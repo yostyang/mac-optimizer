@@ -154,152 +154,256 @@ enum Loaders {
     }
 }
 
-struct Hexagon: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path(); let c = CGPoint(x: r.midX, y: r.midY); let rad = min(r.width, r.height) / 2
-        for i in 0..<6 {
-            let a = CGFloat(i) * .pi / 3 - .pi / 2
-            let pt = CGPoint(x: c.x + rad * cos(a), y: c.y + rad * sin(a))
-            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
-        }
-        p.closeSubpath(); return p
+// MARK: - 视觉风格
+let accent = Color(red: 0.42, green: 0.36, blue: 0.98)
+let accent2 = Color(red: 0.18, green: 0.70, blue: 0.96)
+let good = Color(red: 0.16, green: 0.72, blue: 0.52)
+let pageBG = Color(red: 0.958, green: 0.960, blue: 0.978)
+
+struct CardBG: ViewModifier {
+    func body(content: Content) -> some View {
+        content.background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white).shadow(color: .black.opacity(0.06), radius: 10, y: 3))
     }
 }
+extension View { func card() -> some View { modifier(CardBG()) } }
 
-struct Logo: View {
-    var spin = false
-    @State private var angle = 0.0
-    var body: some View {
-        ZStack {
-            Hexagon().fill(Color.gray.opacity(0.07)).frame(width: 120, height: 120).offset(x: -90, y: -40)
-            Hexagon().fill(Color.gray.opacity(0.07)).frame(width: 100, height: 100).offset(x: 85, y: 70)
-            Hexagon().stroke(Color.orange.opacity(0.12), lineWidth: 2).frame(width: 236, height: 236)
-            Hexagon().stroke(LinearGradient(colors: [Color(red: 1, green: 0.84, blue: 0.35), Color(red: 1, green: 0.62, blue: 0.05)], startPoint: .top, endPoint: .bottom), lineWidth: 26)
-                .frame(width: 190, height: 190).rotationEffect(.degrees(angle))
-            Image(systemName: "bolt.fill").font(.system(size: 56, weight: .bold))
-                .foregroundStyle(LinearGradient(colors: [Color(red: 1, green: 0.8, blue: 0.2), .orange], startPoint: .top, endPoint: .bottom))
-        }
-        .frame(height: 260)
-        .onAppear { if spin { withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) { angle = 360 } } }
-    }
-}
-
-struct GreenButton: ButtonStyle {
-    var width: CGFloat = 206
+struct PillButton: ButtonStyle {
+    var filled = true
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 22, weight: .medium)).foregroundColor(.white)
-            .frame(width: width, height: 58)
-            .background(LinearGradient(colors: [Color(red: 0.33, green: 0.86, blue: 0.56), Color(red: 0.08, green: 0.78, blue: 0.56)], startPoint: .leading, endPoint: .trailing))
-            .cornerRadius(6).shadow(color: Color.green.opacity(0.28), radius: 7, y: 3)
-            .opacity(configuration.isPressed ? 0.8 : 1)
+        configuration.label.font(.system(size: 13, weight: .semibold))
+            .foregroundColor(filled ? .white : accent)
+            .padding(.horizontal, 18).padding(.vertical, 9)
+            .background(Capsule().fill(filled ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(accent.opacity(0.10))))
+            .opacity(configuration.isPressed ? 0.75 : 1)
     }
 }
 
-struct ResultView: View {
-    @ObservedObject var m: Model
-    var scoreColor: Color { m.score >= 80 ? Color(red: 0.1, green: 0.78, blue: 0.5) : (m.score >= 60 ? .orange : .red) }
-    var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle().stroke(Color.gray.opacity(0.13), lineWidth: 12)
-                Circle().trim(from: 0, to: CGFloat(m.score) / 100).stroke(scoreColor, style: StrokeStyle(lineWidth: 12, lineCap: .round)).rotationEffect(.degrees(-90))
-                VStack(spacing: 0) { Text("\(m.score)").font(.system(size: 42, weight: .bold)).foregroundColor(scoreColor); Text("健康分").font(.caption).foregroundColor(.secondary) }
-            }.frame(width: 132, height: 132).padding(.top, 40)
-            Text(m.summary).font(.callout).foregroundColor(.secondary)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(m.log, id: \.self) { Text($0).font(.caption).foregroundColor(.green) }
-                    if m.issues.isEmpty { Text("✅ 没发现明显问题，电脑状态不错").foregroundColor(.secondary).frame(maxWidth: .infinity).padding(.top, 20) }
-                    ForEach($m.issues) { $i in
-                        HStack(alignment: .top, spacing: 10) {
-                            if i.action != nil { Toggle("", isOn: $i.on).toggleStyle(.checkbox).labelsHidden() }
-                            else { Image(systemName: "lightbulb.fill").foregroundColor(.orange) }
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(i.title).font(.system(size: 13, weight: .medium))
-                                Text(i.detail).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer(minLength: 0)
-                        }.padding(10).background(Color.gray.opacity(0.06)).cornerRadius(8)
-                    }
-                }.padding(.horizontal, 26)
-            }
-            VStack(spacing: 8) {
-                if m.issues.contains(where: { $0.on && $0.action != nil }) { Button("一键优化") { m.fix() }.buttonStyle(GreenButton()) }
-                Button("重新扫描") { m.scan() }.buttonStyle(.link)
-            }.padding(.bottom, 26)
+// MARK: - 实时指标
+struct Metrics { var load = 0.0; var cores = 1.0; var memFree = 100; var days = 0 }
+final class Live: ObservableObject {
+    @Published var v = Metrics()
+    private var timer: Timer?
+    func start() {
+        guard timer == nil else { return }
+        refresh()
+        timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in self?.refresh() }
+    }
+    func refresh() {
+        DispatchQueue.global().async {
+            var x = Metrics()
+            x.load = Double(sh("sysctl -n vm.loadavg").split(separator: " ").dropFirst().first.map(String.init) ?? "0") ?? 0
+            x.cores = Double(ProcessInfo.processInfo.activeProcessorCount)
+            x.memFree = Int(sh("memory_pressure | awk -F': ' '/free percentage/{print $2}'").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: "")) ?? 100
+            x.days = Int(ProcessInfo.processInfo.systemUptime / 86400)
+            DispatchQueue.main.async { self.v = x }
         }
     }
 }
 
-struct LeftPanel: View {
-    @ObservedObject var m: Model
-    var body: some View {
-        VStack(spacing: 12) {
-            switch m.phase {
-            case .idle:
-                Spacer()
-                Logo()
-                Text("畅快运行，轻快一下").font(.system(size: 28, weight: .semibold)).padding(.top, 20)
-                Text("欢迎使用 Mac 一键优化").foregroundColor(.secondary)
-                Spacer()
-                Button("开始扫描") { m.scan() }.buttonStyle(GreenButton())
-                Spacer().frame(height: 70)
-            case .scanning, .fixing:
-                Spacer()
-                Logo(spin: true)
-                Text(m.phase == .scanning ? "正在体检…" : "正在优化…").font(.system(size: 20, weight: .medium)).padding(.top, 20)
-                Text("马上就好").foregroundColor(.secondary)
-                Spacer()
-            case .done:
-                ResultView(m: m)
-            }
-        }
-        .frame(width: 384).frame(maxHeight: .infinity).background(Color.white)
-    }
-}
-
+// MARK: - 侧边栏
 struct Feature: Identifiable { let id: Int; let icon: String; let title: String; let sub: String }
 let features = [
-    Feature(id: 0, icon: "chart.bar.xaxis", title: "资源占用排行", sub: "查看最占内存和 CPU 的应用"),
-    Feature(id: 1, icon: "power", title: "开机启动项管理", sub: "快速禁用开机自启应用"),
-    Feature(id: 2, icon: "globe", title: "浏览器管理", sub: "退出多余的浏览器"),
-    Feature(id: 3, icon: "magnifyingglass", title: "Spotlight 修复", sub: "解决索引卡住导致的卡顿"),
-    Feature(id: 4, icon: "shippingbox", title: "后台虚拟机", sub: "Claude 等应用的虚拟机占用"),
-    Feature(id: 5, icon: "network", title: "网络与 VPN", sub: "检查多个 VPN 冲突"),
-    Feature(id: 6, icon: "display", title: "显示性能优化", sub: "减轻带鱼屏的渲染负担"),
-    Feature(id: 7, icon: "stethoscope", title: "系统体检", sub: "全面检查卡顿原因"),
+    Feature(id: 0, icon: "chart.bar.xaxis", title: "资源排行", sub: "看看谁最占内存和 CPU"),
+    Feature(id: 1, icon: "power", title: "开机启动", sub: "关掉不需要的开机自启"),
+    Feature(id: 2, icon: "globe", title: "浏览器", sub: "同时开太多浏览器会拖慢系统"),
+    Feature(id: 3, icon: "magnifyingglass", title: "Spotlight", sub: "索引卡住时一键重启"),
+    Feature(id: 4, icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机"),
+    Feature(id: 5, icon: "network", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突"),
+    Feature(id: 6, icon: "display", title: "显示性能", sub: "减轻大屏幕的渲染负担"),
 ]
 
-struct FeatureSheet: View {
-    let feature: Feature
-    @Environment(\.dismiss) var dismiss
-    @State private var rows: [Row] = []
-    @State private var loading = true
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+struct Sidebar: View {
+    @Binding var sel: Int
+    func item(_ id: Int, _ icon: String, _ title: String) -> some View {
+        Button { sel = id } label: {
             HStack(spacing: 10) {
-                Image(systemName: feature.icon).font(.title2).foregroundColor(.gray)
-                VStack(alignment: .leading) { Text(feature.title).font(.title3.weight(.semibold)); Text(feature.sub).font(.caption).foregroundColor(.secondary) }
+                Image(systemName: icon).font(.system(size: 13)).frame(width: 18)
+                Text(title).font(.system(size: 13, weight: sel == id ? .semibold : .regular))
                 Spacer()
-                Button("完成") { dismiss() }.keyboardShortcut(.defaultAction)
-            }.padding(20)
-            Divider()
-            if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if rows.isEmpty { Text("一切正常，没有需要处理的项目 ✅").foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else {
-                List(rows) { r in
-                    HStack(spacing: 12) {
-                        if let ic = r.icon { Image(nsImage: ic).resizable().frame(width: 28, height: 28) }
-                        VStack(alignment: .leading, spacing: 2) { Text(r.title).font(.system(size: 13, weight: .medium)); Text(r.subtitle).font(.caption).foregroundColor(.secondary) }
-                        Spacer()
-                        if let t = r.actionTitle, let act = r.action {
-                            Button(t) { DispatchQueue.global().async { act(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { reload() } } }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(sel == id ? 0.16 : 0)))
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(LinearGradient(colors: [accent2, accent], startPoint: .topLeading, endPoint: .bottomTrailing)).frame(width: 34, height: 34)
+                    Image(systemName: "speedometer").font(.system(size: 17, weight: .semibold))
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Mac 一键优化").font(.system(size: 14, weight: .semibold))
+                    Text("让 Mac 重新轻快").font(.system(size: 10)).opacity(0.6)
+                }
+            }.padding(.horizontal, 16).padding(.top, 46).padding(.bottom, 24)
+            Group {
+                item(-1, "square.grid.2x2", "概览")
+                Text("工具").font(.system(size: 10, weight: .semibold)).opacity(0.45).padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
+                ForEach(features) { f in item(f.id, f.icon, f.title) }
+            }.padding(.horizontal, 8)
+            Spacer()
+            Label("不会删除你的任何文件", systemImage: "lock.shield").font(.system(size: 10)).opacity(0.55).padding(16)
+        }
+        .foregroundColor(.white)
+        .frame(width: 212).frame(maxHeight: .infinity)
+        .background(LinearGradient(colors: [Color(red: 0.10, green: 0.10, blue: 0.22), Color(red: 0.21, green: 0.15, blue: 0.40)], startPoint: .top, endPoint: .bottom))
+    }
+}
+
+// MARK: - 概览
+struct MetricCard: View {
+    let icon: String; let title: String; let value: String; let note: String; let frac: Double; let color: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) { Image(systemName: icon).foregroundColor(color); Text(title).font(.system(size: 12)).foregroundColor(.secondary); Spacer() }
+            Text(value).font(.system(size: 28, weight: .semibold, design: .rounded))
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(color.opacity(0.14))
+                    Capsule().fill(color).frame(width: max(6, g.size.width * CGFloat(min(1, max(0, frac)))))
+                }
+            }.frame(height: 6).animation(.easeOut(duration: 0.6), value: frac)
+            Text(note).font(.system(size: 11)).foregroundColor(.secondary)
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).card()
+    }
+}
+
+struct CheckupCard: View {
+    @ObservedObject var m: Model
+    var busy: Bool { m.phase == .scanning || m.phase == .fixing }
+    var selected: Int { m.issues.filter { $0.on && $0.action != nil }.count }
+    var scoreColor: Color { m.score >= 80 ? good : (m.score >= 60 ? .orange : .red) }
+    var headline: String {
+        switch m.phase {
+        case .idle: return "智能体检"
+        case .scanning: return "正在检查…"
+        case .fixing: return "正在优化…"
+        case .done: return m.score >= 80 ? "状态不错" : (m.score >= 60 ? "有点负担" : "需要处理一下")
+        }
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(m.phase == .done ? scoreColor.opacity(0.12) : accent.opacity(0.10)).frame(width: 60, height: 60)
+                    if busy { ProgressView().controlSize(.small) }
+                    else if m.phase == .done { Text("\(m.score)").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundColor(scoreColor) }
+                    else { Image(systemName: "waveform.path.ecg").font(.system(size: 24, weight: .medium)).foregroundColor(accent) }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(headline).font(.system(size: 17, weight: .semibold))
+                    Text(m.phase == .done ? "健康分 \(m.score) · " + m.summary : "找出让 Mac 变卡的原因，几秒钟就好").font(.system(size: 12)).foregroundColor(.secondary)
+                }
+                Spacer()
+                if m.phase == .done {
+                    Button("重新体检") { m.scan() }.buttonStyle(PillButton(filled: selected == 0))
+                    if selected > 0 { Button("修复所选（\(selected)）") { m.fix() }.buttonStyle(PillButton()) }
+                } else {
+                    Button("开始体检") { m.scan() }.buttonStyle(PillButton()).disabled(busy).opacity(busy ? 0.5 : 1)
+                }
+            }
+            if m.phase == .done {
+                Divider()
+                ForEach(m.log, id: \.self) { Label($0.replacingOccurrences(of: "✔ ", with: ""), systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundColor(good) }
+                if m.issues.isEmpty {
+                    Label("没发现明显问题，这台 Mac 状态很好", systemImage: "checkmark.seal.fill").font(.system(size: 13)).foregroundColor(good).padding(.vertical, 6)
+                }
+                ForEach($m.issues) { $i in
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: i.action != nil ? "exclamationmark.circle.fill" : "info.circle.fill")
+                            .font(.system(size: 16)).foregroundColor(i.action != nil ? .orange : accent2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(i.title).font(.system(size: 13, weight: .medium))
+                            Text(i.detail).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                         }
+                        Spacer(minLength: 8)
+                        if i.action != nil { Toggle("", isOn: $i.on).toggleStyle(.switch).controlSize(.small).labelsHidden().tint(accent) }
+                        else { Text("建议").font(.system(size: 10, weight: .medium)).foregroundColor(accent2).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(accent2.opacity(0.12))) }
                     }.padding(.vertical, 4)
                 }
             }
+        }.padding(20).card()
+    }
+}
+
+struct Overview: View {
+    @ObservedObject var m: Model
+    @ObservedObject var live: Live
+    var body: some View {
+        let v = live.v
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("概览").font(.system(size: 24, weight: .bold))
+                    Text("下面的数字每 4 秒自动刷新").font(.system(size: 12)).foregroundColor(.secondary)
+                }
+                HStack(spacing: 14) {
+                    MetricCard(icon: "cpu", title: "CPU 负载", value: String(format: "%.1f", v.load),
+                               note: "\(Int(v.cores)) 核 · " + (v.load > v.cores ? "偏高" : "正常"), frac: v.load / max(1, v.cores),
+                               color: v.load > v.cores ? .orange : accent2)
+                    MetricCard(icon: "memorychip", title: "内存可用", value: "\(v.memFree)%",
+                               note: v.memFree < 20 ? "很紧张" : (v.memFree < 40 ? "一般" : "充足"), frac: Double(100 - v.memFree) / 100,
+                               color: v.memFree < 20 ? .red : (v.memFree < 40 ? .orange : accent))
+                    MetricCard(icon: "clock", title: "连续运行", value: "\(v.days) 天",
+                               note: v.days >= 14 ? "跑太久了，有空重启一次" : "正常", frac: Double(v.days) / 14,
+                               color: v.days >= 14 ? .orange : good)
+                }
+                CheckupCard(m: m)
+            }.padding(28)
         }
-        .frame(width: 580, height: 470)
+    }
+}
+
+// MARK: - 工具页
+struct ToolPage: View {
+    let feature: Feature
+    @State private var rows: [Row] = []
+    @State private var loading = true
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(feature.title).font(.system(size: 24, weight: .bold))
+                    Text(feature.sub).font(.system(size: 12)).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button { loading = true; reload() } label: { Label("刷新", systemImage: "arrow.clockwise") }.buttonStyle(PillButton(filled: false))
+            }
+            if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else if rows.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundColor(good)
+                    Text("一切正常，没有需要处理的项目").foregroundColor(.secondary)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { idx, r in
+                            HStack(spacing: 12) {
+                                if let ic = r.icon { Image(nsImage: ic).resizable().frame(width: 30, height: 30) }
+                                else {
+                                    ZStack { RoundedRectangle(cornerRadius: 8, style: .continuous).fill(accent.opacity(0.10)).frame(width: 30, height: 30)
+                                        Image(systemName: feature.icon).font(.system(size: 13)).foregroundColor(accent) }
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(r.title).font(.system(size: 13, weight: .medium))
+                                    Text(r.subtitle).font(.system(size: 11)).foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                if let t = r.actionTitle, let act = r.action {
+                                    Button(t) { DispatchQueue.global().async { act(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { reload() } } }
+                                        .buttonStyle(PillButton(filled: false))
+                                }
+                            }.padding(.horizontal, 16).padding(.vertical, 11)
+                            if idx < rows.count - 1 { Divider().padding(.leading, 58) }
+                        }
+                    }.card().padding(2)
+                }
+            }
+        }
+        .padding(28)
         .onAppear { reload() }
     }
     func reload() {
@@ -308,31 +412,21 @@ struct FeatureSheet: View {
     }
 }
 
-struct RightPanel: View {
-    @ObservedObject var m: Model
-    @State private var open: Feature?
-    let cols = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
+// MARK: - 窗口
+struct RootView: View {
+    @StateObject private var m = Model()
+    @StateObject private var live = Live()
+    @State private var sel = -1
     var body: some View {
-        VStack {
-            Spacer()
-            LazyVGrid(columns: cols, spacing: 50) {
-                ForEach(features) { f in
-                    Button { if f.id == 7 { m.scan() } else { open = f } } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: f.icon).font(.system(size: 30, weight: .light))
-                                .foregroundStyle(LinearGradient(colors: [Color(white: 0.32), Color(white: 0.62)], startPoint: .top, endPoint: .bottom)).frame(width: 44)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(f.title).font(.system(size: 15, weight: .medium)).foregroundColor(Color(white: 0.15))
-                                Text(f.sub).font(.system(size: 12)).foregroundColor(.gray)
-                            }
-                        }.contentShape(Rectangle())
-                    }.buttonStyle(.plain)
-                }
-            }.padding(.horizontal, 64)
-            Spacer()
+        HStack(spacing: 0) {
+            Sidebar(sel: $sel)
+            Group {
+                if sel < 0 { Overview(m: m, live: live) }
+                else { ToolPage(feature: features[sel]).id(sel) }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBG)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(white: 0.985))
-        .sheet(item: $open) { f in FeatureSheet(feature: f) }
+        .frame(width: 980, height: 640).ignoresSafeArea().preferredColorScheme(.light)
+        .onAppear { live.start() }
     }
 }
 
@@ -343,12 +437,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct MacOptimizerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var m = Model()
     var body: some Scene {
-        WindowGroup("Mac 一键优化") {
-            HStack(spacing: 0) { LeftPanel(m: m); Divider(); RightPanel(m: m) }
-                .frame(width: 1000, height: 620).ignoresSafeArea().preferredColorScheme(.light)
-        }
-        .windowStyle(.hiddenTitleBar).windowResizability(.contentSize)
+        WindowGroup("Mac 一键优化") { RootView() }
+            .windowStyle(.hiddenTitleBar).windowResizability(.contentSize)
     }
 }

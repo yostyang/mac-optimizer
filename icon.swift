@@ -1,10 +1,11 @@
 import SwiftUI
-struct Hexagon: Shape { func path(in r: CGRect) -> Path { var p = Path(); let c = CGPoint(x: r.midX, y: r.midY); let rad = min(r.width, r.height)/2
-  for i in 0..<6 { let a = CGFloat(i) * .pi/3 - .pi/2; let pt = CGPoint(x: c.x + rad*cos(a), y: c.y + rad*sin(a)); if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) } }; p.closeSubpath(); return p } }
+let accent = Color(red: 0.42, green: 0.36, blue: 0.98), accent2 = Color(red: 0.18, green: 0.70, blue: 0.96)
 struct IconView: View { var body: some View { ZStack {
-  RoundedRectangle(cornerRadius: 230).fill(LinearGradient(colors: [.white, Color(white: 0.93)], startPoint: .top, endPoint: .bottom)).frame(width: 824, height: 824)
-  Hexagon().stroke(LinearGradient(colors: [Color(red: 1, green: 0.84, blue: 0.35), Color(red: 1, green: 0.62, blue: 0.05)], startPoint: .top, endPoint: .bottom), lineWidth: 90).frame(width: 600, height: 600)
-  Image(systemName: "bolt.fill").font(.system(size: 220, weight: .bold)).foregroundStyle(LinearGradient(colors: [Color(red: 1, green: 0.8, blue: 0.2), .orange], startPoint: .top, endPoint: .bottom))
+  RoundedRectangle(cornerRadius: 230, style: .continuous).fill(LinearGradient(colors: [Color(red: 0.10, green: 0.10, blue: 0.22), Color(red: 0.24, green: 0.16, blue: 0.46)], startPoint: .top, endPoint: .bottom)).frame(width: 824, height: 824)
+  Circle().trim(from: 0.1, to: 0.9).stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 70, lineCap: .round)).rotationEffect(.degrees(90)).frame(width: 520, height: 520)
+  Circle().trim(from: 0.1, to: 0.62).stroke(LinearGradient(colors: [accent2, accent], startPoint: .leading, endPoint: .trailing), style: StrokeStyle(lineWidth: 70, lineCap: .round)).rotationEffect(.degrees(90)).frame(width: 520, height: 520)
+  Capsule().fill(Color.white).frame(width: 34, height: 220).offset(y: -95).rotationEffect(.degrees(40))
+  Circle().fill(Color.white).frame(width: 90, height: 90)
 }.frame(width: 1024, height: 1024) } }
 @MainActor func run() { let r = ImageRenderer(content: IconView()); r.scale = 1
   if let img = r.nsImage, let t = img.tiffRepresentation, let b = NSBitmapImageRep(data: t), let png = b.representation(using: .png, properties: [:]) { try! png.write(to: URL(fileURLWithPath: "icon.png")) } }
