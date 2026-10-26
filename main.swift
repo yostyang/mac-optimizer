@@ -42,7 +42,9 @@ enum Sys {
     static func isVPN(_ n: String) -> Bool { n.contains("VPN") || n.contains("鹊桥") }
     static func quitClaude() { sh("osascript -e 'tell application \"Claude\" to quit'") }
     static func restartSpotlight() { sh("killall corespotlightd helpd mds_stores") }
-    static func openDisplaySettings() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension?Display")!) }
+    static let osMajor = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+    static func openAppearance() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!) }
+    static func openA11y(_ pane: String) { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension?" + pane)!) }
     static let vmName = "com.apple.Virtualization.VirtualMachine"
 }
 
@@ -147,7 +149,19 @@ enum Loaders {
                 return Row(icon: a.icon, title: u.name, subtitle: v.count > 1 ? "⚠️ 同时开着 \(v.count) 个 VPN，建议只留一个" : "运行中", actionTitle: "退出", action: { _ = a.terminate() }) }
         case 6:
             let ws = Sys.cpu(["WindowServer"], ps)
-            return [Row(icon: nil, title: "减少透明度和动态效果", subtitle: "在大分辨率屏幕上能明显减轻画面渲染负担", actionTitle: "打开设置", action: Sys.openDisplaySettings),
+            let tr = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency, mo = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            let v = Sys.osMajor
+            var r: [Row] = []
+            // macOS 26 起有 Liquid Glass：26 是「透明 / 着色」两档，27 起改成「外观」里的滑块
+            if v >= 27 {
+                r.append(Row(icon: nil, title: "调低 Liquid Glass 透明感", subtitle: "在「外观」里把 Liquid Glass 滑块往右拖，菜单、侧边栏会更不透明，渲染更轻", actionTitle: "去设置", action: Sys.openAppearance))
+            } else if v == 26 {
+                r.append(Row(icon: nil, title: "Liquid Glass 改为「着色」", subtitle: "在「外观」里把 Liquid Glass 从「透明」改成「着色」，减少玻璃效果", actionTitle: "去设置", action: Sys.openAppearance))
+            }
+            r.append(Row(icon: nil, title: "降低透明度" + (tr ? "（已开启 ✓）" : ""), subtitle: (v >= 26 ? "比上面那项更彻底，几乎去掉所有透明效果。" : "关掉窗口毛玻璃效果，大屏幕上能明显减轻渲染负担。") + "位置：无障碍 › 显示 › 降低透明度", actionTitle: tr ? nil : "去开启", action: { Sys.openA11y("Display") }))
+            // 「减弱动态效果」在 macOS 26 起移到了 无障碍 › 动态效果，之前在 无障碍 › 显示
+            r.append(Row(icon: nil, title: "减弱动态效果" + (mo ? "（已开启 ✓）" : ""), subtitle: "减少切换桌面、打开窗口时的动画。位置：" + (v >= 26 ? "无障碍 › 动态效果 › 减弱动态效果" : "无障碍 › 显示 › 减弱动态效果"), actionTitle: mo ? nil : "去开启", action: { Sys.openA11y(v >= 26 ? "Motion" : "Display") }))
+            return r + [
                     Row(icon: nil, title: "WindowServer（负责画面渲染）", subtitle: String(format: "当前占用 %.0f%% CPU，已运行 %d 天", ws, Int(ProcessInfo.processInfo.systemUptime / 86400)), actionTitle: nil, action: nil)]
         default: return []
         }
