@@ -3,174 +3,269 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手</title>
-<meta name="description" content="外接大屏、多开 AI 工具和浏览器时 Mac 突然卡顿？一键找出元凶，不用重启。">
+<title>Mac 一键优化 · Mac Optimizer</title>
+<meta name="description" content="不用重启，也能让卡顿的 Mac 重新跟手。Fix a laggy Mac without restarting.">
 <link rel="icon" href="icon.png">
 <style>
-:root{--a:#6b5cfa;--b:#2eb3f5;--ink:#16152b;--mute:#6b6a80;--bg:#f5f5fa}
+:root{--ink:#111112;--mute:#6b6f7b;--line:#e9eaeb;--bg:#fcfcfc;--gray:#f3f4f6;--a:#5b55f5;--b:#2ea7f2}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:var(--ink);background:var(--bg);line-height:1.7}
+html{scroll-behavior:smooth}
+body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-header.hero{background:linear-gradient(180deg,#1a1a38,#3a2770);color:#fff;padding:28px 0 0;overflow:hidden}
-nav{display:flex;align-items:center;justify-content:space-between}
-nav .brand{display:flex;align-items:center;gap:10px;font-weight:600}
-nav .brand img{width:32px;height:32px}
-nav a.gh{font-size:14px;opacity:.8}
-.hero-main{text-align:center;padding:72px 0 48px}
-.hero-main img{width:120px;height:120px;filter:drop-shadow(0 12px 30px rgba(0,0,0,.35))}
-h1{font-size:46px;line-height:1.25;margin:28px 0 16px;letter-spacing:-.5px}
-.hero-main p{font-size:18px;opacity:.75;max-width:620px;margin:0 auto}
-.btns{margin-top:34px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-block;padding:13px 28px;border-radius:999px;font-weight:600;font-size:15px}
-.btn.primary{background:linear-gradient(90deg,var(--b),var(--a));color:#fff;box-shadow:0 8px 24px rgba(107,92,250,.45)}
-.btn.ghost{background:rgba(255,255,255,.12);color:#fff}
-.meta{margin-top:14px;font-size:12px;opacity:.55}
-/* 界面示意 */
-.mock{max-width:860px;margin:30px auto -1px;background:#fff;border-radius:14px 14px 0 0;box-shadow:0 -10px 60px rgba(0,0,0,.35);display:flex;height:330px;overflow:hidden;color:var(--ink)}
-.mock .side{width:190px;background:linear-gradient(180deg,#1a1a38,#36266b);color:#fff;padding:16px 10px;font-size:12px}
-.mock .dots{display:flex;gap:6px;margin-bottom:22px;padding-left:4px}
-.mock .dots i{width:10px;height:10px;border-radius:50%;background:#ff5f57}.mock .dots i:nth-child(2){background:#febc2e}.mock .dots i:nth-child(3){background:#28c840}
-.mock .side div{padding:7px 10px;border-radius:7px;opacity:.85}
-.mock .side div.on{background:rgba(255,255,255,.16);opacity:1;font-weight:600}
-.mock .main{flex:1;background:var(--bg);padding:22px;text-align:left}
-.mock h4{font-size:18px;margin-bottom:12px}
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.mc{background:#fff;border-radius:10px;padding:12px;box-shadow:0 3px 10px rgba(0,0,0,.05);font-size:11px;color:var(--mute)}
-.mc b{display:block;font-size:20px;color:var(--ink);margin:4px 0 6px}
-.bar{height:5px;border-radius:5px;background:#e8e6ff;overflow:hidden}.bar span{display:block;height:100%;background:var(--a)}
-.check{margin-top:12px;background:#fff;border-radius:10px;padding:14px;box-shadow:0 3px 10px rgba(0,0,0,.05);font-size:12px}
-.check .row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid #f0f0f5}
-.check .row:first-child{border:0}
-.check .row em{font-style:normal;flex:1}
-.sw{width:26px;height:15px;border-radius:9px;background:var(--a);position:relative}.sw:after{content:"";position:absolute;right:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#fff}
-.sw.off{background:#ddd}.sw.off:after{left:2px;right:auto}
-.score{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.score span{width:40px;height:40px;border-radius:10px;background:#fff3e0;color:#f39200;font-weight:700;display:grid;place-items:center;font-size:16px}
-section{padding:90px 0}
-h2{font-size:32px;margin-bottom:18px;letter-spacing:-.3px}
-.story{max-width:760px;margin:0 auto}
-.story p{font-size:17px;color:#3a3950;margin-bottom:18px}
-.story .quote{font-size:22px;font-weight:600;color:var(--ink);border-left:4px solid var(--a);padding-left:18px;margin:30px 0}
-.center{text-align:center}
-.sub{color:var(--mute);margin-bottom:44px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
-.f{background:#fff;border-radius:16px;padding:24px;box-shadow:0 6px 20px rgba(20,20,60,.05)}
-.f .ic{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--b),var(--a));color:#fff;display:grid;place-items:center;font-size:20px;margin-bottom:14px}
-.f h3{font-size:17px;margin-bottom:6px}
-.f p{font-size:14px;color:var(--mute)}
-.safe{background:#fff}
-.safe ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:30px}
-.safe li{background:var(--bg);border-radius:14px;padding:20px;font-size:15px}
-.safe li b{display:block;margin-bottom:4px}
-.install ol{max-width:640px;margin:30px auto 0;counter-reset:s;list-style:none}
-.install li{counter-increment:s;background:#fff;border-radius:14px;padding:18px 20px 18px 62px;margin-bottom:12px;position:relative;box-shadow:0 6px 20px rgba(20,20,60,.05)}
-.install li:before{content:counter(s);position:absolute;left:20px;top:18px;width:28px;height:28px;border-radius:50%;background:var(--a);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
-code{background:#eeedf7;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}
-.cta{background:linear-gradient(180deg,#1a1a38,#3a2770);color:#fff;text-align:center}
-.cta p{opacity:.7;margin-bottom:30px}
-footer{text-align:center;padding:30px 0;font-size:13px;color:var(--mute)}
-@media(max-width:720px){h1{font-size:32px}.mock .side{display:none}.cards{grid-template-columns:1fr 1fr}.cards .mc:last-child{display:none}}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;font-weight:500;font-size:14px;padding:10px 20px;transition:.2s}
+.pill.blue{background:var(--a);color:#fff}.pill.blue:hover{background:#4842e0}
+.pill.light{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.pill.sm{font-size:13px;padding:7px 15px}
+/* header */
+header{position:fixed;top:0;left:0;right:0;z-index:10;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1040px)/2));transition:.25s}
+header.scrolled{background:rgba(252,252,252,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;opacity:0;transition:.25s}
+header.scrolled .brand{opacity:1}
+.brand img{width:26px;height:26px}
+.right{display:flex;align-items:center;gap:10px}
+.lang{display:flex;background:var(--gray);border-radius:999px;padding:3px}
+.lang button{border:0;background:none;font:inherit;font-size:12px;padding:5px 11px;border-radius:999px;cursor:pointer;color:var(--mute)}
+.lang button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+/* hero */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px}
+.hero img.logo{width:84px;height:84px;border-radius:20px;box-shadow:0 10px 30px rgba(60,50,160,.25);margin-bottom:36px}
+h1{font-size:clamp(34px,5.4vw,60px);font-weight:500;letter-spacing:-.03em;line-height:1.15}
+.rot{display:inline-block;position:relative;color:var(--a);min-width:2.4em;text-align:center}
+.rot span{display:inline-block;animation:in .5s ease}
+@keyframes in{from{opacity:0;transform:translateY(.4em)}to{opacity:1;transform:none}}
+.hero p{margin-top:22px;font-size:17px;color:var(--mute);max-width:560px;line-height:1.7}
+.hero .cta{margin-top:34px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.hero small{font-size:12px;color:var(--mute)}
+.more{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:9;font-size:13px;transition:.3s}
+.more.hide{opacity:0;pointer-events:none}
+/* sections */
+section{padding:120px 24px}
+section.g{background:var(--gray)}
+.inner{max-width:880px;margin:0 auto}
+h2{font-size:clamp(26px,3.4vw,36px);font-weight:500;letter-spacing:-.02em;line-height:1.25}
+.lead{color:var(--mute);font-size:16px;line-height:1.75;margin-top:16px}
+.center{text-align:center}.center .lead{max-width:600px;margin-left:auto;margin-right:auto}
+.story{max-width:620px;margin:0 auto}
+.story p{font-size:18px;line-height:1.85;color:#3b3e48;margin-top:22px}
+.story p.big{font-size:24px;color:var(--ink);font-weight:500;letter-spacing:-.01em}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.row.rev .txt{order:2}
+.txt{max-width:340px}
+.media{background:#fff;border-radius:24px;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;padding:28px;box-shadow:0 1px 0 var(--line)}
+section.g .media{background:#fff}section:not(.g) .media{background:var(--gray)}
+/* mini UI */
+.ui{width:100%;background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(20,20,60,.08);padding:16px;font-size:12px}
+.ui .h{font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.ui .it{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #f1f1f4}
+.ui .it:first-of-type{border-top:0}
+.ui .it em{flex:1;font-style:normal}
+.ui .it small{display:block;color:var(--mute);font-size:10.5px}
+.dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;flex:none}.dot.ok{background:#22c55e}
+.sw{width:28px;height:16px;border-radius:9px;background:var(--a);position:relative;flex:none}.sw:after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+.sw.off{background:#d9dae0}.sw.off:after{left:2px;right:auto}
+.tag{font-size:10.5px;color:var(--a);background:#eeedff;border-radius:999px;padding:3px 9px;flex:none}
+.score{width:44px;height:44px;border-radius:12px;background:#fff4e5;color:#e58a00;font-weight:700;font-size:17px;display:grid;place-items:center}
+.metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.m{background:#f7f7fa;border-radius:10px;padding:10px}.m b{display:block;font-size:18px;margin:2px 0 6px}.m small{color:var(--mute);font-size:10px}
+.bar{height:4px;border-radius:4px;background:#e4e3fb;overflow:hidden}.bar i{display:block;height:100%;background:var(--a)}
+.bar.o i{background:#f59e0b}
+/* list */
+.list{display:grid;grid-template-columns:1fr 1.3fr;gap:64px;align-items:center}
+.list ul{list-style:none}
+.list li{display:flex;gap:14px;padding:20px 0;border-bottom:1px solid var(--line)}
+.list li:last-child{border:0}
+.list li .ic{font-size:16px;color:var(--mute);width:20px;flex:none;line-height:1.4}
+.list li b{font-weight:600;font-size:15px}
+.list li p{color:var(--mute);font-size:13.5px;line-height:1.65;margin-top:4px}
+.steps{counter-reset:s;max-width:620px;margin:40px auto 0;text-align:left}
+.steps li{list-style:none;counter-increment:s;position:relative;padding:18px 0 18px 48px;border-bottom:1px solid var(--line);font-size:15px;line-height:1.7;color:#3b3e48}
+.steps li:before{content:counter(s);position:absolute;left:0;top:18px;width:28px;height:28px;border-radius:50%;background:#fff;border:1px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:600}
+code{background:#fff;border:1px solid var(--line);padding:2px 7px;border-radius:6px;font-size:12.5px;word-break:break-all}
+.final{padding:160px 24px}
+.final h2{font-size:clamp(30px,4.2vw,46px)}
+.final .pill{margin-top:30px;font-size:15px;padding:13px 28px}
+footer{display:flex;justify-content:space-between;align-items:center;max-width:1040px;margin:0 auto;padding:28px 24px;font-size:12px;color:var(--mute);border-top:1px solid var(--line)}
+footer nav{display:flex;gap:20px}
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.reveal.on{opacity:1;transform:none}
+@media(max-width:760px){.row,.list{grid-template-columns:1fr;gap:32px}.row.rev .txt{order:0}.txt{max-width:none}section{padding:80px 20px}}
 </style>
 </head>
 <body>
-<header class="hero">
-  <div class="wrap">
-    <nav>
-      <div class="brand"><img src="icon.png" alt="">Mac 一键优化</div>
-      <a class="gh" href="https://github.com/yostyang/mac-optimizer">GitHub ↗</a>
-    </nav>
-    <div class="hero-main">
-      <img src="icon.png" alt="Mac 一键优化图标">
-      <h1>不用重启，<br>也能让卡顿的 Mac 重新跟手</h1>
-      <p>外接大屏、多开 AI 工具和浏览器时，Mac 突然卡顿却查不出原因？一键体检，找出元凶，当场解决。</p>
-      <div class="btns">
-        <a class="btn primary" href="https://github.com/yostyang/mac-optimizer/releases/latest">免费下载</a>
-        <a class="btn ghost" href="#story">为什么做它</a>
-      </div>
-      <div class="meta">macOS 13 及以上 · Apple 芯片与 Intel 通用 · 不到 1 MB · 开源</div>
-    </div>
-    <div class="mock" aria-hidden="true">
-      <div class="side">
-        <div class="dots"><i></i><i></i><i></i></div>
-        <div class="on">▦ 概览</div><div>▤ 资源排行</div><div>⏻ 开机启动</div><div>◍ 浏览器</div><div>⌕ Spotlight</div><div>▣ 虚拟机</div><div>⇅ 网络与 VPN</div><div>▭ 显示性能</div>
-      </div>
-      <div class="main">
-        <h4>概览</h4>
-        <div class="cards">
-          <div class="mc">CPU 负载<b>6.8</b><div class="bar"><span style="width:68%;background:#2eb3f5"></span></div></div>
-          <div class="mc">内存可用<b>34%</b><div class="bar"><span style="width:66%;background:#f39200"></span></div></div>
-          <div class="mc">连续运行<b>17 天</b><div class="bar"><span style="width:100%;background:#f39200"></span></div></div>
-        </div>
-        <div class="check">
-          <div class="score"><span>62</span><div><b>有点负担</b><br><small style="color:#6b6a80">发现 3 个可以处理的问题</small></div></div>
-          <div class="row">⚠️ <em>Spotlight 索引卡住，占用 180% CPU</em><i class="sw"></i></div>
-          <div class="row">⚠️ <em>多个 VPN 同时运行</em><i class="sw"></i></div>
-          <div class="row">⚠️ <em>同时开着 4 个浏览器</em><i class="sw off"></i></div>
-        </div>
-      </div>
-    </div>
+<header id="hd">
+  <a class="brand" href="#"><img src="icon.png" alt=""><span data-i="name"></span></a>
+  <div class="right">
+    <div class="lang"><button data-l="zh">中文</button><button data-l="en">EN</button></div>
+    <a class="pill blue sm" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="dl"></a>
   </div>
 </header>
 
-<section id="story">
-  <div class="wrap story">
-    <h2>为什么做这个</h2>
-    <p>如果你和我一样，平时用 MacBook Pro 外接显示器，同时开着一堆 AI 工具、软件和浏览器窗口，那你可能也遇到过这种情况：电脑突然变卡，鼠标和键盘都不跟手了。</p>
-    <p>可打开「活动监视器」一看，没有哪个软件特别占 CPU 或内存，也没有程序卡死。按理说，电脑应该运行得好好的。</p>
-    <p class="quote">重启当然最省事，但代价也最大。</p>
-    <p>开着的窗口、跑着的任务、手头的工作状态，全都得重来。我就想，有没有办法不重启也能把问题解决掉？于是 vibe 出了这个小工具。</p>
+<div class="hero">
+  <img class="logo" src="icon.png" alt="">
+  <h1><span data-i="h1a"></span><br><span data-i="h1b"></span> <span class="rot" id="rot"><span></span></span> <span data-i="h1c"></span></h1>
+  <p data-i="sub"></p>
+  <div class="cta">
+    <a class="pill blue" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="dlfree"></a>
+    <small data-i="meta"></small>
+  </div>
+</div>
+<a class="pill light more" id="more" href="#story"><span data-i="more"></span> ↓</a>
+
+<section class="g" id="story">
+  <div class="story reveal">
+    <h2 data-i="whyT"></h2>
+    <p data-i="why1"></p>
+    <p data-i="why2"></p>
+    <p class="big" data-i="why3"></p>
+    <p data-i="why4"></p>
   </div>
 </section>
 
-<section style="padding-top:0">
-  <div class="wrap">
-    <h2 class="center">它会帮你检查这些</h2>
-    <p class="center sub">都是那些“活动监视器里看不出来”的卡顿元凶</p>
-    <div class="grid">
-      <div class="f"><div class="ic">♥</div><h3>智能体检</h3><p>几秒钟给出健康分，列出问题，选好要处理的项目后一键修复。</p></div>
-      <div class="f"><div class="ic">◔</div><h3>实时概览</h3><p>CPU 负载、可用内存、连续运行天数，每 4 秒自动刷新。</p></div>
-      <div class="f"><div class="ic">⌕</div><h3>Spotlight 索引卡住</h3><p>索引进程偷偷占满 CPU 是常见元凶，一键重启它，不会丢任何数据。</p></div>
-      <div class="f"><div class="ic">⇅</div><h3>多个 VPN 冲突</h3><p>两个 VPN 同时运行会互相抢网络，视频卡、网页慢，帮你只留一个。</p></div>
-      <div class="f"><div class="ic">▣</div><h3>后台虚拟机</h3><p>找出 Claude 桌面版等 AI 应用在后台跑的虚拟机，看看它吃了多少资源。</p></div>
-      <div class="f"><div class="ic">◍</div><h3>浏览器太多</h3><p>Chrome、Edge、豆包、夸克同时开？看清每个占多少内存，一键退出多余的。</p></div>
-      <div class="f"><div class="ic">▭</div><h3>外接大屏渲染负担</h3><p>按系统版本直达 Liquid Glass、降低透明度、减弱动态效果的设置，减轻 5K 带鱼屏的压力。</p></div>
-      <div class="f"><div class="ic">⏻</div><h3>开机启动与资源排行</h3><p>关掉不需要的开机自启，按应用汇总内存和 CPU，谁最占资源一目了然。</p></div>
-    </div>
+<section>
+  <div class="inner row reveal">
+    <div class="txt"><h2 data-i="f1T"></h2><p class="lead" data-i="f1D"></p></div>
+    <div class="media"><div class="ui">
+      <div class="h" style="justify-content:flex-start;gap:12px"><div class="score">62</div><div><span data-i="u_burden"></span><br><small style="color:var(--mute);font-weight:400" data-i="u_found"></small></div></div>
+      <div class="it"><i class="dot"></i><em data-i="u_sp"></em><i class="sw"></i></div>
+      <div class="it"><i class="dot"></i><em data-i="u_vpn"></em><i class="sw"></i></div>
+      <div class="it"><i class="dot"></i><em data-i="u_br"></em><i class="sw off"></i></div>
+      <div style="text-align:right;margin-top:10px"><span class="pill blue sm" data-i="u_fix"></span></div>
+    </div></div>
   </div>
 </section>
 
-<section class="safe">
-  <div class="wrap">
-    <h2 class="center">放心用</h2>
+<section class="g">
+  <div class="inner row rev reveal">
+    <div class="txt"><h2 data-i="f2T"></h2><p class="lead" data-i="f2D"></p></div>
+    <div class="media"><div class="ui">
+      <div class="h"><span data-i="u_ov"></span><span class="tag" data-i="u_live"></span></div>
+      <div class="metrics">
+        <div class="m"><small data-i="u_cpu"></small><b>3.2</b><div class="bar"><i style="width:32%"></i></div></div>
+        <div class="m"><small data-i="u_mem"></small><b>46%</b><div class="bar"><i style="width:54%"></i></div></div>
+        <div class="m"><small data-i="u_up"></small><b data-i="u_days"></b><div class="bar o"><i style="width:100%"></i></div></div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<section>
+  <div class="inner row reveal">
+    <div class="txt"><h2 data-i="f3T"></h2><p class="lead" data-i="f3D"></p></div>
+    <div class="media"><div class="ui">
+      <div class="h"><span data-i="u_net"></span></div>
+      <div class="it"><i class="dot ok"></i><em>鹊桥VPN<small data-i="u_run"></small></em></div>
+      <div class="it"><i class="dot"></i><em>LetsVPN<small data-i="u_conf"></small></em><span class="pill light sm" data-i="u_quit"></span></div>
+      <div class="it"><i class="dot"></i><em data-i="u_vm"></em><span class="pill light sm" data-i="u_quit"></span></div>
+    </div></div>
+  </div>
+</section>
+
+<section class="g">
+  <div class="inner row rev reveal">
+    <div class="txt"><h2 data-i="f4T"></h2><p class="lead" data-i="f4D"></p></div>
+    <div class="media"><div class="ui">
+      <div class="h"><span data-i="u_disp"></span><span class="tag">macOS 27</span></div>
+      <div class="it"><em><span data-i="u_lg"></span><small data-i="u_lgD"></small></em><span class="pill light sm" data-i="u_go"></span></div>
+      <div class="it"><em><span data-i="u_rt"></span><small data-i="u_rtD"></small></em><span class="pill light sm" data-i="u_go"></span></div>
+      <div class="it"><em><span data-i="u_rm"></span><small data-i="u_rmD"></small></em><span class="tag" data-i="u_on"></span></div>
+    </div></div>
+  </div>
+</section>
+
+<section>
+  <div class="inner list reveal">
+    <div><h2 data-i="safeT"></h2><p class="lead" data-i="safeD"></p></div>
     <ul>
-      <li><b>不会自动动手</b>每一项操作都要你自己选、自己点。</li>
-      <li><b>不删任何文件</b>只是退出程序或重启系统服务。</li>
-      <li><b>不要管理员密码</b>不装后台常驻服务，不改系统文件。</li>
-      <li><b>完全开源</b>代码都在 GitHub 上，随时可以查看。</li>
+      <li><span class="ic">✋</span><div><b data-i="s1"></b><p data-i="s1d"></p></div></li>
+      <li><span class="ic">🗂</span><div><b data-i="s2"></b><p data-i="s2d"></p></div></li>
+      <li><span class="ic">🔑</span><div><b data-i="s3"></b><p data-i="s3d"></p></div></li>
+      <li><span class="ic">⌥</span><div><b data-i="s4"></b><p data-i="s4d"></p></div></li>
     </ul>
   </div>
 </section>
 
-<section class="install">
-  <div class="wrap">
-    <h2 class="center">安装</h2>
-    <ol>
-      <li>到 <a href="https://github.com/yostyang/mac-optimizer/releases/latest" style="color:var(--a);font-weight:600">下载页</a> 下载最新的 <code>Mac-Optimizer-x.x.dmg</code>。</li>
-      <li>打开 DMG，把「Mac一键优化」拖进「应用程序」。</li>
-      <li>应用没有经过苹果公证，第一次打开如果提示“无法验证开发者”，到 <b>系统设置 › 隐私与安全性</b>，在底部点「仍要打开」。也可以在终端运行：<br><code>xattr -dr com.apple.quarantine "/Applications/Mac一键优化.app"</code></li>
+<section class="g">
+  <div class="inner center reveal">
+    <h2 data-i="insT"></h2>
+    <ol class="steps">
+      <li data-i="i1"></li>
+      <li data-i="i2"></li>
+      <li><span data-i="i3"></span><br><code>xattr -dr com.apple.quarantine "/Applications/Mac一键优化.app"</code></li>
     </ol>
   </div>
 </section>
 
-<section class="cta">
-  <div class="wrap">
-    <h2>下次卡顿，先别急着重启</h2>
-    <p>免费、开源，不到 1 MB。</p>
-    <a class="btn primary" href="https://github.com/yostyang/mac-optimizer/releases/latest">下载 Mac 一键优化</a>
+<section class="final center">
+  <div class="reveal">
+    <h2 data-i="endT"></h2>
+    <p class="lead" data-i="endD"></p>
+    <a class="pill blue" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="dlfree"></a>
   </div>
 </section>
 
-<footer>由 <a href="https://github.com/yostyang" style="color:var(--a)">@yostyang</a> vibe 出品 · <a href="https://github.com/yostyang/mac-optimizer">GitHub</a></footer>
+<footer>
+  <span>© 2026 <a href="https://github.com/yostyang">@yostyang</a></span>
+  <nav><a href="https://github.com/yostyang/mac-optimizer">GitHub</a><a href="https://github.com/yostyang/mac-optimizer/releases" data-i="rel"></a></nav>
+  <span data-i="made"></span>
+</footer>
+
+<script>
+const T={
+zh:{name:"Mac 一键优化",dl:"下载",dlfree:"免费下载",more:"了解更多",
+h1a:"不用重启，",h1b:"也能让",h1c:"重新跟手",rot:["鼠标","键盘","视频","窗口","Mac"],
+sub:"外接大屏、多开 AI 工具和浏览器时，Mac 突然卡顿却查不出原因？一键体检，找出元凶，当场解决。",
+meta:"macOS 13 及以上 · Apple 芯片与 Intel 通用 · 不到 1 MB · 开源免费",
+whyT:"为什么做这个",
+why1:"如果你和我一样，平时用 MacBook Pro 外接显示器，同时开着一堆 AI 工具、软件和浏览器窗口，那你可能也遇到过这种情况：电脑突然变卡，鼠标和键盘都不跟手了。",
+why2:"可打开「活动监视器」一看，没有哪个软件特别占 CPU 或内存，也没有程序卡死。按理说，电脑应该运行得好好的。",
+why3:"重启当然最省事，但代价也最大。",
+why4:"开着的窗口、跑着的任务、手头的工作状态，全都得重来。我就想，有没有办法不重启也能把问题解决掉？于是 vibe 出了这个小工具。",
+f1T:"几秒钟，找出卡顿的真正原因",f1D:"一键体检会给出健康分，把那些活动监视器里看不出来的问题列出来：卡住的 Spotlight 索引、冲突的 VPN、开太多的浏览器。选好要处理的，一键修复。",
+f2T:"实时看清这台 Mac 的状态",f2D:"CPU 负载、可用内存、连续运行天数，每 4 秒自动刷新。跑得太久、内存紧张，一眼就知道。",
+f3T:"揪出藏在后台的资源大户",f3D:"两个 VPN 同时运行会互相抢网络，Claude 等 AI 应用会在后台跑虚拟机。它会把这些都找出来，告诉你占了多少，要不要退出由你决定。",
+f4T:"为外接大屏减轻渲染负担",f4D:"5K 带鱼屏加上 Liquid Glass 效果，画面渲染压力不小。它会按你的系统版本，直接打开对应的设置页：Liquid Glass 滑块、降低透明度、减弱动态效果。",
+u_burden:"有点负担",u_found:"发现 3 个可以处理的问题",u_sp:"Spotlight 索引卡住",u_vpn:"多个 VPN 同时运行",u_br:"同时开着 4 个浏览器",u_fix:"修复所选（2）",
+u_ov:"概览",u_live:"实时",u_cpu:"CPU 负载",u_mem:"内存可用",u_up:"连续运行",u_days:"17 天",
+u_net:"网络与 VPN",u_run:"运行中",u_conf:"同时开着 2 个 VPN，建议只留一个",u_quit:"退出",u_vm:"后台虚拟机（Claude）",
+u_disp:"显示性能",u_lg:"调低 Liquid Glass 透明感",u_lgD:"外观 › Liquid Glass 滑块",u_rt:"降低透明度",u_rtD:"无障碍 › 显示",u_rm:"减弱动态效果",u_rmD:"无障碍 › 动态效果",u_go:"去设置",u_on:"已开启 ✓",
+safeT:"放心交给它",safeD:"它只做必要的事，每一步都在你的掌控之中。",
+s1:"不会自动动手",s1d:"每一项操作都要你自己选、自己点。",s2:"不删任何文件",s2d:"只是退出程序，或者重启会自动恢复的系统服务。",s3:"不要管理员密码",s3d:"不装后台常驻服务，也不改系统文件。",s4:"完全开源",s4d:"所有代码都在 GitHub 上，随时可以查看。",
+insT:"安装",i1:"到下载页下载最新的 Mac-Optimizer-x.x.dmg。",i2:"打开 DMG，把「Mac一键优化」拖进「应用程序」。",i3:"应用没有经过苹果公证。第一次打开如果提示“无法验证开发者”，到 系统设置 › 隐私与安全性，在底部点「仍要打开」。也可以在终端运行：",
+endT:"下次卡顿，先别急着重启",endD:"免费、开源，不到 1 MB。",rel:"版本记录",made:"vibe coded with ♥"},
+en:{name:"Mac Optimizer",dl:"Download",dlfree:"Download for free",more:"Learn more",
+h1a:"No restart needed.",h1b:"Make your",h1c:"smooth again",rot:["mouse","keyboard","video","windows","Mac"],
+sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
+meta:"macOS 13+ · Apple silicon & Intel · Under 1 MB · Free & open source",
+whyT:"Why I built this",
+why1:"If you're like me, you run a MacBook Pro on an external display with lots of AI tools, apps and browser windows open. And every now and then the whole thing starts to stutter: the mouse and keyboard stop keeping up.",
+why2:"But Activity Monitor shows nothing unusual. No app is hogging the CPU or memory, and nothing has frozen. By all accounts, the Mac should be running fine.",
+why3:"Restarting is the easy fix, but also the most expensive one.",
+why4:"Every open window, running task and bit of work in progress has to start over. So I wondered: could I fix it without restarting? That's how I vibe coded this little tool.",
+f1T:"Find the real cause of lag in seconds",f1D:"A one-click checkup gives you a health score and lists the problems Activity Monitor won't show: a stuck Spotlight index, clashing VPNs, too many browsers. Pick what to fix, then fix it in one click.",
+f2T:"See how your Mac is doing, live",f2D:"CPU load, free memory and uptime, refreshed every 4 seconds. You'll know right away when it's been running too long or memory is tight.",
+f3T:"Catch the resource hogs hiding in the background",f3D:"Two VPNs running at once fight over the network, and AI apps like Claude run virtual machines in the background. It finds them, shows what they cost, and leaves the decision to you.",
+f4T:"Ease the load on big external displays",f4D:"A 5K ultrawide plus Liquid Glass effects is a lot to render. Based on your macOS version, it opens the exact settings you need: the Liquid Glass slider, Reduce transparency and Reduce motion.",
+u_burden:"Under some strain",u_found:"3 issues you can fix",u_sp:"Spotlight index is stuck",u_vpn:"Several VPNs running",u_br:"4 browsers open at once",u_fix:"Fix selected (2)",
+u_ov:"Overview",u_live:"Live",u_cpu:"CPU load",u_mem:"Free memory",u_up:"Uptime",u_days:"17 days",
+u_net:"Network & VPN",u_run:"Running",u_conf:"2 VPNs running, keep just one",u_quit:"Quit",u_vm:"Background VM (Claude)",
+u_disp:"Display performance",u_lg:"Tone down Liquid Glass",u_lgD:"Appearance › Liquid Glass slider",u_rt:"Reduce transparency",u_rtD:"Accessibility › Display",u_rm:"Reduce motion",u_rmD:"Accessibility › Motion",u_go:"Open",u_on:"On ✓",
+safeT:"Safe by design",safeD:"It only does what's needed, and you stay in control of every step.",
+s1:"Never acts on its own",s1d:"Every action needs your pick and your click.",s2:"Never deletes files",s2d:"It only quits apps or restarts system services that come right back.",s3:"No admin password",s3d:"No background daemons, no changes to system files.",s4:"Fully open source",s4d:"All the code is on GitHub for anyone to read.",
+insT:"Install",i1:"Download the latest Mac-Optimizer-x.x.dmg from the Releases page.",i2:"Open the DMG and drag the app into Applications.",i3:"The app isn't notarized by Apple. If macOS says it can't verify the developer the first time, go to System Settings › Privacy & Security and click “Open Anyway” at the bottom. Or run this in Terminal:",
+endT:"Next time it lags, don't reach for restart",endD:"Free, open source, under 1 MB.",rel:"Releases",made:"vibe coded with ♥"}};
+let lang=localStorage.getItem("lang")||(navigator.language.startsWith("zh")?"zh":"en"),ri=0,timer;
+function apply(l){lang=l;localStorage.setItem("lang",l);const d=T[l];
+ document.documentElement.lang=l=="zh"?"zh-CN":"en";document.title=l=="zh"?"Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手":"Mac Optimizer · Fix a laggy Mac without restarting";
+ document.querySelectorAll("[data-i]").forEach(e=>{const v=d[e.dataset.i];if(v!==undefined)e.textContent=v});
+ document.querySelectorAll(".lang button").forEach(b=>b.classList.toggle("on",b.dataset.l==l));
+ ri=0;spin();clearInterval(timer);timer=setInterval(spin,1800)}
+function spin(){const w=T[lang].rot,el=document.querySelector("#rot");el.innerHTML="<span>"+w[ri%w.length]+"</span>";ri++}
+document.querySelectorAll(".lang button").forEach(b=>b.onclick=()=>apply(b.dataset.l));
+apply(lang);
+const hd=document.getElementById("hd"),more=document.getElementById("more");
+addEventListener("scroll",()=>{hd.classList.toggle("scrolled",scrollY>40);more.classList.toggle("hide",scrollY>innerHeight*.6||innerHeight+scrollY>document.body.scrollHeight-300)});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("on");io.unobserve(e.target)}}),{threshold:.15});
+document.querySelectorAll(".reveal").forEach(e=>io.observe(e));
+</script>
 </body>
 </html>
