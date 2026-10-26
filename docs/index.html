@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手</title>
+<meta name="description" content="外接大屏、多开 AI 工具和浏览器时 Mac 突然卡顿？一键找出元凶，不用重启。">
+<link rel="icon" href="icon.png">
+<style>
+:root{--a:#6b5cfa;--b:#2eb3f5;--ink:#16152b;--mute:#6b6a80;--bg:#f5f5fa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:var(--ink);background:var(--bg);line-height:1.7}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+header.hero{background:linear-gradient(180deg,#1a1a38,#3a2770);color:#fff;padding:28px 0 0;overflow:hidden}
+nav{display:flex;align-items:center;justify-content:space-between}
+nav .brand{display:flex;align-items:center;gap:10px;font-weight:600}
+nav .brand img{width:32px;height:32px}
+nav a.gh{font-size:14px;opacity:.8}
+.hero-main{text-align:center;padding:72px 0 48px}
+.hero-main img{width:120px;height:120px;filter:drop-shadow(0 12px 30px rgba(0,0,0,.35))}
+h1{font-size:46px;line-height:1.25;margin:28px 0 16px;letter-spacing:-.5px}
+.hero-main p{font-size:18px;opacity:.75;max-width:620px;margin:0 auto}
+.btns{margin-top:34px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;padding:13px 28px;border-radius:999px;font-weight:600;font-size:15px}
+.btn.primary{background:linear-gradient(90deg,var(--b),var(--a));color:#fff;box-shadow:0 8px 24px rgba(107,92,250,.45)}
+.btn.ghost{background:rgba(255,255,255,.12);color:#fff}
+.meta{margin-top:14px;font-size:12px;opacity:.55}
+/* 界面示意 */
+.mock{max-width:860px;margin:30px auto -1px;background:#fff;border-radius:14px 14px 0 0;box-shadow:0 -10px 60px rgba(0,0,0,.35);display:flex;height:330px;overflow:hidden;color:var(--ink)}
+.mock .side{width:190px;background:linear-gradient(180deg,#1a1a38,#36266b);color:#fff;padding:16px 10px;font-size:12px}
+.mock .dots{display:flex;gap:6px;margin-bottom:22px;padding-left:4px}
+.mock .dots i{width:10px;height:10px;border-radius:50%;background:#ff5f57}.mock .dots i:nth-child(2){background:#febc2e}.mock .dots i:nth-child(3){background:#28c840}
+.mock .side div{padding:7px 10px;border-radius:7px;opacity:.85}
+.mock .side div.on{background:rgba(255,255,255,.16);opacity:1;font-weight:600}
+.mock .main{flex:1;background:var(--bg);padding:22px;text-align:left}
+.mock h4{font-size:18px;margin-bottom:12px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.mc{background:#fff;border-radius:10px;padding:12px;box-shadow:0 3px 10px rgba(0,0,0,.05);font-size:11px;color:var(--mute)}
+.mc b{display:block;font-size:20px;color:var(--ink);margin:4px 0 6px}
+.bar{height:5px;border-radius:5px;background:#e8e6ff;overflow:hidden}.bar span{display:block;height:100%;background:var(--a)}
+.check{margin-top:12px;background:#fff;border-radius:10px;padding:14px;box-shadow:0 3px 10px rgba(0,0,0,.05);font-size:12px}
+.check .row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid #f0f0f5}
+.check .row:first-child{border:0}
+.check .row em{font-style:normal;flex:1}
+.sw{width:26px;height:15px;border-radius:9px;background:var(--a);position:relative}.sw:after{content:"";position:absolute;right:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#fff}
+.sw.off{background:#ddd}.sw.off:after{left:2px;right:auto}
+.score{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.score span{width:40px;height:40px;border-radius:10px;background:#fff3e0;color:#f39200;font-weight:700;display:grid;place-items:center;font-size:16px}
+section{padding:90px 0}
+h2{font-size:32px;margin-bottom:18px;letter-spacing:-.3px}
+.story{max-width:760px;margin:0 auto}
+.story p{font-size:17px;color:#3a3950;margin-bottom:18px}
+.story .quote{font-size:22px;font-weight:600;color:var(--ink);border-left:4px solid var(--a);padding-left:18px;margin:30px 0}
+.center{text-align:center}
+.sub{color:var(--mute);margin-bottom:44px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.f{background:#fff;border-radius:16px;padding:24px;box-shadow:0 6px 20px rgba(20,20,60,.05)}
+.f .ic{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--b),var(--a));color:#fff;display:grid;place-items:center;font-size:20px;margin-bottom:14px}
+.f h3{font-size:17px;margin-bottom:6px}
+.f p{font-size:14px;color:var(--mute)}
+.safe{background:#fff}
+.safe ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:30px}
+.safe li{background:var(--bg);border-radius:14px;padding:20px;font-size:15px}
+.safe li b{display:block;margin-bottom:4px}
+.install ol{max-width:640px;margin:30px auto 0;counter-reset:s;list-style:none}
+.install li{counter-increment:s;background:#fff;border-radius:14px;padding:18px 20px 18px 62px;margin-bottom:12px;position:relative;box-shadow:0 6px 20px rgba(20,20,60,.05)}
+.install li:before{content:counter(s);position:absolute;left:20px;top:18px;width:28px;height:28px;border-radius:50%;background:var(--a);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+code{background:#eeedf7;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}
+.cta{background:linear-gradient(180deg,#1a1a38,#3a2770);color:#fff;text-align:center}
+.cta p{opacity:.7;margin-bottom:30px}
+footer{text-align:center;padding:30px 0;font-size:13px;color:var(--mute)}
+@media(max-width:720px){h1{font-size:32px}.mock .side{display:none}.cards{grid-template-columns:1fr 1fr}.cards .mc:last-child{display:none}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <nav>
+      <div class="brand"><img src="icon.png" alt="">Mac 一键优化</div>
+      <a class="gh" href="https://github.com/yostyang/mac-optimizer">GitHub ↗</a>
+    </nav>
+    <div class="hero-main">
+      <img src="icon.png" alt="Mac 一键优化图标">
+      <h1>不用重启，<br>也能让卡顿的 Mac 重新跟手</h1>
+      <p>外接大屏、多开 AI 工具和浏览器时，Mac 突然卡顿却查不出原因？一键体检，找出元凶，当场解决。</p>
+      <div class="btns">
+        <a class="btn primary" href="https://github.com/yostyang/mac-optimizer/releases/latest">免费下载</a>
+        <a class="btn ghost" href="#story">为什么做它</a>
+      </div>
+      <div class="meta">macOS 13 及以上 · Apple 芯片与 Intel 通用 · 不到 1 MB · 开源</div>
+    </div>
+    <div class="mock" aria-hidden="true">
+      <div class="side">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="on">▦ 概览</div><div>▤ 资源排行</div><div>⏻ 开机启动</div><div>◍ 浏览器</div><div>⌕ Spotlight</div><div>▣ 虚拟机</div><div>⇅ 网络与 VPN</div><div>▭ 显示性能</div>
+      </div>
+      <div class="main">
+        <h4>概览</h4>
+        <div class="cards">
+          <div class="mc">CPU 负载<b>6.8</b><div class="bar"><span style="width:68%;background:#2eb3f5"></span></div></div>
+          <div class="mc">内存可用<b>34%</b><div class="bar"><span style="width:66%;background:#f39200"></span></div></div>
+          <div class="mc">连续运行<b>17 天</b><div class="bar"><span style="width:100%;background:#f39200"></span></div></div>
+        </div>
+        <div class="check">
+          <div class="score"><span>62</span><div><b>有点负担</b><br><small style="color:#6b6a80">发现 3 个可以处理的问题</small></div></div>
+          <div class="row">⚠️ <em>Spotlight 索引卡住，占用 180% CPU</em><i class="sw"></i></div>
+          <div class="row">⚠️ <em>多个 VPN 同时运行</em><i class="sw"></i></div>
+          <div class="row">⚠️ <em>同时开着 4 个浏览器</em><i class="sw off"></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="story">
+  <div class="wrap story">
+    <h2>为什么做这个</h2>
+    <p>如果你和我一样，平时用 MacBook Pro 外接显示器，同时开着一堆 AI 工具、软件和浏览器窗口，那你可能也遇到过这种情况：电脑突然变卡，鼠标和键盘都不跟手了。</p>
+    <p>可打开「活动监视器」一看，没有哪个软件特别占 CPU 或内存，也没有程序卡死。按理说，电脑应该运行得好好的。</p>
+    <p class="quote">重启当然最省事，但代价也最大。</p>
+    <p>开着的窗口、跑着的任务、手头的工作状态，全都得重来。我就想，有没有办法不重启也能把问题解决掉？于是 vibe 出了这个小工具。</p>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2 class="center">它会帮你检查这些</h2>
+    <p class="center sub">都是那些“活动监视器里看不出来”的卡顿元凶</p>
+    <div class="grid">
+      <div class="f"><div class="ic">♥</div><h3>智能体检</h3><p>几秒钟给出健康分，列出问题，选好要处理的项目后一键修复。</p></div>
+      <div class="f"><div class="ic">◔</div><h3>实时概览</h3><p>CPU 负载、可用内存、连续运行天数，每 4 秒自动刷新。</p></div>
+      <div class="f"><div class="ic">⌕</div><h3>Spotlight 索引卡住</h3><p>索引进程偷偷占满 CPU 是常见元凶，一键重启它，不会丢任何数据。</p></div>
+      <div class="f"><div class="ic">⇅</div><h3>多个 VPN 冲突</h3><p>两个 VPN 同时运行会互相抢网络，视频卡、网页慢，帮你只留一个。</p></div>
+      <div class="f"><div class="ic">▣</div><h3>后台虚拟机</h3><p>找出 Claude 桌面版等 AI 应用在后台跑的虚拟机，看看它吃了多少资源。</p></div>
+      <div class="f"><div class="ic">◍</div><h3>浏览器太多</h3><p>Chrome、Edge、豆包、夸克同时开？看清每个占多少内存，一键退出多余的。</p></div>
+      <div class="f"><div class="ic">▭</div><h3>外接大屏渲染负担</h3><p>按系统版本直达 Liquid Glass、降低透明度、减弱动态效果的设置，减轻 5K 带鱼屏的压力。</p></div>
+      <div class="f"><div class="ic">⏻</div><h3>开机启动与资源排行</h3><p>关掉不需要的开机自启，按应用汇总内存和 CPU，谁最占资源一目了然。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="safe">
+  <div class="wrap">
+    <h2 class="center">放心用</h2>
+    <ul>
+      <li><b>不会自动动手</b>每一项操作都要你自己选、自己点。</li>
+      <li><b>不删任何文件</b>只是退出程序或重启系统服务。</li>
+      <li><b>不要管理员密码</b>不装后台常驻服务，不改系统文件。</li>
+      <li><b>完全开源</b>代码都在 GitHub 上，随时可以查看。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="install">
+  <div class="wrap">
+    <h2 class="center">安装</h2>
+    <ol>
+      <li>到 <a href="https://github.com/yostyang/mac-optimizer/releases/latest" style="color:var(--a);font-weight:600">下载页</a> 下载最新的 <code>Mac-Optimizer-x.x.dmg</code>。</li>
+      <li>打开 DMG，把「Mac一键优化」拖进「应用程序」。</li>
+      <li>应用没有经过苹果公证，第一次打开如果提示“无法验证开发者”，到 <b>系统设置 › 隐私与安全性</b>，在底部点「仍要打开」。也可以在终端运行：<br><code>xattr -dr com.apple.quarantine "/Applications/Mac一键优化.app"</code></li>
+    </ol>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap">
+    <h2>下次卡顿，先别急着重启</h2>
+    <p>免费、开源，不到 1 MB。</p>
+    <a class="btn primary" href="https://github.com/yostyang/mac-optimizer/releases/latest">下载 Mac 一键优化</a>
+  </div>
+</section>
+
+<footer>由 <a href="https://github.com/yostyang" style="color:var(--a)">@yostyang</a> vibe 出品 · <a href="https://github.com/yostyang/mac-optimizer">GitHub</a></footer>
+</body>
+</html>

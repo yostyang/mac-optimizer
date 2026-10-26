@@ -1,6 +1,6 @@
 # Mac 一键优化
 
-**不用重启，也能让卡顿的 Mac 重新跟手。**
+**不用重启，也能让卡顿的 Mac 重新跟手。** · [介绍页](https://yostyang.github.io/mac-optimizer/)
 
 ## 为什么做这个
 
