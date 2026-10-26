@@ -1,0 +1,9 @@
+MacOptimizer
+mo_arm
+mo_x86
+mkicon
+*.iconset
+dmg/
+*.dmg
+.DS_Store
+build/
