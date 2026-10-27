@@ -174,11 +174,16 @@ enum Loaders {
 let accent = Color(red: 0.42, green: 0.36, blue: 0.98)
 let accent2 = Color(red: 0.18, green: 0.70, blue: 0.96)
 let good = Color(red: 0.16, green: 0.72, blue: 0.52)
-let pageBG = Color(red: 0.958, green: 0.960, blue: 0.978)
+func dyn(_ light: NSColor, _ dark: NSColor) -> Color {
+    Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .vibrantDark, .aqua, .vibrantLight]).map { [.darkAqua, .vibrantDark].contains($0) } == true ? dark : light })
+}
+/// 页面和卡片背景随系统外观切换（浅色 / 深色）
+let pageBG = dyn(NSColor(red: 0.958, green: 0.960, blue: 0.978, alpha: 1), NSColor(red: 0.105, green: 0.108, blue: 0.135, alpha: 1))
+let cardBG = dyn(.white, NSColor(red: 0.165, green: 0.168, blue: 0.200, alpha: 1))
 
 struct CardBG: ViewModifier {
     func body(content: Content) -> some View {
-        content.background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white).shadow(color: .black.opacity(0.06), radius: 10, y: 3))
+        content.background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.06), radius: 10, y: 3))
     }
 }
 extension View { func card() -> some View { modifier(CardBG()) } }
@@ -330,7 +335,7 @@ struct Overview: View {
     var body: some View {
         let s = mon.s
         let v = (load: s.load[0], cores: Double(ProcessInfo.processInfo.activeProcessorCount), memFree: Int((1 - s.memFraction) * 100), days: Int(s.uptime / 86400))
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("概览").font(.system(size: 24, weight: .bold))
@@ -375,7 +380,7 @@ struct ToolPage: View {
                     Text("一切正常，没有需要处理的项目").foregroundColor(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
+                ScrollView(showsIndicators: false) {   // 列表长度不定，只在内容超出时滚动，不显示滚动条
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { idx, r in
                             HStack(spacing: 12) {
@@ -411,6 +416,20 @@ struct ToolPage: View {
 }
 
 // MARK: - 窗口
+/// 页面容器：默认尺寸和最小尺寸下内容都能完整放下（由测试保证），极端情况下才滚动且不显示滚动条
+struct PageScroll<C: View>: View {
+    @ViewBuilder let content: C
+    var body: some View { ScrollView(.vertical, showsIndicators: false) { content } }
+}
+enum Layout {
+    static let minSize = NSSize(width: 1080, height: 720)
+    static let idealSize = NSSize(width: 1180, height: 780)
+    /// 默认窗口大小：理想尺寸，但不超过屏幕可用区域
+    static func defaultSize(for screen: NSScreen?) -> NSSize {
+        let vf = screen?.visibleFrame.size ?? idealSize
+        return NSSize(width: max(min(idealSize.width, vf.width - 40), min(minSize.width, vf.width)), height: max(min(idealSize.height, vf.height - 40), min(minSize.height, vf.height)))
+    }
+}
 final class Nav: ObservableObject { static let shared = Nav(); @Published var sel = -1 }
 struct RootView: View {
     @StateObject private var m = Model()
@@ -426,7 +445,7 @@ struct RootView: View {
                 else { ToolPage(feature: features[nav.sel]).id(nav.sel) }
             }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBG)
         }
-        .frame(width: 980, height: 640).ignoresSafeArea().preferredColorScheme(.light)
+        .frame(minWidth: Layout.minSize.width, maxWidth: .infinity, minHeight: Layout.minSize.height, maxHeight: .infinity).ignoresSafeArea()
     }
 }
 
@@ -435,7 +454,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ n: Notification) {
         let args = CommandLine.arguments
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 640), styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: false)
+        let size = Layout.defaultSize(for: NSScreen.main)
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        w.contentMinSize = NSSize(width: min(Layout.minSize.width, size.width), height: min(Layout.minSize.height, size.height))
         w.titlebarAppearsTransparent = true; w.titleVisibility = .hidden; w.title = "Mac 一键优化"
         w.isReleasedWhenClosed = false; w.isRestorable = false; w.center()
         window = w

@@ -64,7 +64,7 @@ struct Tile<Content: View>: View {
                 if !trailing.isEmpty { Text(trailing).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1) }
             }
             content
-        }.padding(11).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white)
+        }.padding(11).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardBG)
             .shadow(color: .black.opacity(0.05), radius: 6, y: 2))
     }
 }
@@ -248,7 +248,7 @@ struct ProcList: View {
                         .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 18)
                 }
             }
-        }.padding(11).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white).shadow(color: .black.opacity(0.05), radius: 6, y: 2))
+        }.padding(11).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.05), radius: 6, y: 2))
     }
 }
 
@@ -343,7 +343,7 @@ struct DashboardView: View {
     @ObservedObject var ui = UIState.shared
     var body: some View {
         let s = m.s; let h = s.health
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 16) {
                     ScoreRing(score: h.score, size: 64, light: false)
@@ -362,12 +362,12 @@ struct DashboardView: View {
                 HStack(alignment: .top, spacing: 8) {
                     VStack(spacing: 8) { BatteryTile(s: s); ProcList(m: m) }
                     VStack(spacing: 8) {
-                        QuickActions().padding(11).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white).shadow(color: .black.opacity(0.05), radius: 6, y: 2))
+                        QuickActions().padding(11).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.05), radius: 6, y: 2))
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle("在菜单栏显示实时指标", isOn: $ui.menuBar).accessibilityIdentifier("dash.menubar")
                             Toggle("登录时自动启动（默认关闭）", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled })).accessibilityIdentifier("dash.login")
                         }.toggleStyle(.switch).controlSize(.small).font(.system(size: 12)).padding(11).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white).shadow(color: .black.opacity(0.05), radius: 6, y: 2))
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.05), radius: 6, y: 2))
                     }
                 }
             }.padding(28)

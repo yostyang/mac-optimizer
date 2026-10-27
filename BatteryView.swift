@@ -19,19 +19,16 @@ struct BatteryPage: View {
     var now = Date()
     var body: some View {
         let s = m.s
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+        PageScroll {
+            VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("电池").font(.system(size: 24, weight: .bold))
                     Text("健康、外设电量、耗电排行和提醒").font(.system(size: 12)).foregroundColor(.secondary)
                 }
                 HStack(alignment: .top, spacing: 14) {
-                    health(s)
-                    devices(s)
+                    VStack(spacing: 14) { health(s); devices(s); sounds; limits }.frame(maxWidth: .infinity)
+                    VStack(spacing: 14) { energy; alerts }.frame(maxWidth: .infinity)
                 }
-                energy
-                alerts
-                limits
             }.padding(28)
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
     }
@@ -80,20 +77,20 @@ struct BatteryPage: View {
         }
     }
     var energy: some View {
-        let rows = Array(en.store.summary(range, now: now).prefix(8))
+        let rows = Array(en.store.summary(range, now: now).prefix(6))
         let mx = rows.first?.joules ?? 1
         return Card(title: "应用耗电", icon: "bolt.fill") {
             HStack {
                 Picker("", selection: $range) { ForEach(EnergyStore.Range.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 230)
                 Spacer()
-                if !en.live.isEmpty { Text("当前最耗电：" + en.live.prefix(2).map { "\($0.app) " + String(format: "%.1f W", $0.watts) }.joined(separator: "、")).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1) }
             }
+            if !en.live.isEmpty { HStack { Text("当前最耗电：" + en.live.prefix(2).map { "\($0.app) " + String(format: "%.1f W", $0.watts) }.joined(separator: "、")).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1) } }
             if rows.isEmpty { Text("正在收集数据（每分钟记录一次，几分钟后就有结果）").font(.system(size: 12)).foregroundColor(.secondary).padding(.vertical, 6) }
             ForEach(rows) { r in
                 HStack(spacing: 10) {
-                    Text(r.app).font(.system(size: 12)).lineLimit(1).frame(width: 150, alignment: .leading)
+                    Text(r.app).font(.system(size: 12)).lineLimit(1).frame(width: 120, alignment: .leading)
                     Bar(frac: r.joules / mx, color: accent2, height: 6)
-                    Spark(values: r.series, color: accent).frame(width: 90, height: 18)
+                    Spark(values: r.series, color: accent).frame(width: 64, height: 18)
                     Text(Fmt.energy(r.joules)).font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 70, alignment: .trailing)
                 }
             }
@@ -104,37 +101,42 @@ struct BatteryPage: View {
         Card(title: "电量提醒", icon: "bell.badge") {
             Toggle("开启电量提醒（系统通知）", isOn: $al.settings.alertsOn).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("bat.alertsOn")
             Group {
-                HStack(spacing: 6) {
-                    Text("低电量提醒：").font(.system(size: 12))
-                    ForEach([3, 5, 10, 15, 20, 30, 40, 50], id: \.self) { t in
-                        let on = al.settings.lowThresholds.contains(t)
-                        Button("\(t)%") { if on { al.settings.lowThresholds.removeAll { $0 == t } } else { al.settings.lowThresholds.append(t); al.settings.lowThresholds.sort() } }
-                            .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Capsule().fill(on ? accent : accent.opacity(0.08))).foregroundColor(on ? .white : accent)
+                Text("低电量提醒（可多选）").font(.system(size: 12))
+                ForEach([[3, 5, 10, 15], [20, 30, 40, 50]], id: \.self) { row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { t in
+                            let on = al.settings.lowThresholds.contains(t)
+                            Button("\(t)%") { if on { al.settings.lowThresholds.removeAll { $0 == t } } else { al.settings.lowThresholds.append(t); al.settings.lowThresholds.sort() } }
+                                .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).frame(width: 46).padding(.vertical, 3)
+                                .background(Capsule().fill(on ? accent : accent.opacity(0.10))).foregroundColor(on ? .white : accent)
+                        }
                     }
                 }
-                HStack(spacing: 18) {
+                HStack(spacing: 10) {
                     Toggle("充到", isOn: $al.settings.upperOn)
                     Stepper("\(al.settings.upper)% 时提醒拔电", value: $al.settings.upper, in: 50...99, step: 5).fixedSize()
                 }
-                HStack(spacing: 18) {
-                    Toggle("接通电源", isOn: $al.settings.plugOn); Toggle("断开电源", isOn: $al.settings.unplugOn); Toggle("充满", isOn: $al.settings.fullOn)
-                    Toggle("应用耗电异常", isOn: $al.settings.drainAlertsOn)
-                }
-                HStack(spacing: 18) {
-                    Toggle("电量 ≤ \(al.settings.criticalLevel)% 时全屏发光提醒", isOn: $al.settings.criticalGlow)
-                    Toggle("外设电量 ≤ \(al.settings.deviceLow)% / 充满时提醒", isOn: $al.settings.deviceAlertsOn)
-                }
-                HStack(spacing: 10) {
-                    Text("提示音：").font(.system(size: 12))
-                    ForEach([("plug", "接电"), ("unplug", "断电"), ("upper", "上限"), ("full", "充满"), ("low", "低电")], id: \.0) { k, n in
-                        Picker(n, selection: Binding(get: { al.settings.sounds[k] ?? "Pop" }, set: { al.settings.sounds[k] = $0; if $0 != "无声" { NSSound(named: $0)?.play() } })) {
-                            ForEach(BatterySettings.soundChoices, id: \.self) { Text($0).tag($0) }
-                        }.frame(width: 110)
-                    }
-                }
+                HStack(spacing: 14) { Toggle("接通电源", isOn: $al.settings.plugOn); Toggle("断开电源", isOn: $al.settings.unplugOn); Toggle("充满", isOn: $al.settings.fullOn) }
+                Toggle("应用耗电异常", isOn: $al.settings.drainAlertsOn)
+                Toggle("电量 ≤ \(al.settings.criticalLevel)% 时全屏发光提醒", isOn: $al.settings.criticalGlow)
+                Toggle("外设电量 ≤ \(al.settings.deviceLow)% 或充满时提醒", isOn: $al.settings.deviceAlertsOn)
             }.disabled(!al.settings.alertsOn).opacity(al.settings.alertsOn ? 1 : 0.5)
         }.toggleStyle(.checkbox).font(.system(size: 12))
+    }
+    var sounds: some View {
+        Card(title: "提示音", icon: "speaker.wave.2") {
+                Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+                    ForEach([[("plug", "接电"), ("unplug", "断电"), ("upper", "上限")], [("full", "充满"), ("low", "低电")]], id: \.first!.0) { row in
+                        GridRow {
+                            ForEach(row, id: \.0) { k, n in
+                                Picker(n, selection: Binding(get: { al.settings.sounds[k] ?? "Pop" }, set: { al.settings.sounds[k] = $0; if $0 != "无声" { NSSound(named: $0)?.play() } })) {
+                                    ForEach(BatterySettings.soundChoices, id: \.self) { Text($0).tag($0) }
+                                }.frame(width: 118)
+                            }
+                        }
+                    }
+                }
+        }.disabled(!al.settings.alertsOn).opacity(al.settings.alertsOn ? 1 : 0.5).font(.system(size: 12))
     }
     var limits: some View {
         Card(title: "充电控制", icon: "bolt.batteryblock") {

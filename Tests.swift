@@ -215,7 +215,11 @@ enum MOTests {
             let mon = Monitor.shared
             mon.start()
             EnergyTracker.shared.start(interval: 1)
-            if snap { snapshots(out, w) } else { uiChecks(w) }
+            if snap {
+                let gi = args.firstIndex(of: "--goldens"); let gd = gi.flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil }
+                if let gd { try? FileManager.default.createDirectory(atPath: gd, withIntermediateDirectories: true) }
+                snapshots(out, w, goldens: gd, approve: args.contains("--approve"))
+            } else { uiChecks(w) }
             EnergyTracker.shared.stop()
             for (k, v) in zip(keys, backup) { if let v { UserDefaults.standard.set(v, forKey: k) } else { UserDefaults.standard.removeObject(forKey: k) } }
             suite.removePersistentDomain(forName: "mo-uitest")
@@ -224,29 +228,155 @@ enum MOTests {
         }
     }
 
-    static func snapshots(_ out: String, _ w: NSWindow) {
+    // MARK: 截图、外观（浅色/深色）、对比度、布局适配
+    @discardableResult static func pngRep(_ v: NSView, _ path: String) -> NSBitmapImageRep? {
+        v.layoutSubtreeIfNeeded()
+        guard let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return nil }
+        v.cacheDisplay(in: v.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        return rep
+    }
+    static func lum(_ c: NSColor) -> Double {
+        guard let c = c.usingColorSpace(.sRGB) else { return 0 }
+        func ch(_ v: CGFloat) -> Double { let v = Double(v); return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * ch(c.redComponent) + 0.7152 * ch(c.greenComponent) + 0.0722 * ch(c.blueComponent)
+    }
+    /// 对比度检查：用辅助功能树找到每一段文字的位置，在截图里取样，文字区域内最亮和最暗像素的对比度必须够大
+    /// （白字落在浅色卡片上这类问题对比度≈1，会直接失败）
+    static func contrast(_ v: NSView, _ rep: NSBitmapImageRep, _ name: String) {
+        var texts: [(String, NSRect)] = []
+        var stack: [NSObject] = [v]; var n = 0
+        while let x = stack.popLast(), n < 30000 {
+            n += 1
+            if axString(x, "accessibilityRole") == "AXStaticText", x.responds(to: NSSelectorFromString("accessibilityFrame")),
+               let fr = (x.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue, fr.width > 6, fr.height > 6 {
+                texts.append((axString(x, "accessibilityLabel"), fr))
+            }
+            stack.append(contentsOf: axChildren(x))
+        }
+        guard let win = v.window else { return }
+        let sx = CGFloat(rep.pixelsWide) / v.bounds.width, sy = CGFloat(rep.pixelsHigh) / v.bounds.height
+        var bad: [String] = []; var minR = 99.0; var checked = 0
+        for (label, fr) in texts {
+            var r = v.convert(win.convertFromScreen(fr), from: nil).intersection(v.bounds)
+            guard r.width > 4, r.height > 4 else { continue }
+            if !v.isFlipped { r.origin.y = v.bounds.height - r.maxY }
+            var lo = 1.0, hi = 0.0
+            let x0 = Int(r.minX * sx), x1 = Int(r.maxX * sx), y0 = Int(r.minY * sy), y1 = Int(r.maxY * sy)
+            for y in stride(from: max(0, y0), to: min(rep.pixelsHigh, y1), by: 1) {
+                for x in stride(from: max(0, x0), to: min(rep.pixelsWide, x1), by: 1) {
+                    if let c = rep.colorAt(x: x, y: y) { let l = lum(c); lo = min(lo, l); hi = max(hi, l) }
+                }
+            }
+            let ratio = (hi + 0.05) / (lo + 0.05); checked += 1
+            minR = min(minR, ratio)
+            if ratio < 1.5 { bad.append("\(label)(\(String(format: "%.2f", ratio)))") }
+        }
+        check(checked >= 5 && bad.isEmpty, "文字对比度 \(name)", "检查 \(checked) 段文字，最低 \(String(format: "%.2f", minR))" + (bad.isEmpty ? "" : "；看不清：" + bad.prefix(6).joined(separator: "、")))
+    }
+    /// 布局检查：页面内容完全放得下，不需要滚动，也没有可见滚动条
+    static func fits(_ root: NSView, _ name: String) {
+        var scrolls: [NSScrollView] = []
+        func walk(_ v: NSView) { if let s = v as? NSScrollView { scrolls.append(s) }; v.subviews.forEach(walk) }
+        walk(root)
+        var worst = ""
+        for s in scrolls {
+            guard let doc = s.documentView else { continue }
+            let over = doc.frame.height - s.contentView.bounds.height
+            if over > 1 { worst = "内容超出 \(Int(over)) pt" }
+            if s.hasVerticalScroller, let sc = s.verticalScroller, !sc.isHidden, sc.alphaValue > 0, s.scrollerStyle == .legacy { worst += " 有滚动条" }
+        }
+        check(worst.isEmpty, "无需滚动 \(name)", worst.isEmpty ? "\(scrolls.count) 个滚动区域都放得下" : worst)
+    }
+    static func diffRatio(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> Double {
+        guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh else { return 1 }
+        var d = 0, n = 0
+        for y in stride(from: 0, to: a.pixelsHigh, by: 2) { for x in stride(from: 0, to: a.pixelsWide, by: 2) {
+            n += 1
+            guard let p = a.colorAt(x: x, y: y)?.usingColorSpace(.sRGB), let q = b.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { d += 1; continue }
+            if abs(p.redComponent - q.redComponent) + abs(p.greenComponent - q.greenComponent) + abs(p.blueComponent - q.blueComponent) > 0.25 { d += 1 }
+        } }
+        return Double(d) / Double(max(1, n))
+    }
+    static func golden(_ rep: NSBitmapImageRep?, _ name: String, _ dir: String?, approve: Bool) {
+        guard let rep, let dir else { return }
+        let path = dir + "/\(name).png"
+        if approve || !FileManager.default.fileExists(atPath: path) {
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            info("已更新基准图 \(name)"); return
+        }
+        guard let g = NSBitmapImageRep(data: (try? Data(contentsOf: URL(fileURLWithPath: path))) ?? Data()) else { check(false, "基准图 \(name) 可读"); return }
+        let r = diffRatio(rep, g)
+        check(r < 0.02, "与基准图一致 \(name)", String(format: "差异 %.2f%%", r * 100))
+    }
+    static func fixture() -> Snapshot {
+        var s = Snapshot()
+        s.chip = "M1 Max"; s.ramGB = 64; s.osVersion = "macOS 27"; s.pCores = 8; s.eCores = 2; s.gpuCores = 24
+        s.uptime = 3 * 86400 + 5 * 3600; s.cpu = 23; s.load = [3.1, 2.8, 2.5]; s.cpuTemp = 46; s.gpu = 12; s.gpuTemp = 41
+        s.memUsedGB = 38.5; s.memTotalGB = 64; s.memPressure = 1; s.swapUsedGB = 0.4
+        s.diskTotalGB = 995; s.diskFreeGB = 310; s.netIface = "en0"; s.netKind = "Wi-Fi"; s.downBps = 420_000; s.upBps = 36_000; s.proxy = "SOCKS"
+        s.fans = [1820, 1790]; s.fanMin = 1500; s.fanMax = 5348
+        s.battery = 76; s.batteryHealth = 86; s.charging = true; s.onAC = true; s.cycles = 156; s.batteryTemp = 31; s.batteryCondition = "正常"; s.designMah = 8694; s.fullMah = 7467
+        s.devices = [DeviceBattery(name: "Magic Mouse", percent: 18, kind: "computermouse"), DeviceBattery(name: "AirPods Pro", percent: 64, kind: "airpodspro")]
+        s.top = [ProcInfo(id: 999_991, name: "Google Chrome Helper", cpu: 38.2, memMB: 1450), ProcInfo(id: 999_992, name: "WindowServer", cpu: 12.4, memMB: 820),
+                 ProcInfo(id: 999_993, name: "Xcode", cpu: 6.1, memMB: 2900), ProcInfo(id: 999_994, name: "微信", cpu: 2.3, memMB: 560), ProcInfo(id: 999_995, name: "Music", cpu: 0.8, memMB: 210)]
+        return s
+    }
+
+    static func snapshots(_ out: String, _ w: NSWindow, goldens: String?, approve: Bool) {
         let mon = Monitor.shared
         mon.panelOpen = true
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
+        NSApp.activate(ignoringOtherApps: true)   // 让 SwiftUI 生成辅助功能树（用于对比度检查）
         settle(7)
         check(mon.cpuHist.count >= 3, "已采样", "\(mon.cpuHist.count) 次")
-        // 面板
-        let host = NSHostingView(rootView: PanelContent(m: mon))
-        let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
-        let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: .borderless, backing: .buffered, defer: false)
-        pw.contentView = host; pw.orderFrontRegardless(); settle(0.8)
-        png(host, out + "/panel.png"); check(size.width == 380 && size.height > 600 && size.height < 1000, "面板尺寸", "\(Int(size.width))×\(Int(size.height))")
-        pw.orderOut(nil)
-        // 主窗口
-        w.setFrameOrigin(NSPoint(x: -4000, y: 0)); w.orderFrontRegardless()
-        for (sel, name) in [(-2, "dashboard"), (-3, "battery"), (-1, "overview")] {
-            Nav.shared.sel = sel; settle(1.2)
-            png(w.contentView!, out + "/\(name).png"); check(FileManager.default.fileExists(atPath: out + "/\(name).png"), "截图 \(name)")
+        let modes: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
+        let screen = NSScreen.main
+        let defaultSize = Layout.defaultSize(for: screen)
+        for (mode, ap) in modes {
+            NSApp.appearance = NSAppearance(named: ap)
+            // 菜单栏面板
+            let host = NSHostingView(rootView: PanelContent(m: mon))
+            let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
+            let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
+            pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
+            if let rep = pngRep(host, out + "/panel-\(mode).png") { contrast(host, rep, "面板 \(mode)") }
+            if mode == "light" { pngRep(host, out + "/panel.png") }
+            check(size.width == 380 && size.height > 600 && size.height < 1000, "面板尺寸 \(mode)", "\(Int(size.width))×\(Int(size.height))")
+            pw.orderOut(nil)
+            // 主窗口：默认尺寸和最小尺寸
+            w.appearance = NSAppearance(named: ap)
+            for (sz, szName) in [(defaultSize, "default"), (Layout.minSize, "min")] {
+                w.setContentSize(sz); w.setFrameOrigin(NSPoint(x: -4000, y: 0)); w.orderFrontRegardless()
+                for (sel, name) in [(-2, "dashboard"), (-3, "battery"), (-1, "overview")] {
+                    Nav.shared.sel = sel; settle(1.2)
+                    let tag = "\(name)-\(szName)-\(mode)"
+                    let rep = pngRep(w.contentView!, out + "/\(tag).png")
+                    fits(w.contentView!, tag)
+                    if szName == "default", let rep { contrast(w.contentView!, rep, tag) }
+                    if szName == "default", mode == "light" { pngRep(w.contentView!, out + "/\(name).png") }
+                }
+            }
         }
-        let bh = NSHostingView(rootView: BatteryPage(m: mon).frame(width: 768, height: 1060).background(pageBG))
-        bh.frame = NSRect(x: 0, y: 0, width: 768, height: 1060)
-        let bw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: 768, height: 1060), styleMask: .borderless, backing: .buffered, defer: false)
-        bw.contentView = bh; bw.orderFrontRegardless(); settle(1.0); png(bh, out + "/battery-full.png"); bw.orderOut(nil)
+        check(defaultSize.width >= Layout.minSize.width && defaultSize.height >= Layout.minSize.height, "默认窗口不小于最小尺寸", "\(Int(defaultSize.width))×\(Int(defaultSize.height))")
+        // 固定数据的基准图（浅色/深色）
+        mon.panelOpen = false; mon.menuBarEnabled = false; mon.mainWindowVisible = { false }; mon.reschedule()
+        settle(2.5)
+        let fx = fixture()
+        mon.inject(fx, cpu: (0..<40).map { 20 + 15 * sin(Double($0) / 4) }, gpu: (0..<40).map { 10 + 5 * cos(Double($0) / 5) }, up: (0..<40).map { 30_000 + 8_000 * sin(Double($0) / 3) }, down: (0..<40).map { 400_000 + 90_000 * cos(Double($0) / 3) })
+        for (mode, ap) in modes {
+            NSApp.appearance = NSAppearance(named: ap)
+            let host = NSHostingView(rootView: PanelContent(m: mon))
+            let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
+            let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
+            pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
+            golden(pngRep(host, out + "/golden-panel-\(mode).png"), "panel-\(mode)", goldens, approve: approve)
+            pw.orderOut(nil)
+            w.appearance = NSAppearance(named: ap); w.setContentSize(Layout.idealSize); w.orderFrontRegardless()
+            Nav.shared.sel = -2; settle(1.2)
+            golden(pngRep(w.contentView!, out + "/golden-dashboard-\(mode).png"), "dashboard-\(mode)", goldens, approve: approve)
+        }
+        NSApp.appearance = NSAppearance(named: .aqua)
         // 菜单栏电池图标
         if let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 120, pixelsHigh: 56, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) {
             NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
@@ -258,9 +388,6 @@ enum MOTests {
             NSGraphicsContext.restoreGraphicsState()
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out + "/menubar-battery.png"))
         }
-        Overlay.showGlow(level: 5); settle(1.2)
-        if let gw = Overlay.windows.first { png(gw.contentView!, out + "/glow.png") }
-        Overlay.close()
     }
 
     static func uiChecks(_ w: NSWindow) {
