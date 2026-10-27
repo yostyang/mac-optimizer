@@ -7,3 +7,4 @@ dmg/
 *.dmg
 .DS_Store
 build/
+build-test/

@@ -173,6 +173,33 @@ footer nav{display:flex;gap:20px}
 </section>
 
 <section>
+  <div class="inner row reveal">
+    <div class="txt"><h2 data-i="f5T"></h2><p class="lead" data-i="f5D"></p></div>
+    <div class="media"><div class="ui">
+      <div class="h" style="justify-content:flex-start;gap:12px"><div class="score">95</div><div><span data-i="u_mb"></span><br><small style="color:var(--mute);font-weight:400">M1 Max · 64 GB · macOS 27</small></div></div>
+      <div class="metrics">
+        <div class="m"><small>CPU · 41°C</small><b>12%</b><div class="bar"><i style="width:12%"></i></div></div>
+        <div class="m"><small>GPU</small><b>3%</b><div class="bar"><i style="width:3%"></i></div></div>
+        <div class="m"><small data-i="u_mem2"></small><b>69%</b><div class="bar"><i style="width:69%"></i></div></div>
+      </div>
+      <div class="it"><em data-i="u_qa"></em></div>
+    </div></div>
+  </div>
+</section>
+
+<section class="g">
+  <div class="inner row rev reveal">
+    <div class="txt"><h2 data-i="f6T"></h2><p class="lead" data-i="f6D"></p></div>
+    <div class="media"><div class="ui">
+      <div class="h"><span data-i="u_bat"></span><span class="tag" data-i="u_health"></span></div>
+      <div class="it"><i class="dot ok"></i><em data-i="u_b1"></em></div>
+      <div class="it"><i class="dot ok"></i><em data-i="u_b2"></em></div>
+      <div class="it"><i class="dot"></i><em data-i="u_b3"></em></div>
+    </div></div>
+  </div>
+</section>
+
+<section>
   <div class="inner list reveal">
     <div><h2 data-i="safeT"></h2><p class="lead" data-i="safeD"></p></div>
     <ul>
@@ -214,45 +241,51 @@ const T={
 zh:{name:"Mac 一键优化",dl:"下载",dlfree:"免费下载",more:"了解更多",
 h1a:"不用重启，",h1b:"也能让",h1c:"重新跟手",rot:["鼠标","键盘","视频","窗口","Mac"],
 sub:"外接大屏、多开 AI 工具和浏览器时，Mac 突然卡顿却查不出原因？一键体检，找出元凶，当场解决。",
-meta:"macOS 13 及以上 · Apple 芯片与 Intel 通用 · 不到 1 MB · 开源免费",
+meta:"macOS 13 及以上 · Apple 芯片与 Intel 通用 · 约 2 MB · 开源免费",
 whyT:"为什么做这个",
 why1:"如果你和我一样，平时用 MacBook Pro 外接显示器，同时开着一堆 AI 工具、软件和浏览器窗口，那你可能也遇到过这种情况：电脑突然变卡，鼠标和键盘都不跟手了。",
 why2:"可打开「活动监视器」一看，没有哪个软件特别占 CPU 或内存，也没有程序卡死。按理说，电脑应该运行得好好的。",
 why3:"重启当然最省事，但代价也最大。",
 why4:"开着的窗口、跑着的任务、手头的工作状态，全都得重来。我就想，有没有办法不重启也能把问题解决掉？于是 vibe 出了这个小工具。",
 f1T:"几秒钟，找出卡顿的真正原因",f1D:"一键体检会给出健康分，把那些活动监视器里看不出来的问题列出来：卡住的 Spotlight 索引、冲突的 VPN、开太多的浏览器。选好要处理的，一键修复。",
-f2T:"实时看清这台 Mac 的状态",f2D:"CPU 负载、可用内存、连续运行天数，每 4 秒自动刷新。跑得太久、内存紧张，一眼就知道。",
+f2T:"实时看清这台 Mac 的状态",f2D:"CPU 负载、可用内存、连续运行天数，每 5 秒自动刷新。跑得太久、内存紧张，一眼就知道。",
 f3T:"揪出藏在后台的资源大户",f3D:"两个 VPN 同时运行会互相抢网络，Claude 等 AI 应用会在后台跑虚拟机。它会把这些都找出来，告诉你占了多少，要不要退出由你决定。",
 f4T:"为外接大屏减轻渲染负担",f4D:"5K 带鱼屏加上 Liquid Glass 效果，画面渲染压力不小。它会按你的系统版本，直接打开对应的设置页：Liquid Glass 滑块、降低透明度、减弱动态效果。",
 u_burden:"有点负担",u_found:"发现 3 个可以处理的问题",u_sp:"Spotlight 索引卡住",u_vpn:"多个 VPN 同时运行",u_br:"同时开着 4 个浏览器",u_fix:"修复所选（2）",
 u_ov:"概览",u_live:"实时",u_cpu:"CPU 负载",u_mem:"内存可用",u_up:"连续运行",u_days:"17 天",
 u_net:"网络与 VPN",u_run:"运行中",u_conf:"同时开着 2 个 VPN，建议只留一个",u_quit:"退出",u_vm:"后台虚拟机（Claude）",
 u_disp:"显示性能",u_lg:"调低 Liquid Glass 透明感",u_lgD:"外观 › Liquid Glass 滑块",u_rt:"降低透明度",u_rtD:"无障碍 › 显示",u_rm:"减弱动态效果",u_rmD:"无障碍 › 动态效果",u_go:"去设置",u_on:"已开启 ✓",
+f5T:"菜单栏里的实时仪表盘",f5D:"菜单栏常驻一个小指标（CPU、健康分或电池，可选），点开就是完整面板：CPU/GPU 占用和温度、内存压力、磁盘、网速、风扇、电池和外设电量、高占用进程（确认后正常退出）。还有常亮、擦屏、截图、麦克风静音等快捷开关。主窗口里同样能看。面板关着时每 5 秒采一次，常驻几乎不占资源。",
+f6T:"更细致的电池管理",f6D:"电池健康度、循环次数、温度和状况一目了然；所有设备电量按高低排序；任意百分比的低电量提醒、充到上限、接电/断电、充满提醒，每种可配提示音，严重低电还能全屏发光提醒；记录每个应用 24 小时 / 7 天 / 30 天的耗电，发现异常耗电会提醒。打扰类功能默认关闭。",
+u_mb:"一切正常",u_mem2:"内存",u_qa:"常亮 · 擦屏 · 截图 · 麦克风",u_bat:"电池",u_health:"健康度 86%",u_b1:"低电量提醒：20%、10%",u_b2:"充到 80% 提醒拔电",u_b3:"今日耗电最多：Chrome 2.1 Wh",
 safeT:"放心交给它",safeD:"它只做必要的事，每一步都在你的掌控之中。",
 s1:"不会自动动手",s1d:"每一项操作都要你自己选、自己点。",s2:"不删任何文件",s2d:"只是退出程序，或者重启会自动恢复的系统服务。",s3:"不要管理员密码",s3d:"不装后台常驻服务，也不改系统文件。",s4:"完全开源",s4d:"所有代码都在 GitHub 上，随时可以查看。",
 insT:"安装",i1:"到下载页下载最新的 Mac-Optimizer-x.x.dmg。",i2:"打开 DMG，把「Mac一键优化」拖进「应用程序」。",i3:"应用没有经过苹果公证。第一次打开如果提示“无法验证开发者”，到 系统设置 › 隐私与安全性，在底部点「仍要打开」。也可以在终端运行：",
-endT:"下次卡顿，先别急着重启",endD:"免费、开源，不到 1 MB。",rel:"版本记录",made:"vibe coded with ♥"},
+endT:"下次卡顿，先别急着重启",endD:"免费、开源，约 2 MB。",rel:"版本记录",made:"vibe coded with ♥"},
 en:{name:"Mac Optimizer",dl:"Download",dlfree:"Download for free",more:"Learn more",
 h1a:"No restart needed.",h1b:"Make your",h1c:"smooth again",rot:["mouse","keyboard","video","windows","Mac"],
 sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
-meta:"macOS 13+ · Apple silicon & Intel · Under 1 MB · Free & open source",
+meta:"macOS 13+ · Apple silicon & Intel · About 2 MB · Free & open source",
 whyT:"Why I built this",
 why1:"If you're like me, you run a MacBook Pro on an external display with lots of AI tools, apps and browser windows open. And every now and then the whole thing starts to stutter: the mouse and keyboard stop keeping up.",
 why2:"But Activity Monitor shows nothing unusual. No app is hogging the CPU or memory, and nothing has frozen. By all accounts, the Mac should be running fine.",
 why3:"Restarting is the easy fix, but also the most expensive one.",
 why4:"Every open window, running task and bit of work in progress has to start over. So I wondered: could I fix it without restarting? That's how I vibe coded this little tool.",
 f1T:"Find the real cause of lag in seconds",f1D:"A one-click checkup gives you a health score and lists the problems Activity Monitor won't show: a stuck Spotlight index, clashing VPNs, too many browsers. Pick what to fix, then fix it in one click.",
-f2T:"See how your Mac is doing, live",f2D:"CPU load, free memory and uptime, refreshed every 4 seconds. You'll know right away when it's been running too long or memory is tight.",
+f2T:"See how your Mac is doing, live",f2D:"CPU load, free memory and uptime, refreshed every 5 seconds. You'll know right away when it's been running too long or memory is tight.",
 f3T:"Catch the resource hogs hiding in the background",f3D:"Two VPNs running at once fight over the network, and AI apps like Claude run virtual machines in the background. It finds them, shows what they cost, and leaves the decision to you.",
 f4T:"Ease the load on big external displays",f4D:"A 5K ultrawide plus Liquid Glass effects is a lot to render. Based on your macOS version, it opens the exact settings you need: the Liquid Glass slider, Reduce transparency and Reduce motion.",
 u_burden:"Under some strain",u_found:"3 issues you can fix",u_sp:"Spotlight index is stuck",u_vpn:"Several VPNs running",u_br:"4 browsers open at once",u_fix:"Fix selected (2)",
 u_ov:"Overview",u_live:"Live",u_cpu:"CPU load",u_mem:"Free memory",u_up:"Uptime",u_days:"17 days",
 u_net:"Network & VPN",u_run:"Running",u_conf:"2 VPNs running, keep just one",u_quit:"Quit",u_vm:"Background VM (Claude)",
 u_disp:"Display performance",u_lg:"Tone down Liquid Glass",u_lgD:"Appearance › Liquid Glass slider",u_rt:"Reduce transparency",u_rtD:"Accessibility › Display",u_rm:"Reduce motion",u_rmD:"Accessibility › Motion",u_go:"Open",u_on:"On ✓",
+f5T:"A live dashboard in your menu bar",f5D:"A tiny live indicator sits in the menu bar (CPU, health score or battery — your pick). Click it for the full panel: CPU/GPU load and temperature, memory pressure, disk, network, fans, battery and accessory levels, and top processes (quit normally after you confirm). Plus quick toggles: keep awake, clean-screen, screenshot, mic mute. The same dashboard lives in the main window. With the panel closed it samples every 5 s and uses almost nothing.",
+f6T:"Smarter battery care",f6D:"Battery health, cycle count, temperature and condition at a glance; every device's battery sorted by level; alerts at any percentages you choose, at your charge limit, on plug/unplug and when full, each with its own sound, plus an optional full-screen glow when critically low. Per-app energy use over 24 h / 7 d / 30 d with alerts for unusual drain. Anything intrusive is off by default.",
+u_mb:"All good",u_mem2:"Memory",u_qa:"Keep awake · Clean screen · Screenshot · Mic",u_bat:"Battery",u_health:"Health 86%",u_b1:"Low battery alerts: 20%, 10%",u_b2:"Alert at 80% to unplug",u_b3:"Top drain today: Chrome 2.1 Wh",
 safeT:"Safe by design",safeD:"It only does what's needed, and you stay in control of every step.",
 s1:"Never acts on its own",s1d:"Every action needs your pick and your click.",s2:"Never deletes files",s2d:"It only quits apps or restarts system services that come right back.",s3:"No admin password",s3d:"No background daemons, no changes to system files.",s4:"Fully open source",s4d:"All the code is on GitHub for anyone to read.",
 insT:"Install",i1:"Download the latest Mac-Optimizer-x.x.dmg from the Releases page.",i2:"Open the DMG and drag the app into Applications.",i3:"The app isn't notarized by Apple. If macOS says it can't verify the developer the first time, go to System Settings › Privacy & Security and click “Open Anyway” at the bottom. Or run this in Terminal:",
-endT:"Next time it lags, don't reach for restart",endD:"Free, open source, under 1 MB.",rel:"Releases",made:"vibe coded with ♥"}};
+endT:"Next time it lags, don't reach for restart",endD:"Free, open source, about 2 MB.",rel:"Releases",made:"vibe coded with ♥"}};
 let lang=localStorage.getItem("lang")||(navigator.language.startsWith("zh")?"zh":"en"),ri=0,timer;
 function apply(l){lang=l;localStorage.setItem("lang",l);const d=T[l];
  document.documentElement.lang=l=="zh"?"zh-CN":"en";document.title=l=="zh"?"Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手":"Mac Optimizer · Fix a laggy Mac without restarting";

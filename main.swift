@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 @discardableResult
 func sh(_ cmd: String) -> String {
@@ -118,6 +119,7 @@ final class Model: ObservableObject {
         DispatchQueue.global().async {
             for (_, a) in acts { a() }
             Thread.sleep(forTimeInterval: 3)
+            CleanStats.shared.addOptimized(acts.count)
             DispatchQueue.main.async { self.log = acts.map { "✔ 已处理：\($0.0)" }; self.scan(keepLog: true) }
         }
     }
@@ -192,28 +194,6 @@ struct PillButton: ButtonStyle {
     }
 }
 
-// MARK: - 实时指标
-struct Metrics { var load = 0.0; var cores = 1.0; var memFree = 100; var days = 0 }
-final class Live: ObservableObject {
-    @Published var v = Metrics()
-    private var timer: Timer?
-    func start() {
-        guard timer == nil else { return }
-        refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in self?.refresh() }
-    }
-    func refresh() {
-        DispatchQueue.global().async {
-            var x = Metrics()
-            x.load = Double(sh("sysctl -n vm.loadavg").split(separator: " ").dropFirst().first.map(String.init) ?? "0") ?? 0
-            x.cores = Double(ProcessInfo.processInfo.activeProcessorCount)
-            x.memFree = Int(sh("memory_pressure | awk -F': ' '/free percentage/{print $2}'").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: "")) ?? 100
-            x.days = Int(ProcessInfo.processInfo.systemUptime / 86400)
-            DispatchQueue.main.async { self.v = x }
-        }
-    }
-}
-
 // MARK: - 侧边栏
 struct Feature: Identifiable { let id: Int; let icon: String; let title: String; let sub: String }
 let features = [
@@ -254,6 +234,8 @@ struct Sidebar: View {
             }.padding(.horizontal, 16).padding(.top, 46).padding(.bottom, 24)
             Group {
                 item(-1, "square.grid.2x2", "概览")
+                item(-2, "waveform.path.ecg.rectangle", "实时监控")
+                item(-3, "battery.75", "电池")
                 Text("工具").font(.system(size: 10, weight: .semibold)).opacity(0.45).padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
                 ForEach(features) { f in item(f.id, f.icon, f.title) }
             }.padding(.horizontal, 8)
@@ -344,14 +326,15 @@ struct CheckupCard: View {
 
 struct Overview: View {
     @ObservedObject var m: Model
-    @ObservedObject var live: Live
+    @ObservedObject var mon: Monitor
     var body: some View {
-        let v = live.v
+        let s = mon.s
+        let v = (load: s.load[0], cores: Double(ProcessInfo.processInfo.activeProcessorCount), memFree: Int((1 - s.memFraction) * 100), days: Int(s.uptime / 86400))
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("概览").font(.system(size: 24, weight: .bold))
-                    Text("下面的数字每 4 秒自动刷新").font(.system(size: 12)).foregroundColor(.secondary)
+                    Text("下面的数字每 5 秒自动刷新（读系统接口，几乎不占资源）").font(.system(size: 12)).foregroundColor(.secondary)
                 }
                 HStack(spacing: 14) {
                     MetricCard(icon: "cpu", title: "CPU 负载", value: String(format: "%.1f", v.load),
@@ -407,7 +390,8 @@ struct ToolPage: View {
                                 }
                                 Spacer()
                                 if let t = r.actionTitle, let act = r.action {
-                                    Button(t) { DispatchQueue.global().async { act(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { reload() } } }
+                                    Button(t) { let isQuit = t.contains("退出"); let memMB = isQuit ? (Double(r.subtitle.components(separatedBy: "内存 ").last?.components(separatedBy: " GB").first ?? "") ?? Double(r.subtitle.components(separatedBy: "占用 ").last?.components(separatedBy: " GB").first ?? "") ?? 0) * 1024 : 0
+                                        DispatchQueue.global().async { act(); if isQuit { CleanStats.shared.addQuit(memMB: memMB) } else { CleanStats.shared.addOptimized(1) }; DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { reload() } } }
                                         .buttonStyle(PillButton(filled: false))
                                 }
                             }.padding(.horizontal, 16).padding(.vertical, 11)
@@ -427,32 +411,67 @@ struct ToolPage: View {
 }
 
 // MARK: - 窗口
+final class Nav: ObservableObject { static let shared = Nav(); @Published var sel = -1 }
 struct RootView: View {
     @StateObject private var m = Model()
-    @StateObject private var live = Live()
-    @State private var sel = -1
+    @ObservedObject var mon = Monitor.shared
+    @ObservedObject var nav = Nav.shared
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(sel: $sel)
+            Sidebar(sel: $nav.sel)
             Group {
-                if sel < 0 { Overview(m: m, live: live) }
-                else { ToolPage(feature: features[sel]).id(sel) }
+                if nav.sel == -1 { Overview(m: m, mon: mon) }
+                else if nav.sel == -2 { DashboardView(m: mon) }
+                else if nav.sel == -3 { BatteryPage(m: mon) }
+                else { ToolPage(feature: features[nav.sel]).id(nav.sel) }
             }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBG)
         }
         .frame(width: 980, height: 640).ignoresSafeArea().preferredColorScheme(.light)
-        .onAppear { live.start() }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    var window: NSWindow!
+    func applicationDidFinishLaunching(_ n: Notification) {
+        let args = CommandLine.arguments
+        if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 640), styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: false)
+        w.titlebarAppearsTransparent = true; w.titleVisibility = .hidden; w.title = "Mac 一键优化"
+        w.isReleasedWhenClosed = false; w.isRestorable = false; w.center()
+        window = w
+        let mon = Monitor.shared
+        mon.mainWindowVisible = { [weak w] in guard let w else { return false }; return w.isVisible && w.occlusionState.contains(.visible) && !w.isMiniaturized }
+        for name in [NSWindow.didChangeOcclusionStateNotification, NSWindow.willCloseNotification, NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: w, queue: .main) { _ in DispatchQueue.main.async { mon.reschedule() } }
+        }
+        // 窗口关闭后释放界面，避免隐藏的 SwiftUI 视图继续跟着数据刷新
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
+            DispatchQueue.main.async { w.contentView = NSView(); if UIState.shared.menuBar { NSApp.setActivationPolicy(.accessory) } }
+        }
+        UIState.shared.openMain = { [weak self] in self?.showMain() }
+        mon.onSample = { BatteryAlerts.shared.handle($0) }
+        EnergyTracker.shared.onDrain = { BatteryAlerts.shared.drain($0, $1) }
+        if args.contains("--snapshot") || args.contains("--uitest") { w.contentView = NSHostingView(rootView: RootView()); MOTests.runUI(args: args, window: w); return }
+        mon.start()
+        StatusBar.shared.setup()
+        if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }
+        BatteryAlerts.shared.$settings.map(\.energyTracking).removeDuplicates().dropFirst().sink { $0 ? EnergyTracker.shared.start() : EnergyTracker.shared.stop() }.store(in: &subs)
+        if args.contains("--background") && UIState.shared.menuBar { NSApp.setActivationPolicy(.accessory) } else { showMain() }
+        if args.contains("--open-panel"), let b = StatusBar.shared.item?.button { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { StatusBar.shared.show(from: b) } }
+    }
+    var subs: Set<AnyCancellable> = []
+    func showMain() {
+        NSApp.setActivationPolicy(.regular)
+        if !(window.contentView is NSHostingView<RootView>) { window.contentView = NSHostingView(rootView: RootView()) }
+        window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); Monitor.shared.reschedule()
+    }
+    func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { showMain(); return true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !UIState.shared.menuBar }
+    func applicationWillTerminate(_ n: Notification) { EnergyTracker.shared.stop(); KeepAwake.shared.stop() }
 }
 
 @main
 struct MacOptimizerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    var body: some Scene {
-        WindowGroup("Mac 一键优化") { RootView() }
-            .windowStyle(.hiddenTitleBar).windowResizability(.contentSize)
-    }
+    var body: some Scene { Settings { EmptyView() } }
 }
