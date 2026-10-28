@@ -498,6 +498,52 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
 .foot .fb{display:flex;align-items:center;gap:8px}
 .foot .fb img{width:18px;height:18px;border-radius:5px;opacity:.85}
 
+
+/* ============ menu bar / live monitor / light-dark ============ */
+.duo{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(28px,5vw,64px);align-items:center;margin-top:56px}
+.duo.rev{grid-template-columns:1.25fr 1fr}
+.glass{padding:clamp(18px,2.4vw,30px);border-radius:26px;background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.02));border:1px solid var(--line);box-shadow:0 40px 100px -40px rgba(0,0,0,1),inset 0 1px 0 rgba(255,255,255,.07)}
+.glass img{width:100%;height:auto;display:block;border-radius:14px}
+.panel-shot{max-width:400px;margin:0 auto}
+.mb{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:22px 0 26px}
+.mb-bar{display:inline-flex;align-items:center;gap:16px;padding:7px 14px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.mb-bar .on{padding:3px 8px;border-radius:6px;background:rgba(109,99,245,.32);color:#fff;font-weight:600}
+.mb-bar .batt{display:inline-flex;align-items:center;gap:3px}
+.mb-bar .batt b{display:inline-block;width:24px;height:11px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative}
+.mb-bar .batt b::after{content:"";position:absolute;left:2px;top:2px;bottom:2px;width:76%;border-radius:1px;background:#3bc47a}
+.fx{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fx div{padding:14px 16px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid var(--line-2)}
+.fx b{display:block;font-size:14px;margin-bottom:4px;color:var(--ink)}
+.fx span{font-size:12.6px;line-height:1.6;color:var(--mute)}
+.fx i{font-style:normal;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;margin-right:7px;font-size:11px;font-weight:700;background:rgba(109,99,245,.3);color:#d9d6ff;vertical-align:1px}
+.actions-shot{margin:16px auto 0;max-width:400px;padding:6px;border-radius:18px;background:linear-gradient(160deg,rgba(109,99,245,.55),rgba(74,168,248,.35));box-shadow:0 0 30px -6px rgba(109,99,245,.7)}
+.actions-shot img{border-radius:13px}
+.actions-cap{text-align:center;font-size:12px;color:var(--mute);margin-top:10px}
+.metrics{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.metrics span{font-size:12px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line-2);color:var(--ink-2)}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.08em;color:#7be3a6;margin-bottom:14px}
+.live i{width:8px;height:8px;border-radius:50%;background:#3bd17f;box-shadow:0 0 0 0 rgba(59,209,127,.6);animation:livepulse 1.8s ease-out infinite}
+@keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(59,209,127,.55)}100%{box-shadow:0 0 0 10px rgba(59,209,127,0)}}
+@media(prefers-reduced-motion:reduce){.live i{animation:none}}
+.cmp{margin-top:56px}
+.cmp-frame{position:relative;border-radius:16px;overflow:hidden;line-height:0}
+.cmp-frame img{width:100%;height:auto;display:block}
+.cmp-frame .top{position:absolute;inset:0;clip-path:inset(0 0 0 var(--x,50%))}
+.cmp-line{position:absolute;top:0;bottom:0;left:var(--x,50%);width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 12px rgba(0,0,0,.5);pointer-events:none}
+.cmp-line::after{content:"⇆";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;background:#fff;color:#333;display:grid;place-items:center;font-size:15px;line-height:34px;text-align:center}
+.cmp-range{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize;margin:0}
+.cmp-tags{display:flex;justify-content:space-between;margin-top:14px;font-size:12px;color:var(--mute);letter-spacing:.06em}
+.cmp-stack{display:none}
+@media(max-width:880px){
+  .duo,.duo.rev{grid-template-columns:1fr}
+  .duo .glass{order:-1}
+  .fx{grid-template-columns:1fr}
+  .cmp-frame{display:none}.cmp-tags{display:none}
+  .cmp-stack{display:grid;gap:14px}
+  .cmp-stack figure{margin:0}
+  .cmp-stack figcaption{font-size:12px;color:var(--mute);margin-top:8px;text-align:center}
+}
+
 /* ============ responsive ============ */
 @media(max-width:1000px){
   .bento{grid-template-columns:repeat(2,1fr)}
@@ -632,6 +678,47 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
   </div>
 
   <!-- ============ PROBLEM ============ -->
+
+  <!-- ============ MENU BAR ============ -->
+  <section id="menubar">
+    <div class="wrap">
+      <div class="duo">
+        <div class="rv">
+          <div class="eyebrow"><span class="dotp"></span><span data-i="mb_eb">菜单栏</span></div>
+          <h2 data-i="mb_h2">常驻状态栏，<br>四个常用开关就在手边</h2>
+          <p class="lead" data-i="mb_p">菜单栏图标可以显示 CPU 占用、健康分或电池电量，点一下展开面板：健康分、各项指标和占用最高的进程一目了然，底部是四个随手就用的功能。</p>
+          <div class="mb"><div class="mb-bar"><span class="on" data-i="mb_cpu">CPU 23%</span><span data-i="mb_score">♡ 健康分 100</span><span class="batt"><b></b>76</span></div></div>
+          <div class="fx">
+            <div><b><i>1</i><span data-i="fx1t">截图</span></b><span data-i="fx1d">直接打开系统的「截屏」工具，截图、录屏都行。</span></div>
+            <div><b><i>2</i><span data-i="fx2t">麦克风</span></b><span data-i="fx2d">一键静音或恢复系统麦克风，开会时一眼看清是否已关。</span></div>
+            <div><b><i>3</i><span data-i="fx3t">常亮</span></b><span data-i="fx3d">阻止 Mac 自动睡眠和熄屏，跑长任务、做演示时用，再点一下恢复。</span></div>
+            <div><b><i>4</i><span data-i="fx4t">擦屏</span></b><span data-i="fx4d">所有屏幕变黑 60 秒，放心擦屏幕，不会误点到东西。</span></div>
+          </div>
+        </div>
+        <div class="glass rv" style="--d:.1s">
+          <div class="panel-shot"><img src="panel-dark-2x.png" width="760" height="1685" alt="菜单栏面板真实截图" loading="lazy"></div>
+          <div class="actions-shot"><img src="panel-actions-2x.png" width="760" height="215" alt="面板底部的四个功能" loading="lazy"></div>
+          <div class="actions-cap" data-i="mb_cap">↑ 面板底部的四个功能：截图 · 麦克风 · 常亮 · 擦屏</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LIVE MONITOR ============ -->
+  <section id="monitor">
+    <div class="wrap">
+      <div class="sec-head center rv">
+        <div class="live"><i></i><span data-i="lv_tag">LIVE</span></div>
+        <h2 data-i="lv_h2">实时监控，一眼看清</h2>
+        <p class="lead" data-i="lv_p">CPU、GPU、内存、磁盘、网络、风扇、电池和高占用进程放在同一个页面。窗口可见时每 2 秒刷新，关掉窗口自动降频，监控本身几乎不占资源。</p>
+        <div class="metrics" style="justify-content:center">
+          <span data-i="lv_m1">CPU 占用 · 温度 · 负载</span><span data-i="lv_m2">GPU 占用 · 温度</span><span data-i="lv_m3">内存压力 · 交换</span><span data-i="lv_m4">磁盘可用空间</span><span data-i="lv_m5">网络上下行 · 代理</span><span data-i="lv_m6">风扇转速</span><span data-i="lv_m7">电池 · 健康度 · 外设电量</span><span data-i="lv_m8">高占用进程</span>
+        </div>
+      </div>
+      <div class="glass rv" style="margin-top:48px;--d:.1s"><img src="dashboard-dark-2x.png" width="1800" height="1190" alt="实时监控页真实截图" loading="lazy"></div>
+    </div>
+  </section>
+
   <section id="problem">
     <div class="wrap">
       <div class="sec-head rv">
@@ -833,6 +920,31 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
     </div>
   </section>
 
+  <!-- ============ LIGHT / DARK ============ -->
+  <section id="modes">
+    <div class="wrap">
+      <div class="sec-head center rv">
+        <div class="eyebrow"><span class="dotp"></span><span data-i="md_eb">外观</span></div>
+        <h2 data-i="md_h2">日间与夜间，都好看</h2>
+        <p class="lead" data-i="md_p">跟随系统的浅色和深色模式自动切换，每个页面都分别为两种模式调过对比度。拖动中间的滑块对比同一个页面。</p>
+      </div>
+      <div class="cmp glass rv" style="--d:.1s">
+        <div class="cmp-frame" id="cmp">
+          <img src="dashboard-light-2x.png" width="1800" height="1190" alt="浅色模式" loading="lazy">
+          <img class="top" src="dashboard-dark-2x.png" width="1800" height="1190" alt="深色模式" loading="lazy">
+          <span class="cmp-line"></span>
+          <input class="cmp-range" type="range" min="0" max="100" value="50" aria-label="对比浅色和深色模式">
+        </div>
+        <div class="cmp-tags"><span data-i="md_l">☀︎ 日间模式</span><span data-i="md_d">夜间模式 ☾</span></div>
+        <div class="cmp-stack">
+          <figure><img src="dashboard-light-2x.png" width="1800" height="1190" alt="浅色模式" loading="lazy"><figcaption data-i="md_l2">日间模式</figcaption></figure>
+          <figure><img src="dashboard-dark-2x.png" width="1800" height="1190" alt="深色模式" loading="lazy"><figcaption data-i="md_d2">夜间模式</figcaption></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
   <!-- ============ SAFETY ============ -->
   <section id="safe">
     <div class="wrap">
@@ -990,6 +1102,20 @@ var EN = {
   f7t:"Display control", f7d:"With DDC/CI, adjust hardware brightness, contrast and input source directly. Four scenes — Day, Reading, Movie, Night — plus one-click resolution and HiDPI.",
   f8t:"Network diagnostics", f8d:"One click measures latency and packet loss, checks DNS resolve times, and detects ISP hijacking with a non-existent domain. Switch to Alibaba Public DNS and flush the cache in one click.",
   f9t:"Bluetooth battery", f9d:"Battery levels for mice, keyboards, headphones and remotes: system readings, AirPods (left, right, case) and the standard BLE battery service used by Logitech MX and others.",
+  mb_eb:"Menu bar", mb_h2:"Always in your menu bar,<br>four handy switches built in",
+  mb_p:"The menu-bar icon can show CPU usage, the health score or battery level. Click it for a panel with your health score, every key metric and the busiest processes, plus four quick actions at the bottom.",
+  mb_cap:"↑ The four quick actions at the bottom of the panel: Screenshot · Microphone · Keep awake · Clean screen",
+  mb_cpu:"CPU 23%", mb_score:"♡ Health 100",
+  fx1t:"Screenshot", fx1d:"Opens the macOS Screenshot tool for captures and screen recordings.",
+  fx2t:"Microphone", fx2d:"Mute or unmute the system microphone in one click, and see at a glance whether it's off.",
+  fx3t:"Keep awake", fx3d:"Stops your Mac from sleeping or dimming during long tasks or presentations. Click again to turn it off.",
+  fx4t:"Clean screen", fx4d:"Turns every display black for 60 seconds so you can wipe the screen without clicking anything.",
+  lv_tag:"LIVE", lv_h2:"Live monitoring at a glance",
+  lv_p:"CPU, GPU, memory, disk, network, fans, battery and the busiest processes on one page. It refreshes every 2 seconds while the window is visible and slows down when it's closed, so monitoring costs almost nothing.",
+  lv_m1:"CPU usage · temp · load", lv_m2:"GPU usage · temp", lv_m3:"Memory pressure · swap", lv_m4:"Free disk space", lv_m5:"Network up/down · proxy", lv_m6:"Fan speed", lv_m7:"Battery · health · accessories", lv_m8:"Top processes",
+  md_eb:"Appearance", md_h2:"Looks great day and night",
+  md_p:"Follows your system's light or dark mode automatically, with contrast tuned for both on every page. Drag the slider to compare the same page.",
+  md_l:"☀︎ Light mode", md_d:"Dark mode ☾", md_l2:"Light mode", md_d2:"Dark mode",
   st_eb:"The real thing", st_h2:"Here's what it actually looks like",
   st_p:"These are real screenshots from the app, not mockups.",
   s1k:"Battery · Charging", s1t:"A charge limit that protects your battery",
@@ -1169,6 +1295,11 @@ window.addEventListener("scroll", function(){
 }, {passive:true});
 window.addEventListener("resize", stackUpdate);
 stackUpdate();
+
+
+/* ---------- light/dark compare ---------- */
+(function(){var f=document.getElementById("cmp");if(!f)return;var r=f.querySelector(".cmp-range");
+r.addEventListener("input",function(){f.style.setProperty("--x",r.value+"%")});})();
 
 /* ---------- magnetic buttons ---------- */
 if(!reduce && window.matchMedia("(hover:hover)").matches){
