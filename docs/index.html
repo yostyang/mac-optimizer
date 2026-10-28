@@ -3,330 +3,1204 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mac 一键优化 · Mac Optimizer</title>
-<meta name="description" content="不用重启，也能让卡顿的 Mac 重新跟手。Fix a laggy Mac without restarting.">
+<title>Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手</title>
+<meta name="description" content="不用重启，也能让卡顿的 Mac 重新跟手。一键体检找出活动监视器看不到的原因：卡住的 Spotlight 索引、冲突的 VPN、后台虚拟机。开源免费，约 2 MB。">
+<meta name="theme-color" content="#07070a">
+<meta property="og:title" content="Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手">
+<meta property="og:description" content="一键体检，几秒钟找出卡顿的真凶。开源免费，约 2 MB。">
+<meta property="og:image" content="icon.png">
 <link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
 <style>
-:root{--ink:#111112;--mute:#6b6f7b;--line:#e9eaeb;--bg:#fcfcfc;--gray:#f3f4f6;--a:#5b55f5;--b:#2ea7f2}
+/* ============ tokens ============ */
+:root{
+  --bg:#07070a;
+  --ink:#f4f4f8;
+  --ink-2:#c9c9d6;
+  --mute:#8a8a9e;
+  --mute-2:#6b6b80;
+  --line:rgba(255,255,255,.10);
+  --line-2:rgba(255,255,255,.055);
+  --card:rgba(255,255,255,.035);
+  --card-hi:rgba(255,255,255,.06);
+  --a1:#6d63f5;
+  --a2:#4aa8f8;
+  --a3:#a78bfa;
+  --ok:#3ddc84;
+  --warn:#ffb340;
+  --max:1120px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  overflow-x:clip;line-height:1.5;
+}
 a{color:inherit;text-decoration:none}
-.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;font-weight:500;font-size:14px;padding:10px 20px;transition:.2s}
-.pill.blue{background:var(--a);color:#fff}.pill.blue:hover{background:#4842e0}
-.pill.light{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-.pill.sm{font-size:13px;padding:7px 15px}
-/* header */
-header{position:fixed;top:0;left:0;right:0;z-index:10;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1040px)/2));transition:.25s}
-header.scrolled{background:rgba(252,252,252,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;opacity:0;transition:.25s}
-header.scrolled .brand{opacity:1}
-.brand img{width:26px;height:26px}
-.right{display:flex;align-items:center;gap:10px}
-.lang{display:flex;background:var(--gray);border-radius:999px;padding:3px}
-.lang button{border:0;background:none;font:inherit;font-size:12px;padding:5px 11px;border-radius:999px;cursor:pointer;color:var(--mute)}
-.lang button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
-/* hero */
-.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px}
-.hero img.logo{width:84px;height:84px;border-radius:20px;box-shadow:0 10px 30px rgba(60,50,160,.25);margin-bottom:36px}
-h1{font-size:clamp(34px,5.4vw,60px);font-weight:500;letter-spacing:-.03em;line-height:1.15}
-.rot{display:inline-block;position:relative;color:var(--a);min-width:2.4em;text-align:center}
-.rot span{display:inline-block;animation:in .5s ease}
-@keyframes in{from{opacity:0;transform:translateY(.4em)}to{opacity:1;transform:none}}
-.hero p{margin-top:22px;font-size:17px;color:var(--mute);max-width:560px;line-height:1.7}
-.hero .cta{margin-top:34px;display:flex;flex-direction:column;align-items:center;gap:12px}
-.hero small{font-size:12px;color:var(--mute)}
-.more{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:9;font-size:13px;transition:.3s}
-.more.hide{opacity:0;pointer-events:none}
-/* sections */
-section{padding:120px 24px}
-section.g{background:var(--gray)}
-.inner{max-width:880px;margin:0 auto}
-h2{font-size:clamp(26px,3.4vw,36px);font-weight:500;letter-spacing:-.02em;line-height:1.25}
-.lead{color:var(--mute);font-size:16px;line-height:1.75;margin-top:16px}
-.center{text-align:center}.center .lead{max-width:600px;margin-left:auto;margin-right:auto}
-.story{max-width:620px;margin:0 auto}
-.story p{font-size:18px;line-height:1.85;color:#3b3e48;margin-top:22px}
-.story p.big{font-size:24px;color:var(--ink);font-weight:500;letter-spacing:-.01em}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
-.row.rev .txt{order:2}
-.txt{max-width:340px}
-.media{background:#fff;border-radius:24px;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;padding:28px;box-shadow:0 1px 0 var(--line)}
-section.g .media{background:#fff}section:not(.g) .media{background:var(--gray)}
-/* mini UI */
-.ui{width:100%;background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(20,20,60,.08);padding:16px;font-size:12px}
-.ui .h{font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-.ui .it{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #f1f1f4}
-.ui .it:first-of-type{border-top:0}
-.ui .it em{flex:1;font-style:normal}
-.ui .it small{display:block;color:var(--mute);font-size:10.5px}
-.dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;flex:none}.dot.ok{background:#22c55e}
-.sw{width:28px;height:16px;border-radius:9px;background:var(--a);position:relative;flex:none}.sw:after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff}
-.sw.off{background:#d9dae0}.sw.off:after{left:2px;right:auto}
-.tag{font-size:10.5px;color:var(--a);background:#eeedff;border-radius:999px;padding:3px 9px;flex:none}
-.score{width:44px;height:44px;border-radius:12px;background:#fff4e5;color:#e58a00;font-weight:700;font-size:17px;display:grid;place-items:center}
-.metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.m{background:#f7f7fa;border-radius:10px;padding:10px}.m b{display:block;font-size:18px;margin:2px 0 6px}.m small{color:var(--mute);font-size:10px}
-.bar{height:4px;border-radius:4px;background:#e4e3fb;overflow:hidden}.bar i{display:block;height:100%;background:var(--a)}
-.bar.o i{background:#f59e0b}
-/* list */
-.list{display:grid;grid-template-columns:1fr 1.3fr;gap:64px;align-items:center}
-.list ul{list-style:none}
-.list li{display:flex;gap:14px;padding:20px 0;border-bottom:1px solid var(--line)}
-.list li:last-child{border:0}
-.list li .ic{font-size:16px;color:var(--mute);width:20px;flex:none;line-height:1.4}
-.list li b{font-weight:600;font-size:15px}
-.list li p{color:var(--mute);font-size:13.5px;line-height:1.65;margin-top:4px}
-.steps{counter-reset:s;max-width:620px;margin:40px auto 0;text-align:left}
-.steps li{list-style:none;counter-increment:s;position:relative;padding:18px 0 18px 48px;border-bottom:1px solid var(--line);font-size:15px;line-height:1.7;color:#3b3e48}
-.steps li:before{content:counter(s);position:absolute;left:0;top:18px;width:28px;height:28px;border-radius:50%;background:#fff;border:1px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:600}
-code{background:#fff;border:1px solid var(--line);padding:2px 7px;border-radius:6px;font-size:12.5px;word-break:break-all}
-.final{padding:160px 24px}
-.final h2{font-size:clamp(30px,4.2vw,46px)}
-.final .pill{margin-top:30px;font-size:15px;padding:13px 28px}
-footer{display:flex;justify-content:space-between;align-items:center;max-width:1040px;margin:0 auto;padding:28px 24px;font-size:12px;color:var(--mute);border-top:1px solid var(--line)}
-footer nav{display:flex;gap:20px}
-.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
-.reveal.on{opacity:1;transform:none}
-@media(max-width:760px){.row,.list{grid-template-columns:1fr;gap:32px}.row.rev .txt{order:0}.txt{max-width:none}section{padding:80px 20px}}
+img{max-width:100%;display:block}
+::selection{background:rgba(109,99,245,.4)}
+
+/* ============ ambience ============ */
+.ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.blob{position:absolute;border-radius:50%;filter:blur(110px);will-change:transform}
+.b1{width:60vw;height:60vw;left:-18vw;top:-22vw;background:radial-gradient(circle,rgba(109,99,245,.55),transparent 68%);opacity:.55;animation:drift1 26s ease-in-out infinite}
+.b2{width:52vw;height:52vw;right:-16vw;top:-8vw;background:radial-gradient(circle,rgba(74,168,248,.42),transparent 68%);opacity:.5;animation:drift2 32s ease-in-out infinite}
+.b3{width:46vw;height:46vw;left:28vw;top:52vh;background:radial-gradient(circle,rgba(167,139,250,.22),transparent 70%);opacity:.45;animation:drift1 38s ease-in-out infinite reverse}
+@keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6vw,5vh,0) scale(1.12)}}
+@keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1.05)}50%{transform:translate3d(-7vw,7vh,0) scale(.92)}}
+.grid-bg{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(var(--line-2) 1px,transparent 1px),linear-gradient(90deg,var(--line-2) 1px,transparent 1px);
+  background-size:72px 72px;
+  -webkit-mask-image:radial-gradient(ellipse 65% 55% at 50% 22%,#000 10%,transparent 78%);
+  mask-image:radial-gradient(ellipse 65% 55% at 50% 22%,#000 10%,transparent 78%);
+}
+.grain{
+  position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.028;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+main{position:relative;z-index:2}
+
+/* ============ header ============ */
+.progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:60;background:linear-gradient(90deg,var(--a1),var(--a2),var(--a3));box-shadow:0 0 14px rgba(109,99,245,.9)}
+header{
+  position:fixed;top:0;left:0;right:0;z-index:50;height:66px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 max(22px,calc((100vw - var(--max))/2));
+  transition:background .35s var(--ease),border-color .35s,backdrop-filter .35s,height .35s;
+  border-bottom:1px solid transparent;
+}
+header.scrolled{
+  height:58px;background:rgba(7,7,10,.72);backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom-color:var(--line-2);
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:14.5px;letter-spacing:-.01em;white-space:nowrap}
+.brand img{width:26px;height:26px;border-radius:7px;box-shadow:0 2px 10px rgba(109,99,245,.35)}
+.navlinks{display:flex;align-items:center;gap:30px;font-size:13.5px;color:var(--mute)}
+.navlinks a{position:relative;transition:color .25s}
+.navlinks a:hover{color:var(--ink)}
+.navlinks a::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:1px;background:linear-gradient(90deg,var(--a1),var(--a2));transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease)}
+.navlinks a:hover::after{transform:scaleX(1)}
+.right{display:flex;align-items:center;gap:12px}
+.lang{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--line-2);border-radius:999px;padding:3px;position:relative}
+.lang button{border:0;background:none;font:inherit;font-size:11.5px;padding:5px 11px;border-radius:999px;cursor:pointer;color:var(--mute);transition:.25s;letter-spacing:.02em}
+.lang button.on{background:rgba(255,255,255,.12);color:var(--ink)}
+.lang button:hover{color:var(--ink)}
+
+/* ============ buttons ============ */
+.btn{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  height:50px;padding:0 26px;border-radius:999px;font-size:14.5px;font-weight:560;
+  letter-spacing:-.005em;white-space:nowrap;cursor:pointer;overflow:hidden;
+  transition:transform .35s var(--ease),box-shadow .35s var(--ease),background .3s,border-color .3s;
+  will-change:transform;
+}
+.btn svg{width:16px;height:16px;flex:none}
+.btn-primary{
+  background:linear-gradient(180deg,#8377ff,#5a51e8);color:#fff;
+  box-shadow:0 12px 34px -10px rgba(109,99,245,.85),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.15);
+}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 44px -12px rgba(109,99,245,1),inset 0 1px 0 rgba(255,255,255,.32)}
+.btn-primary::after{
+  content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);
+  transform:skewX(-18deg) translateX(-180%);transition:transform .9s var(--ease);
+}
+.btn-primary:hover::after{transform:skewX(-18deg) translateX(520%)}
+.btn-ghost{background:rgba(255,255,255,.045);color:var(--ink);border:1px solid var(--line);backdrop-filter:blur(10px)}
+.btn-ghost:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);transform:translateY(-2px)}
+.btn-sm{height:36px;padding:0 16px;font-size:12.5px}
+
+/* ============ eyebrow / headings ============ */
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--mute);font-weight:600;margin-bottom:22px;
+}
+.eyebrow::before{content:"";width:22px;height:1px;background:linear-gradient(90deg,var(--a1),transparent)}
+.eyebrow .dotp{width:5px;height:5px;border-radius:50%;background:var(--a2);box-shadow:0 0 10px var(--a2);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+h2{font-size:clamp(28px,4.4vw,50px);font-weight:600;letter-spacing:-.035em;line-height:1.1;text-wrap:balance}
+h3{font-size:16.5px;font-weight:600;letter-spacing:-.015em;text-wrap:balance}
+.lead{color:var(--mute);font-size:16.5px;line-height:1.72;margin-top:18px;max-width:620px}
+.grad-text{background:linear-gradient(96deg,#8f86ff 0%,#4aa8f8 48%,#c4b5fd 100%);-webkit-background-clip:text;background-clip:text;color:transparent;background-size:200% 100%;animation:sheen 9s ease-in-out infinite}
+@keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+/* ============ layout ============ */
+.wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
+section{position:relative;padding:clamp(84px,10vw,150px) 0;scroll-margin-top:72px}
+.sec-head{max-width:720px}
+.sec-head.center{margin:0 auto;text-align:center}
+.sec-head.center .lead{margin-left:auto;margin-right:auto}
+.sec-head.center .eyebrow::before{display:none}
+
+/* ============ hero ============ */
+.hero{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:116px 24px 0;overflow:hidden}
+.hero-inner{max-width:960px;position:relative;z-index:2}
+.badge{
+  display:inline-flex;align-items:center;gap:9px;height:32px;padding:0 14px 0 11px;border-radius:999px;
+  background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:12px;color:var(--ink-2);
+  backdrop-filter:blur(10px);letter-spacing:.01em;
+}
+.badge b{color:var(--ink);font-weight:600}
+.badge .led{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);animation:pulse 2.4s ease-in-out infinite}
+h1{
+  margin-top:24px;font-size:clamp(34px,5.6vw,68px);font-weight:650;letter-spacing:-.042em;line-height:1.05;text-wrap:balance;
+}
+html[lang="zh-CN"] h1{letter-spacing:-.026em}
+html[lang="zh-CN"] h2{letter-spacing:-.02em}
+html[lang="zh-CN"] .quote{letter-spacing:-.022em;line-height:1.4}
+h1 .line{display:block}
+.rot{display:inline-block;position:relative;min-width:1.9em;text-align:left;vertical-align:baseline}
+.rot span{display:inline-block;background:linear-gradient(100deg,#8f86ff,#4aa8f8 60%,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent;animation:rotIn .62s var(--ease)}
+@keyframes rotIn{0%{opacity:0;filter:blur(14px);transform:translateY(.42em) scale(.92)}100%{opacity:1;filter:blur(0);transform:translateY(0) scale(1)}}
+.hero p.sub{margin:26px auto 0;max-width:600px;font-size:clamp(15px,1.7vw,18px);line-height:1.7;color:var(--mute)}
+.hero-cta{margin-top:36px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.hero-meta{margin-top:20px;font-size:12px;color:var(--mute-2);letter-spacing:.02em}
+.hero-meta i{font-style:normal;margin:0 9px;opacity:.45}
+
+/* entrance */
+.rise{opacity:0;transform:translateY(26px);animation:rise .95s var(--ease) forwards;animation-delay:var(--d,0s)}
+@keyframes rise{to{opacity:1;transform:none}}
+.pop{opacity:0;transform:scale(.9);animation:pop .9s var(--ease) forwards;animation-delay:var(--d,0s)}
+@keyframes pop{to{opacity:1;transform:none}}
+
+/* ============ hero visual ============ */
+.hero-visual{position:relative;width:min(880px,100%);margin:clamp(42px,5vw,62px) auto 0;perspective:1600px;z-index:2}
+.hv-glow{
+  position:absolute;left:50%;top:12%;width:78%;height:70%;transform:translateX(-50%);
+  background:radial-gradient(ellipse at center,rgba(109,99,245,.55),rgba(74,168,248,.18) 45%,transparent 72%);
+  filter:blur(60px);pointer-events:none;
+}
+.tilt{transform-style:preserve-3d;transition:transform .5s var(--ease);will-change:transform}
+.float{animation:float 9s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.win{
+  position:relative;z-index:1;background:#fff;border-radius:16px;overflow:hidden;text-align:left;
+  box-shadow:0 2px 0 rgba(255,255,255,.5) inset,0 50px 120px -30px rgba(0,0,0,.95),0 0 0 1px rgba(255,255,255,.14),0 0 90px -20px rgba(109,99,245,.5);
+}
+.win-bar{height:42px;display:flex;align-items:center;gap:8px;padding:0 16px;background:linear-gradient(180deg,#fbfbfd,#f4f4f7);border-bottom:1px solid #e9e9ee}
+.win-bar i{width:11px;height:11px;border-radius:50%;display:block}
+.win-bar i:nth-child(1){background:#ff5f57}.win-bar i:nth-child(2){background:#febc2e}.win-bar i:nth-child(3){background:#28c840}
+.win-title{flex:1;text-align:center;font-size:12px;color:#8b8f9b;font-weight:500;margin-right:44px}
+.win-body{display:grid;grid-template-columns:auto 1fr;gap:26px;padding:24px 26px 20px;align-items:center}
+.ring-wrap{position:relative;width:136px;height:136px;flex:none}
+.ring{width:136px;height:136px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:9;stroke-linecap:round}
+.ring .bgc{stroke:#eeedf6}
+.ring .fgc{stroke:url(#rg);stroke-dasharray:326.7;stroke-dashoffset:326.7;transition:stroke-dashoffset 2s var(--ease) .3s}
+.ring-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.ring-num b{font-size:40px;font-weight:650;letter-spacing:-.045em;color:#14141a;line-height:1;font-variant-numeric:tabular-nums}
+.ring-num small{font-size:10.5px;color:#8b8f9b;letter-spacing:.04em}
+.issues{display:flex;flex-direction:column;gap:0;min-width:0}
+.issue{display:flex;align-items:center;gap:11px;padding:12px 0;border-bottom:1px solid #f1f1f5;font-size:13px;color:#26262e;opacity:0;transform:translateX(10px);animation:issueIn .6s var(--ease) forwards}
+.issue:nth-child(1){animation-delay:.75s}.issue:nth-child(2){animation-delay:.9s}.issue:nth-child(3){animation-delay:1.05s}
+@keyframes issueIn{to{opacity:1;transform:none}}
+.issue:last-child{border-bottom:0}
+.issue em{flex:1;font-style:normal;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idot{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none;box-shadow:0 0 0 3px rgba(255,179,64,.16)}
+.sw{width:30px;height:17px;border-radius:9px;background:linear-gradient(180deg,#8377ff,#5a51e8);position:relative;flex:none;transition:.3s}
+.sw::after{content:"";position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.sw.off{background:#dcdce4}
+.sw.off::after{left:2px;right:auto}
+.win-foot{display:flex;align-items:center;justify-content:space-between;padding:0 26px 22px}
+.win-foot span{font-size:12px;color:#8b8f9b}
+.mini-btn{
+  height:34px;padding:0 16px;border:0;border-radius:999px;font:inherit;font-size:12.5px;font-weight:560;color:#fff;cursor:pointer;
+  background:linear-gradient(180deg,#8377ff,#5a51e8);box-shadow:0 6px 16px -4px rgba(109,99,245,.8);
+}
+.chip{
+  position:absolute;right:-22px;top:-34px;z-index:3;display:flex;align-items:center;gap:10px;
+  height:38px;padding:0 15px;border-radius:999px;font-size:11.5px;color:var(--ink);
+  background:rgba(20,20,28,.82);border:1px solid rgba(255,255,255,.13);
+  backdrop-filter:blur(18px);box-shadow:0 16px 40px -12px rgba(0,0,0,.9);
+}
+.chip b{font-variant-numeric:tabular-nums;font-weight:600}
+.chip .bars{display:flex;gap:2.5px;align-items:flex-end;height:13px}
+.chip .bars i{width:2.5px;border-radius:2px;background:linear-gradient(180deg,var(--a2),var(--a1));animation:eq 1.4s ease-in-out infinite}
+.chip .bars i:nth-child(1){height:40%;animation-delay:0s}
+.chip .bars i:nth-child(2){height:75%;animation-delay:.15s}
+.chip .bars i:nth-child(3){height:55%;animation-delay:.3s}
+.chip .bars i:nth-child(4){height:95%;animation-delay:.45s}
+.chip .bars i:nth-child(5){height:35%;animation-delay:.6s}
+@keyframes eq{0%,100%{transform:scaleY(.45)}50%{transform:scaleY(1)}}
+.chip2{
+  position:absolute;left:-30px;bottom:-18px;z-index:3;display:flex;align-items:center;gap:8px;
+  height:34px;padding:0 14px;border-radius:999px;font-size:11.5px;color:#d6d6e4;
+  background:rgba(20,20,28,.82);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(18px);
+  box-shadow:0 16px 40px -12px rgba(0,0,0,.9);
+}
+.chip2 svg{width:13px;height:13px;color:var(--ok)}
+
+.scroll-hint{
+  margin:clamp(36px,5vw,56px) auto 46px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute-2);
+}
+.scroll-hint .bar{width:1px;height:38px;background:linear-gradient(180deg,rgba(255,255,255,.35),transparent);position:relative;overflow:hidden}
+.scroll-hint .bar::after{content:"";position:absolute;top:-38px;left:0;width:1px;height:38px;background:linear-gradient(180deg,transparent,#fff);animation:scrolldot 2.2s ease-in-out infinite}
+@keyframes scrolldot{0%{top:-38px}70%,100%{top:38px}}
+
+/* ============ marquee ============ */
+.marquee{position:relative;padding:0;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);background:rgba(255,255,255,.018);overflow:hidden}
+.marquee::before,.marquee::after{content:"";position:absolute;top:0;bottom:0;width:140px;z-index:2;pointer-events:none}
+.marquee::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+.marquee::after{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+.mq-track{display:flex;width:max-content;animation:mq 42s linear infinite}
+.marquee:hover .mq-track{animation-play-state:paused}
+@keyframes mq{to{transform:translateX(-50%)}}
+.mq-item{display:flex;align-items:center;gap:14px;padding:22px 26px;font-size:14px;color:var(--mute);white-space:nowrap}
+.mq-item::after{content:"";width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.2);margin-left:12px}
+.mq-item b{color:var(--ink-2);font-weight:500;opacity:.85}
+
+/* ============ reveal ============ */
+.rv{opacity:0;transform:translateY(30px);transition:opacity 1s var(--ease),transform 1s var(--ease);transition-delay:var(--d,0s)}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .rv{opacity:1!important;transform:none!important;transition:none!important}
+  .rise,.pop{animation:none!important;opacity:1!important;transform:none!important}
+  .float,.blob,.mq-track,.grad-text,.chip .bars i,.eyebrow .dotp,.badge .led{animation:none!important}
+  .rot span{animation:none!important}
+}
+
+/* ============ problem ============ */
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:56px}
+.pcard{
+  position:relative;padding:30px 26px 32px;border-radius:20px;border:1px solid var(--line-2);
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  overflow:hidden;transition:transform .5s var(--ease),border-color .4s,background .4s;
+}
+.pcard:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.16);background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02))}
+.pcard .num{
+  font-size:11px;letter-spacing:.18em;color:var(--mute-2);font-weight:600;margin-bottom:26px;display:block;
+}
+.pcard .num em{font-style:normal;background:linear-gradient(100deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.pcard h3{margin-bottom:11px}
+.pcard p{font-size:13.8px;line-height:1.72;color:var(--mute)}
+.pcard::after{
+  content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);opacity:0;transition:opacity .4s;
+}
+.pcard:hover::after{opacity:1}
+.quote{
+  margin:clamp(56px,7vw,90px) auto 0;max-width:820px;text-align:center;
+  font-size:clamp(22px,3.4vw,38px);font-weight:600;letter-spacing:-.035em;line-height:1.32;
+}
+.quote span{display:block;color:var(--mute-2);font-size:clamp(15px,1.8vw,19px);font-weight:400;letter-spacing:-.01em;margin-top:20px;line-height:1.7}
+
+/* ============ core showcase ============ */
+.core{display:grid;grid-template-columns:1fr 1.05fr;gap:clamp(40px,6vw,80px);align-items:center;margin-top:20px}
+.steps{display:flex;flex-direction:column;gap:0;margin-top:38px;border-top:1px solid var(--line-2)}
+.step{display:flex;gap:18px;padding:22px 0;border-bottom:1px solid var(--line-2)}
+.step .n{
+  width:28px;height:28px;flex:none;border-radius:9px;display:grid;place-items:center;
+  font-size:12px;font-weight:650;color:var(--ink);background:rgba(255,255,255,.06);
+  border:1px solid var(--line);letter-spacing:0;
+}
+.step b{display:block;font-size:14.5px;font-weight:600;margin-bottom:5px}
+.step p{font-size:13.5px;line-height:1.68;color:var(--mute)}
+.panel{
+  position:relative;border-radius:24px;padding:22px;
+  background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.015));
+  border:1px solid var(--line);overflow:hidden;
+  box-shadow:0 40px 90px -40px rgba(0,0,0,.9);
+}
+.panel::before{
+  content:"";position:absolute;inset:-40% -20% auto -20%;height:80%;
+  background:radial-gradient(ellipse at center,rgba(109,99,245,.35),transparent 62%);
+  filter:blur(50px);pointer-events:none;
+}
+.panel .inner{position:relative;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
+.p-head{display:flex;align-items:center;gap:12px;padding:18px 18px 16px;border-bottom:1px solid #f0f0f5}
+.p-score{
+  width:46px;height:46px;border-radius:13px;display:grid;place-items:center;flex:none;
+  background:linear-gradient(160deg,#fff4e3,#ffe8c7);color:#d98200;font-weight:700;font-size:16px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+}
+.p-head .t{font-size:12.5px;font-weight:600;color:#1b1b22;line-height:1.35}
+.p-head .t small{display:block;font-weight:400;color:#8b8f9b;font-size:11px;margin-top:2px}
+.p-body{padding:6px 18px}
+.p-row{display:flex;align-items:center;gap:11px;padding:12px 0;border-bottom:1px solid #f3f3f7;font-size:12.5px;color:#2b2b34}
+.p-row:last-child{border-bottom:0}
+.p-row em{flex:1;font-style:normal}
+.p-row em small{display:block;color:#8b8f9b;font-size:10.5px;margin-top:2px}
+.tag{font-size:10.5px;padding:3px 9px;border-radius:999px;background:#efedff;color:#5a51e8;font-weight:600;flex:none}
+.tag.g{background:#e6f8ee;color:#129c5a}
+.p-foot{display:flex;justify-content:flex-end;padding:12px 18px 18px}
+.p-foot .mini-btn{height:32px;font-size:12px}
+.shine-line{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);animation:sweep 6s ease-in-out infinite}
+@keyframes sweep{0%,100%{top:0;opacity:0}10%{opacity:1}50%{top:100%;opacity:.6}60%,90%{opacity:0}}
+
+/* ============ vs band ============ */
+.vs-band{padding:0 0 clamp(84px,10vw,150px)}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,4vw,56px);position:relative}
+.vs::after{
+  content:"VS";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--mute);
+  background:#0b0b11;border:1px solid var(--line);z-index:3;
+  box-shadow:0 0 0 6px rgba(7,7,10,.9);
+}
+.vs-card{position:relative;padding:clamp(26px,3vw,34px);border-radius:22px;border:1px solid var(--line-2);overflow:hidden}
+.vs-card.old{background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,.006))}
+.vs-card.new{
+  background:linear-gradient(165deg,rgba(109,99,245,.16),rgba(74,168,248,.05) 60%,rgba(255,255,255,.02));
+  border-color:rgba(140,130,255,.32);
+  box-shadow:0 34px 80px -44px rgba(109,99,245,.95),inset 0 1px 0 rgba(255,255,255,.13);
+}
+.vs-card.new::before{
+  content:"";position:absolute;inset:-50% -20% auto -20%;height:90%;pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(109,99,245,.3),transparent 62%);filter:blur(40px);
+}
+.vs-tag{
+  position:relative;display:inline-flex;align-items:center;gap:7px;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;font-weight:650;padding:5px 11px;border-radius:999px;margin-bottom:18px;
+}
+.vs-card.old .vs-tag{background:rgba(255,255,255,.05);color:var(--mute);border:1px solid var(--line-2)}
+.vs-card.new .vs-tag{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.vs-card h3{position:relative;font-size:clamp(17px,1.9vw,21px);margin-bottom:22px;letter-spacing:-.02em;line-height:1.35}
+.vs-card.old h3{color:var(--mute)}
+.vs-card ul{position:relative;list-style:none;display:flex;flex-direction:column;gap:13px}
+.vs-card li{display:flex;gap:11px;font-size:13.5px;line-height:1.6;color:var(--mute);align-items:flex-start}
+.vs-card.new li{color:var(--ink-2)}
+.vs-card li i{
+  flex:none;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;
+  margin-top:2px;font-size:9.5px;font-style:normal;font-weight:800;line-height:1;
+}
+.vs-card.old li i{background:rgba(255,255,255,.055);color:#75758c}
+.vs-card.new li i{background:rgba(61,220,132,.16);color:var(--ok)}
+
+/* ============ bento ============ */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:56px}
+.card{
+  position:relative;display:flex;flex-direction:column;padding:26px 24px;border-radius:20px;border:1px solid var(--line-2);
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+  overflow:hidden;transition:transform .5s var(--ease),border-color .4s;
+  isolation:isolate;
+}
+.card::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;opacity:0;transition:opacity .4s;
+  background:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),rgba(109,99,245,.22),transparent 62%);
+}
+.card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.17)}
+.card:hover::before{opacity:1}
+.card .ic{
+  width:38px;height:38px;border-radius:11px;display:grid;place-items:center;margin-bottom:20px;
+  background:linear-gradient(160deg,rgba(109,99,245,.28),rgba(74,168,248,.14));
+  border:1px solid rgba(255,255,255,.1);color:#c9c6ff;
+  box-shadow:0 6px 20px -8px rgba(109,99,245,.8);
+}
+.card .ic svg{width:19px;height:19px}
+.card h3{margin-bottom:8px}
+.card p{font-size:13.2px;line-height:1.68;color:var(--mute)}
+.card.wide{grid-column:span 2}
+.card .mini{margin-top:auto;padding-top:20px;display:flex;gap:6px;flex-wrap:wrap}
+.card .mini span{
+  font-size:10px;padding:4px 8px;border-radius:7px;background:rgba(255,255,255,.045);color:var(--mute-2);
+  border:1px solid var(--line-2);letter-spacing:.06em;font-weight:600;font-variant-numeric:tabular-nums;
+  transition:.3s;
+}
+.card:hover .mini span{color:var(--ink-2);border-color:rgba(255,255,255,.13);background:rgba(255,255,255,.075)}
+
+/* ============ stack gallery ============ */
+.stack{position:relative;margin-top:56px}
+.scard{
+  position:sticky;top:12vh;margin-bottom:34px;
+  display:grid;grid-template-columns:1fr 1.15fr;gap:clamp(24px,4vw,54px);align-items:center;
+  padding:clamp(24px,3vw,40px);border-radius:26px;
+  background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.02));
+  border:1px solid var(--line);
+  box-shadow:0 40px 100px -40px rgba(0,0,0,1),inset 0 1px 0 rgba(255,255,255,.07);
+  transform-origin:top center;
+  transform:scale(calc(1 - var(--p,0) * .05)) translateY(calc(var(--p,0) * -10px));
+  transition:transform .15s linear;
+}
+.scard::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:rgba(7,7,10,.55);opacity:calc(var(--p,0) * .9);transition:opacity .15s linear;
+}
+.scard .st{padding-left:6px;position:relative;z-index:1}
+.scard .st h3{font-size:clamp(19px,2.2vw,25px);letter-spacing:-.025em;margin-bottom:12px;font-weight:600}
+.scard .st p{font-size:13.8px;line-height:1.75;color:var(--mute)}
+.scard .st .k{display:inline-flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute-2);margin-bottom:16px;font-weight:600}
+.scard .st .k i{width:5px;height:5px;border-radius:50%;background:var(--a2);box-shadow:0 0 8px var(--a2)}
+.shot{
+  position:relative;border-radius:14px;overflow:hidden;background:#fff;
+  box-shadow:0 30px 70px -25px rgba(0,0,0,.95),0 0 0 1px rgba(255,255,255,.13),0 0 60px -18px rgba(109,99,245,.45);
+  z-index:1;
+}
+.shot img{width:100%;height:auto;display:block}
+
+/* ============ safety ============ */
+.safety{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(36px,6vw,80px);align-items:center}
+.slist{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sitem{
+  padding:22px 20px;border-radius:16px;border:1px solid var(--line-2);
+  background:rgba(255,255,255,.028);transition:.4s var(--ease);
+}
+.sitem:hover{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.14);transform:translateY(-3px)}
+.sitem .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;margin-bottom:14px;background:rgba(61,220,132,.12);color:var(--ok);border:1px solid rgba(61,220,132,.18)}
+.sitem .ic svg{width:16px;height:16px}
+.sitem b{display:block;font-size:14px;font-weight:600;margin-bottom:6px;letter-spacing:-.01em}
+.sitem p{font-size:12.5px;line-height:1.62;color:var(--mute)}
+
+/* ============ install ============ */
+.install{display:grid;grid-template-columns:1fr 1fr;gap:clamp(36px,6vw,70px);align-items:center}
+.steps3{counter-reset:s;list-style:none;margin-top:34px}
+.steps3 li{
+  counter-increment:s;position:relative;padding:0 0 24px 46px;font-size:14px;line-height:1.72;color:var(--ink-2);
+}
+.steps3 li:not(:last-child)::before{
+  content:"";position:absolute;left:13px;top:28px;bottom:0;width:1px;background:linear-gradient(180deg,var(--line),transparent);
+}
+.steps3 li::after{
+  content:counter(s);position:absolute;left:0;top:-2px;width:27px;height:27px;border-radius:50%;
+  display:grid;place-items:center;font-size:12px;font-weight:650;color:var(--ink);
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+}
+.steps3 li:last-child{padding-bottom:0}
+.codebox{
+  margin-top:16px;border-radius:12px;border:1px solid var(--line);overflow:hidden;background:#0c0c12;
+  box-shadow:0 20px 50px -25px rgba(0,0,0,.9);
+}
+.codebox .cb-bar{display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid var(--line-2);background:rgba(255,255,255,.025)}
+.codebox .cb-bar i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.14)}
+.codebox .cb-bar span{margin-left:auto;font-size:10.5px;color:var(--mute-2);letter-spacing:.06em}
+.codebox pre{padding:14px 58px 14px 15px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.75;color:#b9b9cc;white-space:pre-wrap;overflow-wrap:anywhere}
+.codebox pre .p{color:var(--a2)}
+.codebox pre .s{color:#9ce8b8}
+.copy{
+  position:absolute;right:10px;bottom:10px;font:inherit;font-size:10.5px;padding:5px 10px;border-radius:7px;
+  background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--mute);cursor:pointer;transition:.25s;
+}
+.copy:hover{background:rgba(255,255,255,.15);color:var(--ink)}
+
+/* ============ final ============ */
+.final{text-align:center;padding:clamp(96px,12vw,180px) 0 clamp(80px,9vw,130px);position:relative;overflow:hidden}
+.final::before{
+  content:"";position:absolute;left:50%;top:44%;width:min(900px,120vw);height:520px;transform:translate(-50%,-50%);
+  background:radial-gradient(ellipse at center,rgba(109,99,245,.30),rgba(74,168,248,.1) 42%,transparent 70%);
+  filter:blur(50px);pointer-events:none;
+}
+.final .wrap{position:relative}
+.final h2{font-size:clamp(32px,5.6vw,64px);letter-spacing:-.045em;line-height:1.06}
+.final .lead{margin:24px auto 0;max-width:520px}
+.final .hero-cta{margin-top:36px}
+.appicon{
+  width:82px;height:82px;border-radius:20px;margin:0 auto 34px;display:block;
+  box-shadow:0 22px 50px -16px rgba(109,99,245,.85),0 0 0 1px rgba(255,255,255,.12);
+}
+
+/* ============ footer ============ */
+footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34px 0 44px}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--mute-2)}
+.foot nav{display:flex;gap:22px}
+.foot a{transition:color .25s}
+.foot a:hover{color:var(--ink)}
+.foot .fb{display:flex;align-items:center;gap:8px}
+.foot .fb img{width:18px;height:18px;border-radius:5px;opacity:.85}
+
+/* ============ responsive ============ */
+@media(max-width:1000px){
+  .bento{grid-template-columns:repeat(2,1fr)}
+  .card.wide{grid-column:span 2}
+}
+@media(max-width:880px){
+  .navlinks{display:none}
+  .core,.safety,.install{grid-template-columns:1fr}
+  .vs{grid-template-columns:1fr;gap:16px}
+  .vs::after{display:none}
+  .core .panel{order:-1}
+  .scard{position:static;transform:none!important;grid-template-columns:1fr;margin-bottom:22px}
+  .scard::after{display:none}
+  .scard .shot{order:-1}
+  .cards3{grid-template-columns:1fr}
+  .win-body{grid-template-columns:1fr;justify-items:center;gap:18px;padding:22px}
+  .issues{width:100%}
+  .issue em{font-size:12px}
+  .chip{right:6px;top:-20px;transform:scale(.9);transform-origin:right top}
+  .chip2{display:none}
+  .slist{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .bento{grid-template-columns:1fr}
+  .card.wide{grid-column:span 1}
+  h1{letter-spacing:-.035em}
+  .hero{padding-top:112px}
+  .brand span{display:none}
+  .foot{flex-direction:column;align-items:flex-start;gap:16px}
+}
 </style>
 </head>
 <body>
+
+<div class="ambient" aria-hidden="true">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+</div>
+<div class="grid-bg" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="progress" id="prog" aria-hidden="true"></div>
+
 <header id="hd">
-  <a class="brand" href="#"><img src="icon.png" alt=""><span data-i="name"></span></a>
+  <a class="brand" href="#top"><img src="icon.png" alt="Mac 一键优化"><span data-i="name">Mac 一键优化</span></a>
+  <nav class="navlinks">
+    <a href="#problem" data-i="nav_why">为什么</a>
+    <a href="#core" data-i="nav_core">核心功能</a>
+    <a href="#features" data-i="nav_fn">全部功能</a>
+    <a href="#safe" data-i="nav_safe">安全性</a>
+  </nav>
   <div class="right">
     <div class="lang"><button data-l="zh">中文</button><button data-l="en">EN</button></div>
-    <a class="pill blue sm" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="dl"></a>
+    <a class="btn btn-primary btn-sm" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="nav_dl">下载</a>
   </div>
 </header>
 
-<div class="hero">
-  <img class="logo" src="icon.png" alt="">
-  <h1><span data-i="h1a"></span><br><span data-i="h1b"></span> <span class="rot" id="rot"><span></span></span> <span data-i="h1c"></span></h1>
-  <p data-i="sub"></p>
-  <div class="cta">
-    <a class="pill blue" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="dlfree"></a>
-    <small data-i="meta"></small>
-  </div>
-</div>
-<a class="pill light more" id="more" href="#story"><span data-i="more"></span> ↓</a>
+<main id="top">
 
-<section class="g" id="story">
-  <div class="story reveal">
-    <h2 data-i="whyT"></h2>
-    <p data-i="why1"></p>
-    <p data-i="why2"></p>
-    <p class="big" data-i="why3"></p>
-    <p data-i="why4"></p>
-  </div>
-</section>
-
-<section>
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f1T"></h2><p class="lead" data-i="f1D"></p></div>
-    <div class="media"><div class="ui">
-      <div class="h" style="justify-content:flex-start;gap:12px"><div class="score">62</div><div><span data-i="u_burden"></span><br><small style="color:var(--mute);font-weight:400" data-i="u_found"></small></div></div>
-      <div class="it"><i class="dot"></i><em data-i="u_sp"></em><i class="sw"></i></div>
-      <div class="it"><i class="dot"></i><em data-i="u_vpn"></em><i class="sw"></i></div>
-      <div class="it"><i class="dot"></i><em data-i="u_br"></em><i class="sw off"></i></div>
-      <div style="text-align:right;margin-top:10px"><span class="pill blue sm" data-i="u_fix"></span></div>
-    </div></div>
-  </div>
-</section>
-
-<section class="g">
-  <div class="inner row rev reveal">
-    <div class="txt"><h2 data-i="f2T"></h2><p class="lead" data-i="f2D"></p></div>
-    <div class="media"><div class="ui">
-      <div class="h"><span data-i="u_ov"></span><span class="tag" data-i="u_live"></span></div>
-      <div class="metrics">
-        <div class="m"><small data-i="u_cpu"></small><b>3.2</b><div class="bar"><i style="width:32%"></i></div></div>
-        <div class="m"><small data-i="u_mem"></small><b>46%</b><div class="bar"><i style="width:54%"></i></div></div>
-        <div class="m"><small data-i="u_up"></small><b data-i="u_days"></b><div class="bar o"><i style="width:100%"></i></div></div>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">约 2 MB</span></span></div>
+      <h1>
+        <span class="line rise" style="--d:.12s" data-i="h1a">不用重启，也能让</span>
+        <span class="line rise" style="--d:.2s"><span data-i="h1b">卡顿的 Mac 重新</span> <span class="rot" id="rot"><span>跟手</span></span></span>
+      </h1>
+      <p class="sub rise" style="--d:.3s" data-i="sub">外接大屏、多开 AI 工具和浏览器时，Mac 突然卡顿却查不出原因？一键体检，找出元凶，当场解决。</p>
+      <div class="hero-cta rise" style="--d:.38s">
+        <a class="btn btn-primary" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="cta1">
+          免费下载
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="#core" data-i="cta2">看看它能做什么</a>
       </div>
-    </div></div>
-  </div>
-</section>
+      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> 约 2 MB <i>·</i> 开源免费</div>
+    </div>
 
-<section>
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f3T"></h2><p class="lead" data-i="f3D"></p></div>
-    <div class="media"><div class="ui">
-      <div class="h"><span data-i="u_net"></span></div>
-      <div class="it"><i class="dot ok"></i><em>鹊桥VPN<small data-i="u_run"></small></em></div>
-      <div class="it"><i class="dot"></i><em>LetsVPN<small data-i="u_conf"></small></em><span class="pill light sm" data-i="u_quit"></span></div>
-      <div class="it"><i class="dot"></i><em data-i="u_vm"></em><span class="pill light sm" data-i="u_quit"></span></div>
-    </div></div>
-  </div>
-</section>
-
-<section class="g">
-  <div class="inner row rev reveal">
-    <div class="txt"><h2 data-i="f4T"></h2><p class="lead" data-i="f4D"></p></div>
-    <div class="media"><div class="ui">
-      <div class="h"><span data-i="u_disp"></span><span class="tag">macOS 27</span></div>
-      <div class="it"><em><span data-i="u_lg"></span><small data-i="u_lgD"></small></em><span class="pill light sm" data-i="u_go"></span></div>
-      <div class="it"><em><span data-i="u_rt"></span><small data-i="u_rtD"></small></em><span class="pill light sm" data-i="u_go"></span></div>
-      <div class="it"><em><span data-i="u_rm"></span><small data-i="u_rmD"></small></em><span class="tag" data-i="u_on"></span></div>
-    </div></div>
-  </div>
-</section>
-
-<section>
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f5T"></h2><p class="lead" data-i="f5D"></p></div>
-    <div class="media"><div class="ui">
-      <div class="h" style="justify-content:flex-start;gap:12px"><div class="score">95</div><div><span data-i="u_mb"></span><br><small style="color:var(--mute);font-weight:400">M1 Max · 64 GB · macOS 27</small></div></div>
-      <div class="metrics">
-        <div class="m"><small>CPU · 41°C</small><b>12%</b><div class="bar"><i style="width:12%"></i></div></div>
-        <div class="m"><small>GPU</small><b>3%</b><div class="bar"><i style="width:3%"></i></div></div>
-        <div class="m"><small data-i="u_mem2"></small><b>69%</b><div class="bar"><i style="width:69%"></i></div></div>
+    <!-- app window mockup -->
+    <div class="hero-visual rise" style="--d:.5s">
+      <div class="hv-glow"></div>
+      <div class="float">
+        <div class="tilt" id="tilt">
+          <div class="chip">
+            <span class="bars"><i></i><i></i><i></i><i></i><i></i></span>
+            <span>CPU <b>3.2%</b></span>
+            <span style="opacity:.35">|</span>
+            <span>46%</span>
+          </div>
+          <div class="chip2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+            <span data-i="chip2">已修复 2 项</span>
+          </div>
+          <div class="win">
+            <div class="win-bar"><i></i><i></i><i></i><span class="win-title" data-i="w_title">Mac 一键优化</span></div>
+            <div class="win-body">
+              <div class="ring-wrap">
+                <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+                  <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8377ff"/><stop offset="1" stop-color="#4aa8f8"/></linearGradient></defs>
+                  <circle class="bgc" cx="60" cy="60" r="52"/>
+                  <circle class="fgc" id="ringfg" cx="60" cy="60" r="52"/>
+                </svg>
+                <div class="ring-num"><b id="scoreNum">0</b><small data-i="w_score">健康分</small></div>
+              </div>
+              <div class="issues">
+                <div class="issue"><span class="idot"></span><em data-i="u_sp">Spotlight 索引卡住</em><span class="sw"></span></div>
+                <div class="issue"><span class="idot"></span><em data-i="u_vpn">多个 VPN 同时运行</em><span class="sw"></span></div>
+                <div class="issue"><span class="idot"></span><em data-i="u_br">同时开着 4 个浏览器</em><span class="sw off"></span></div>
+              </div>
+            </div>
+            <div class="win-foot"><span data-i="w_found">发现 3 个可以处理的问题</span><button class="mini-btn" data-i="w_fix">修复所选（2）</button></div>
+          </div>
+        </div>
       </div>
-      <div class="it"><em data-i="u_qa"></em></div>
-    </div></div>
-  </div>
-</section>
+    </div>
 
-<section class="g">
-  <div class="inner row rev reveal">
-    <div class="txt"><h2 data-i="f6T"></h2><p class="lead" data-i="f6D"></p></div>
-    <div class="media"><div class="ui">
-      <div class="h"><span data-i="u_bat"></span><span class="tag" data-i="u_health"></span></div>
-      <div class="it"><i class="dot ok"></i><em data-i="u_b1"></em></div>
-      <div class="it"><i class="dot ok"></i><em data-i="u_b2"></em></div>
-      <div class="it"><i class="dot"></i><em data-i="u_b3"></em></div>
-    </div></div>
-  </div>
-</section>
+    <div class="scroll-hint"><span data-i="scroll">往下看</span><span class="bar"></span></div>
+  </section>
 
-<section>
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f7T"></h2><p class="lead" data-i="f7D"></p></div>
-    <div class="media"><img src="charge.png" alt="Charge control" style="width:100%;border-radius:14px;display:block"></div>
+  <!-- ============ MARQUEE ============ -->
+  <div class="marquee" aria-hidden="true">
+    <div class="mq-track" id="mq">
+      <div class="mq-item"><b data-i="m1">Spotlight 索引卡住</b></div>
+      <div class="mq-item"><b data-i="m2">两个 VPN 抢网络</b></div>
+      <div class="mq-item"><b data-i="m3">同时开着 4 个浏览器</b></div>
+      <div class="mq-item"><b data-i="m4">AI 应用后台跑虚拟机</b></div>
+      <div class="mq-item"><b data-i="m5">5K 外接屏渲染过载</b></div>
+      <div class="mq-item"><b data-i="m6">内存压力长期偏高</b></div>
+      <div class="mq-item"><b data-i="m7">DNS 被运营商劫持</b></div>
+      <div class="mq-item"><b data-i="m8">电池健康度悄悄下降</b></div>
+    </div>
   </div>
-</section>
 
-<section class="g">
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f8T"></h2><p class="lead" data-i="f8D"></p></div>
-    <div class="media"><img src="display.png" alt="Display" style="width:100%;border-radius:14px;display:block"></div>
-  </div>
-</section>
+  <!-- ============ PROBLEM ============ -->
+  <section id="problem">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <div class="eyebrow"><span class="dotp"></span><span data-i="pb_eb">问题</span></div>
+        <h2 data-i="pb_h2">卡顿，往往不是哪个 App 的错</h2>
+        <p class="lead" data-i="pb_p">如果你和我一样，平时用 MacBook Pro 外接显示器，同时开着一堆 AI 工具、软件和浏览器窗口——那你大概也遇到过：电脑突然变卡，鼠标和键盘都不跟手了。</p>
+      </div>
+      <div class="cards3">
+        <div class="pcard rv" style="--d:.05s">
+          <span class="num"><em>01</em> / <span data-i="pb_c1n">症状</span></span>
+          <h3 data-i="pb_c1t">鼠标突然不跟手</h3>
+          <p data-i="pb_c1d">窗口拖动开始掉帧，键盘输入有延迟，但风扇不转、机身不烫，看起来一点也不像"过热降频"。</p>
+        </div>
+        <div class="pcard rv" style="--d:.13s">
+          <span class="num"><em>02</em> / <span data-i="pb_c2n">假象</span></span>
+          <h3 data-i="pb_c2t">活动监视器一片平静</h3>
+          <p data-i="pb_c2d">没有哪个软件特别占 CPU 或内存，也没有程序卡死。按理说，这台 Mac 应该运行得好好的。</p>
+        </div>
+        <div class="pcard rv" style="--d:.21s">
+          <span class="num"><em>03</em> / <span data-i="pb_c3n">代价</span></span>
+          <h3 data-i="pb_c3t">重启解决一切，也毁掉一切</h3>
+          <p data-i="pb_c3d">开着的窗口、跑着的任务、手头的工作状态，全都得重来。这是最省事的办法，也是最贵的。</p>
+        </div>
+      </div>
+      <p class="quote rv" style="--d:.1s" data-i="pb_q">所以我想：有没有办法不重启，也能把问题解决掉？<span data-i="pb_q2">于是 vibe 出了这个小工具。</span></p>
+    </div>
+  </section>
 
-<section>
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f9T"></h2><p class="lead" data-i="f9D"></p></div>
-    <div class="media"><img src="network.png" alt="Network diagnostics" style="width:100%;border-radius:14px;display:block"></div>
-  </div>
-</section>
+  <!-- ============ VS ============ -->
+  <section class="vs-band">
+    <div class="wrap">
+      <div class="vs">
+        <div class="vs-card old rv">
+          <span class="vs-tag" data-i="vs_ot">重启</span>
+          <h3 data-i="vs_oh">能修好，但代价是全部重来</h3>
+          <ul>
+            <li><i>×</i><span data-i="vs_o1">关掉所有窗口和标签页</span></li>
+            <li><i>×</i><span data-i="vs_o2">丢掉还没保存的工作状态</span></li>
+            <li><i>×</i><span data-i="vs_o3">等系统重启，再一个个打开回来</span></li>
+            <li><i>×</i><span data-i="vs_o4">过几天，同样的问题又回来了</span></li>
+          </ul>
+        </div>
+        <div class="vs-card new rv" style="--d:.1s">
+          <span class="vs-tag" data-i="vs_nt">一键体检</span>
+          <h3 data-i="vs_nh">当场修好，工作状态一点不动</h3>
+          <ul>
+            <li><i>✓</i><span data-i="vs_n1">窗口、标签页、任务全都留着</span></li>
+            <li><i>✓</i><span data-i="vs_n2">几秒钟扫完，直接给出健康分</span></li>
+            <li><i>✓</i><span data-i="vs_n3">只修你勾选的那几项，其余不动</span></li>
+            <li><i>✓</i><span data-i="vs_n4">告诉你问题为什么反复出现</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<section class="g">
-  <div class="inner row reveal">
-    <div class="txt"><h2 data-i="f10T"></h2><p class="lead" data-i="f10D"></p></div>
-    <div class="media"><img src="bt.png" alt="Bluetooth battery" style="width:100%;border-radius:14px;display:block"></div>
-  </div>
-</section>
+  <!-- ============ CORE ============ -->
+  <section id="core">
+    <div class="wrap">
+      <div class="core">
+        <div class="rv">
+          <div class="eyebrow"><span class="dotp"></span><span data-i="co_eb">核心功能</span></div>
+          <h2 data-i="co_h2">一键体检，<br>几秒钟找出真凶</h2>
+          <p class="lead" data-i="co_p">不是又一个"清理垃圾"的工具。它检查的正是活动监视器看不到的东西：卡住的 Spotlight 索引、互相抢网络的 VPN、开太多的浏览器、后台偷偷跑虚拟机的 AI 应用。</p>
+          <div class="steps">
+            <div class="step"><span class="n">1</span><div><b data-i="co_s1t">体检</b><p data-i="co_s1d">点一下，扫描系统状态，给出 0–100 的健康分。</p></div></div>
+            <div class="step"><span class="n">2</span><div><b data-i="co_s2t">挑选</b><p data-i="co_s2d">列出每一个可以处理的问题，以及它占用了多少。修哪个，你说了算。</p></div></div>
+            <div class="step"><span class="n">3</span><div><b data-i="co_s3t">修复</b><p data-i="co_s3d">一键执行，当场见效——不用关窗口，也不用重启。</p></div></div>
+          </div>
+        </div>
+        <div class="panel rv" style="--d:.1s">
+          <div class="shine-line"></div>
+          <div class="inner">
+            <div class="p-head">
+              <div class="p-score">62</div>
+              <div class="t"><span data-i="w_burden">有点负担</span><small data-i="w_found2">发现 3 个可以处理的问题</small></div>
+            </div>
+            <div class="p-body">
+              <div class="p-row"><span class="idot"></span><em><span data-i="u_sp">Spotlight 索引卡住</span><small data-i="r1">重建索引约需 40 秒</small></em><span class="tag" data-i="r1t">可修复</span></div>
+              <div class="p-row"><span class="idot"></span><em><span data-i="u_vpn">多个 VPN 同时运行</span><small data-i="r2">2 个 VPN 正在抢占网络</small></em><span class="tag" data-i="r1t">可修复</span></div>
+              <div class="p-row"><span class="idot"></span><em><span data-i="u_br">同时开着 4 个浏览器</span><small data-i="r3">建议只保留常用的一两个</small></em><span class="tag g" data-i="r3t">建议</span></div>
+            </div>
+            <div class="p-foot"><button class="mini-btn" data-i="w_fix">修复所选（2）</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<section>
-  <div class="inner list reveal">
-    <div><h2 data-i="safeT"></h2><p class="lead" data-i="safeD"></p></div>
-    <ul>
-      <li><span class="ic">✋</span><div><b data-i="s1"></b><p data-i="s1d"></p></div></li>
-      <li><span class="ic">🗂</span><div><b data-i="s2"></b><p data-i="s2d"></p></div></li>
-      <li><span class="ic">🔑</span><div><b data-i="s3"></b><p data-i="s3d"></p></div></li>
-      <li><span class="ic">⌥</span><div><b data-i="s4"></b><p data-i="s4d"></p></div></li>
-    </ul>
-  </div>
-</section>
+  <!-- ============ BENTO ============ -->
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head center rv">
+        <div class="eyebrow"><span class="dotp"></span><span data-i="bt_eb">全部功能</span></div>
+        <h2 data-i="bt_h2">该有的都有，<br><span class="grad-text">不该有的一个没有</span></h2>
+        <p class="lead" data-i="bt_p">从卡顿排查到日常状态监控，九件小事，都收在一个约 2 MB 的 App 里。</p>
+      </div>
+      <div class="bento">
+        <div class="card rv" style="--d:.02s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3.5l2.5 7 4-15 2.5 8h4.5"/></svg></div>
+          <h3 data-i="f1t">实时概览</h3>
+          <p data-i="f1d">CPU 负载、可用内存、连续运行天数，每 5 秒自动刷新。跑得太久、内存紧张，一眼就知道。</p>
+          <div class="mini"><span>5 s</span><span>CPU</span><span>RAM</span><span>Uptime</span></div>
+        </div>
+        <div class="card rv" style="--d:.06s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></div>
+          <h3 data-i="f2t">后台资源大户</h3>
+          <p data-i="f2d">两个 VPN 同时运行会互相抢网络，Claude 等 AI 应用会在后台跑虚拟机。它把这些都找出来，占了多少写得清清楚楚，退不退由你决定。</p>
+          <div class="mini"><span>VPN</span><span>VM</span><span>AI</span></div>
+        </div>
+        <div class="card rv" style="--d:.1s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h3 data-i="f3t">外接屏减负</h3>
+          <p data-i="f3d">5K 带鱼屏加上 Liquid Glass 效果，渲染压力不小。它按你的系统版本，直接打开对应设置页。</p>
+          <div class="mini"><span>Liquid Glass</span><span>5K</span></div>
+        </div>
+        <div class="card rv" style="--d:.02s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="19" height="17" rx="3"/><path d="M2.5 8.5h19"/><path d="M6 6h.01M9 6h.01"/></svg></div>
+          <h3 data-i="f4t">菜单栏仪表盘</h3>
+          <p data-i="f4d">菜单栏常驻一个小指标，点开就是完整面板：CPU/GPU 占用和温度、内存压力、磁盘、网速、风扇、电池与外设电量。还有常亮、擦屏、截图、麦克风静音等快捷开关。</p>
+          <div class="mini"><span>CPU</span><span>GPU</span><span>°C</span><span>FAN</span></div>
+        </div>
+        <div class="card rv" style="--d:.06s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="17" height="10" rx="3"/><path d="M21.5 10.5v3"/><path d="M5.5 10.5v3"/></svg></div>
+          <h3 data-i="f5t">电池管理</h3>
+          <p data-i="f5d">健康度、循环次数、温度、状况一目了然；任意百分比的低电量提醒，每种可配提示音；记录每个应用 24 小时 / 7 天 / 30 天耗电。</p>
+          <div class="mini"><span>24 h</span><span>7 d</span><span>30 d</span></div>
+        </div>
+        <div class="card rv" style="--d:.1s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2.5L5 13h6l-1 8.5 8-11.5h-6l1-8z"/></svg></div>
+          <h3 data-i="f6t">充电上限</h3>
+          <p data-i="f6d">把电量停在 50–100% 之间的上限，配合 0–10% 的航行范围，避免反复小幅充电；接外接显示器时自动暂停。</p>
+          <div class="mini"><span>50–100%</span><span>0–10%</span></div>
+        </div>
+        <div class="card rv" style="--d:.02s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h8M18 7h2M4 17h3M13 17h7"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></div>
+          <h3 data-i="f7t">显示器控制</h3>
+          <p data-i="f7d">支持 DDC/CI 时直接调硬件亮度、对比度和输入源；日间/阅读/观影/夜间四种场景，一键切分辨率与 HiDPI。</p>
+          <div class="mini"><span>DDC/CI</span><span>HiDPI</span></div>
+        </div>
+        <div class="card rv" style="--d:.06s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5a15 15 0 0119 0"/><path d="M6 12a10 10 0 0112 0"/><path d="M9.5 15.5a5 5 0 015 0"/><circle cx="12" cy="19" r="1"/></svg></div>
+          <h3 data-i="f8t">网络诊断</h3>
+          <p data-i="f8d">一键测延迟与丢包，检查 DNS 解析耗时，并用不存在的域名检测运营商劫持；一键切阿里公共 DNS 并清缓存。</p>
+          <div class="mini"><span>DNS</span><span>223.5.5.5</span></div>
+        </div>
+        <div class="card rv" style="--d:.1s">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6.5l10 11-5 4V2.5l5 4-10 11"/></svg></div>
+          <h3 data-i="f9t">蓝牙电量</h3>
+          <p data-i="f9d">鼠标、键盘、耳机、遥控器的电量集中显示：系统电量、AirPods 左右耳与充电盒，以及罗技 MX 等标准 BLE 电量服务。</p>
+          <div class="mini"><span>AirPods</span><span>BLE</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<section class="g">
-  <div class="inner center reveal">
-    <h2 data-i="insT"></h2>
-    <ol class="steps">
-      <li data-i="i1"></li>
-      <li data-i="i2"></li>
-      <li><span data-i="i3"></span><br><code>xattr -dr com.apple.quarantine "/Applications/Mac一键优化.app"</code></li>
-    </ol>
-  </div>
-</section>
+  <!-- ============ GALLERY STACK ============ -->
+  <section id="gallery">
+    <div class="wrap">
+      <div class="sec-head center rv">
+        <div class="eyebrow"><span class="dotp"></span><span data-i="st_eb">真实界面</span></div>
+        <h2 data-i="st_h2">长这样，不画饼</h2>
+        <p class="lead" data-i="st_p">下面是应用里真实的界面，不是设计稿。</p>
+      </div>
+      <div class="stack" id="stack">
+        <article class="scard">
+          <div class="st">
+            <div class="k"><i></i><span data-i="s1k">电池 · 充电</span></div>
+            <h3 data-i="s1t">充电上限，养护电池</h3>
+            <p data-i="s1d">装一次后台充电助手，就能把电量停在 50–100% 之间的上限，并设置 0–10% 的航行范围，避免反复小幅充电。接外接显示器时自动暂停，不会让屏幕掉线。</p>
+          </div>
+          <div class="shot"><img src="charge.png" alt="充电控制界面" loading="lazy"></div>
+        </article>
+        <article class="scard">
+          <div class="st">
+            <div class="k"><i></i><span data-i="s2k">显示器</span></div>
+            <h3 data-i="s2t">亮度、色温、分辨率，一处搞定</h3>
+            <p data-i="s2d">外接显示器支持 DDC/CI 时，直接调硬件亮度、对比度和输入源。四种场景可按时间自动切换，软件调光默认关闭，检测到 MonitorBar 等工具时不抢着改屏幕色彩。</p>
+          </div>
+          <div class="shot"><img src="display.png" alt="显示器控制界面" loading="lazy"></div>
+        </article>
+        <article class="scard">
+          <div class="st">
+            <div class="k"><i></i><span data-i="s3k">网络</span></div>
+            <h3 data-i="s3t">网络诊断与 DNS 一键修复</h3>
+            <p data-i="s3d">点一下测试路由器、阿里 DNS 和常用网站的延迟与丢包，用不存在的域名检测运营商劫持。原设置自动保存，随时可以恢复。</p>
+          </div>
+          <div class="shot"><img src="network.png" alt="网络诊断界面" loading="lazy"></div>
+        </article>
+        <article class="scard">
+          <div class="st">
+            <div class="k"><i></i><span data-i="s4k">外设</span></div>
+            <h3 data-i="s4t">蓝牙设备电量</h3>
+            <p data-i="s4d">鼠标、键盘、耳机、遥控器的电量集中显示，读不到的设备会写明原因。每 5 分钟刷新一次，不持续扫描。</p>
+          </div>
+          <div class="shot"><img src="bt.png" alt="蓝牙设备电量界面" loading="lazy"></div>
+        </article>
+      </div>
+    </div>
+  </section>
 
-<section class="final center">
-  <div class="reveal">
-    <h2 data-i="endT"></h2>
-    <p class="lead" data-i="endD"></p>
-    <a class="pill blue" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="dlfree"></a>
-  </div>
-</section>
+  <!-- ============ SAFETY ============ -->
+  <section id="safe">
+    <div class="wrap">
+      <div class="safety">
+        <div class="rv">
+          <div class="eyebrow"><span class="dotp"></span><span data-i="sf_eb">安全性</span></div>
+          <h2 data-i="sf_h2">放心交给它</h2>
+          <p class="lead" data-i="sf_p">它只做必要的事，每一步都在你的掌控之中。没有"一键加速"的黑箱，也没有你看不见的后台常驻。</p>
+        </div>
+        <div class="slist">
+          <div class="sitem rv" style="--d:.02s">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 7-6 2-2 6-6-15z"/></svg></div>
+            <b data-i="sf1t">不会自动动手</b><p data-i="sf1d">每一项操作都要你自己选、自己点。</p>
+          </div>
+          <div class="sitem rv" style="--d:.07s">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2.5h6a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg></div>
+            <b data-i="sf2t">不删任何文件</b><p data-i="sf2d">只是退出程序，或重启会自动恢复的系统服务。</p>
+          </div>
+          <div class="sitem rv" style="--d:.12s">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9M17.5 17.5l2-2M15 15l2-2"/></svg></div>
+            <b data-i="sf3t">不要管理员密码</b><p data-i="sf3d">不装后台常驻服务，也不改系统文件。</p>
+          </div>
+          <div class="sitem rv" style="--d:.17s">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8l-5 4 5 4M15 8l5 4-5 4"/></svg></div>
+            <b data-i="sf4t">完全开源</b><p data-i="sf4d">所有代码都在 GitHub 上，随时可以查看。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<footer>
-  <span>© 2026 <a href="https://github.com/yostyang">@yostyang</a></span>
-  <nav><a href="https://github.com/yostyang/mac-optimizer">GitHub</a><a href="https://github.com/yostyang/mac-optimizer/releases" data-i="rel"></a></nav>
-  <span data-i="made"></span>
-</footer>
+  <!-- ============ INSTALL ============ -->
+  <section id="install">
+    <div class="wrap">
+      <div class="install">
+        <div class="rv">
+          <div class="eyebrow"><span class="dotp"></span><span data-i="in_eb">安装</span></div>
+          <h2 data-i="in_h2">三十秒装好</h2>
+          <p class="lead" data-i="in_p">没有安装器、没有后台服务，拖进「应用程序」就能用。</p>
+        </div>
+        <div class="rv" style="--d:.08s">
+          <ol class="steps3">
+            <li><span data-i="in1">到下载页下载最新的 Mac-Optimizer-x.x.dmg。</span></li>
+            <li><span data-i="in2">打开 DMG，把「Mac一键优化」拖进「应用程序」。</span></li>
+            <li>
+              <span data-i="in3">应用没有经过苹果公证。第一次打开如果提示"无法验证开发者"，到 系统设置 › 隐私与安全性，在底部点「仍要打开」。也可以在终端运行：</span>
+              <div class="codebox">
+                <div class="cb-bar"><i></i><i></i><i></i><span>Terminal</span></div>
+                <pre id="cmd">xattr -dr com.apple.quarantine <span class="s">"/Applications/Mac一键优化.app"</span></pre>
+                <button class="copy" id="copybtn" data-i="copy">复制</button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FINAL ============ -->
+  <section class="final">
+    <div class="wrap">
+      <img class="appicon rv" src="icon.png" alt="Mac 一键优化">
+      <h2 class="rv" style="--d:.05s" data-i="fi_h2">下次卡顿，<br>先别急着重启</h2>
+      <p class="lead rv" style="--d:.1s" data-i="fi_p">免费、开源，约 2 MB。下载完就能用，不用注册，不用登录。</p>
+      <div class="hero-cta rv" style="--d:.15s">
+        <a class="btn btn-primary" href="https://github.com/yostyang/mac-optimizer/releases/latest" data-i="cta1">
+          免费下载
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/yostyang/mac-optimizer" data-i="fi_gh">在 GitHub 上看源码</a>
+      </div>
+      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> 约 2 MB <i>·</i> 开源免费</div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div class="fb"><img src="icon.png" alt=""><span>© 2026 <a href="https://github.com/yostyang">@yostyang</a></span></div>
+        <nav>
+          <a href="https://github.com/yostyang/mac-optimizer">GitHub</a>
+          <a href="https://github.com/yostyang/mac-optimizer/releases" data-i="ft_rel">版本记录</a>
+        </nav>
+        <span data-i="ft_made">vibe coded with ♥</span>
+      </div>
+    </div>
+  </footer>
+</main>
 
 <script>
-const T={
-zh:{name:"Mac 一键优化",dl:"下载",dlfree:"免费下载",more:"了解更多",
-h1a:"不用重启，",h1b:"也能让",h1c:"重新跟手",rot:["鼠标","键盘","视频","窗口","Mac"],
-sub:"外接大屏、多开 AI 工具和浏览器时，Mac 突然卡顿却查不出原因？一键体检，找出元凶，当场解决。",
-meta:"macOS 13 及以上 · Apple 芯片与 Intel 通用 · 约 2 MB · 开源免费",
-whyT:"为什么做这个",
-why1:"如果你和我一样，平时用 MacBook Pro 外接显示器，同时开着一堆 AI 工具、软件和浏览器窗口，那你可能也遇到过这种情况：电脑突然变卡，鼠标和键盘都不跟手了。",
-why2:"可打开「活动监视器」一看，没有哪个软件特别占 CPU 或内存，也没有程序卡死。按理说，电脑应该运行得好好的。",
-why3:"重启当然最省事，但代价也最大。",
-why4:"开着的窗口、跑着的任务、手头的工作状态，全都得重来。我就想，有没有办法不重启也能把问题解决掉？于是 vibe 出了这个小工具。",
-f1T:"几秒钟，找出卡顿的真正原因",f1D:"一键体检会给出健康分，把那些活动监视器里看不出来的问题列出来：卡住的 Spotlight 索引、冲突的 VPN、开太多的浏览器。选好要处理的，一键修复。",
-f2T:"实时看清这台 Mac 的状态",f2D:"CPU 负载、可用内存、连续运行天数，每 5 秒自动刷新。跑得太久、内存紧张，一眼就知道。",
-f3T:"揪出藏在后台的资源大户",f3D:"两个 VPN 同时运行会互相抢网络，Claude 等 AI 应用会在后台跑虚拟机。它会把这些都找出来，告诉你占了多少，要不要退出由你决定。",
-f4T:"为外接大屏减轻渲染负担",f4D:"5K 带鱼屏加上 Liquid Glass 效果，画面渲染压力不小。它会按你的系统版本，直接打开对应的设置页：Liquid Glass 滑块、降低透明度、减弱动态效果。",
-u_burden:"有点负担",u_found:"发现 3 个可以处理的问题",u_sp:"Spotlight 索引卡住",u_vpn:"多个 VPN 同时运行",u_br:"同时开着 4 个浏览器",u_fix:"修复所选（2）",
-u_ov:"概览",u_live:"实时",u_cpu:"CPU 负载",u_mem:"内存可用",u_up:"连续运行",u_days:"17 天",
-u_net:"网络与 VPN",u_run:"运行中",u_conf:"同时开着 2 个 VPN，建议只留一个",u_quit:"退出",u_vm:"后台虚拟机（Claude）",
-u_disp:"显示性能",u_lg:"调低 Liquid Glass 透明感",u_lgD:"外观 › Liquid Glass 滑块",u_rt:"降低透明度",u_rtD:"无障碍 › 显示",u_rm:"减弱动态效果",u_rmD:"无障碍 › 动态效果",u_go:"去设置",u_on:"已开启 ✓",
-f5T:"菜单栏里的实时仪表盘",f5D:"菜单栏常驻一个小指标（CPU、健康分或电池，可选），点开就是完整面板：CPU/GPU 占用和温度、内存压力、磁盘、网速、风扇、电池和外设电量、高占用进程（确认后正常退出）。还有常亮、擦屏、截图、麦克风静音等快捷开关。主窗口里同样能看。面板关着时每 5 秒采一次，常驻几乎不占资源。",
-f8T:"显示器：亮度、色温、分辨率一处搞定",f8D:"外接显示器支持 DDC/CI 时，直接调硬件亮度、对比度和输入源（不支持的自动隐藏）。日间/阅读/观影/夜间四种场景，可按时间自动切换；软件调光与色温默认关闭，检测到 MonitorBar 等工具时不抢着改屏幕色彩。一键切分辨率、刷新率和 HiDPI，15 秒不确认自动还原。还有今日亮屏时间和 7 天柱状图（按锁屏/睡眠事件记账，不轮询）。",f9T:"网络诊断与 DNS 一键修复",f9D:"点一下测试路由器、阿里 DNS 和常用网站的延迟与丢包；检查各网络的 DNS、解析耗时，并用不存在的域名检测运营商劫持（VPN 虚拟地址不会误报）。一键把 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6 并清缓存，原设置自动保存、可随时恢复。开着 LetsVPN、鹊桥VPN 时会提醒 VPN 可能接管 DNS。",f10T:"蓝牙设备电量",f10D:"鼠标、键盘、耳机、遥控器的电量集中显示在电池页和菜单栏面板：读取系统电量、AirPods 左右耳与充电盒，以及罗技 MX 等低功耗蓝牙设备的标准电量服务。读不到的设备会写明原因（如经典蓝牙）。每 5 分钟刷新一次，不持续扫描；低电量通知可选。",f7T:"充电上限，养护电池",f7D:"装一次后台充电助手（系统设置里允许一次）即可把电量停在 50–100% 之间的上限，并设置 0–10% 的航行范围，避免反复小幅充电。macOS 27 只允许断开电源适配器，所以电量会在 75%–80%（默认）之间循环。接着外接显示器时自动暂停，不会让屏幕掉线；睡眠前、电量低于 20% 或读不到电量时自动恢复供电；关闭或卸载即恢复系统默认。",f6T:"更细致的电池管理",f6D:"电池健康度、循环次数、温度和状况一目了然；所有设备电量按高低排序；任意百分比的低电量提醒、充到上限、接电/断电、充满提醒，每种可配提示音，严重低电还能全屏发光提醒；记录每个应用 24 小时 / 7 天 / 30 天的耗电，发现异常耗电会提醒。打扰类功能默认关闭。",
-u_mb:"一切正常",u_mem2:"内存",u_qa:"常亮 · 擦屏 · 截图 · 麦克风",u_bat:"电池",u_health:"健康度 86%",u_b1:"低电量提醒：20%、10%",u_b2:"充到 80% 提醒拔电",u_b3:"今日耗电最多：Chrome 2.1 Wh",
-safeT:"放心交给它",safeD:"它只做必要的事，每一步都在你的掌控之中。",
-s1:"不会自动动手",s1d:"每一项操作都要你自己选、自己点。",s2:"不删任何文件",s2d:"只是退出程序，或者重启会自动恢复的系统服务。",s3:"不要管理员密码",s3d:"不装后台常驻服务，也不改系统文件。",s4:"完全开源",s4d:"所有代码都在 GitHub 上，随时可以查看。",
-insT:"安装",i1:"到下载页下载最新的 Mac-Optimizer-x.x.dmg。",i2:"打开 DMG，把「Mac一键优化」拖进「应用程序」。",i3:"应用没有经过苹果公证。第一次打开如果提示“无法验证开发者”，到 系统设置 › 隐私与安全性，在底部点「仍要打开」。也可以在终端运行：",
-endT:"下次卡顿，先别急着重启",endD:"免费、开源，约 2 MB。",rel:"版本记录",made:"vibe coded with ♥"},
-en:{name:"Mac Optimizer",dl:"Download",dlfree:"Download for free",more:"Learn more",
-h1a:"No restart needed.",h1b:"Make your",h1c:"smooth again",rot:["mouse","keyboard","video","windows","Mac"],
-sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
-meta:"macOS 13+ · Apple silicon & Intel · About 2 MB · Free & open source",
-whyT:"Why I built this",
-why1:"If you're like me, you run a MacBook Pro on an external display with lots of AI tools, apps and browser windows open. And every now and then the whole thing starts to stutter: the mouse and keyboard stop keeping up.",
-why2:"But Activity Monitor shows nothing unusual. No app is hogging the CPU or memory, and nothing has frozen. By all accounts, the Mac should be running fine.",
-why3:"Restarting is the easy fix, but also the most expensive one.",
-why4:"Every open window, running task and bit of work in progress has to start over. So I wondered: could I fix it without restarting? That's how I vibe coded this little tool.",
-f1T:"Find the real cause of lag in seconds",f1D:"A one-click checkup gives you a health score and lists the problems Activity Monitor won't show: a stuck Spotlight index, clashing VPNs, too many browsers. Pick what to fix, then fix it in one click.",
-f2T:"See how your Mac is doing, live",f2D:"CPU load, free memory and uptime, refreshed every 5 seconds. You'll know right away when it's been running too long or memory is tight.",
-f3T:"Catch the resource hogs hiding in the background",f3D:"Two VPNs running at once fight over the network, and AI apps like Claude run virtual machines in the background. It finds them, shows what they cost, and leaves the decision to you.",
-f4T:"Ease the load on big external displays",f4D:"A 5K ultrawide plus Liquid Glass effects is a lot to render. Based on your macOS version, it opens the exact settings you need: the Liquid Glass slider, Reduce transparency and Reduce motion.",
-u_burden:"Under some strain",u_found:"3 issues you can fix",u_sp:"Spotlight index is stuck",u_vpn:"Several VPNs running",u_br:"4 browsers open at once",u_fix:"Fix selected (2)",
-u_ov:"Overview",u_live:"Live",u_cpu:"CPU load",u_mem:"Free memory",u_up:"Uptime",u_days:"17 days",
-u_net:"Network & VPN",u_run:"Running",u_conf:"2 VPNs running, keep just one",u_quit:"Quit",u_vm:"Background VM (Claude)",
-u_disp:"Display performance",u_lg:"Tone down Liquid Glass",u_lgD:"Appearance › Liquid Glass slider",u_rt:"Reduce transparency",u_rtD:"Accessibility › Display",u_rm:"Reduce motion",u_rmD:"Accessibility › Motion",u_go:"Open",u_on:"On ✓",
-f5T:"A live dashboard in your menu bar",f5D:"A tiny live indicator sits in the menu bar (CPU, health score or battery — your pick). Click it for the full panel: CPU/GPU load and temperature, memory pressure, disk, network, fans, battery and accessory levels, and top processes (quit normally after you confirm). Plus quick toggles: keep awake, clean-screen, screenshot, mic mute. The same dashboard lives in the main window. With the panel closed it samples every 5 s and uses almost nothing.",
-f8T:"Display: brightness, warmth and resolution in one place",f8D:"If your external monitor supports DDC/CI, adjust its hardware brightness, contrast and input source directly (unsupported controls are hidden). Four scenes - Day, Reading, Movie and Night - with optional automatic day/night switching. Software dimming and color temperature are off by default and stay out of the way when MonitorBar or similar tools are running. Switch resolution, refresh rate and HiDPI in one click, with an automatic revert after 15 seconds unless you keep it. Plus today's screen-on time and a 7-day chart, tracked from lock/sleep events with no polling.",f9T:"Network diagnostics and one-click DNS fix",f9D:"One click measures latency and packet loss to your router, Alibaba DNS and popular sites; checks each network's DNS servers and resolve times, and detects ISP DNS hijacking with a non-existent domain (VPN fake-IP ranges are not flagged). Switch DNS to Alibaba Public DNS 223.5.5.5 / 223.6.6.6 and flush the cache in one click; your original settings are saved and can be restored anytime. A warning appears when LetsVPN or another VPN may override DNS.",f10T:"Bluetooth device battery",f10D:"Battery levels for mice, keyboards, headphones and remotes on the Battery page and in the menu-bar panel: from the system, AirPods (left, right and case), and the standard BLE battery service used by Logitech MX and others. Devices that cannot be read show why (for example Classic Bluetooth). Refreshes every 5 minutes with no continuous scanning; low-battery alerts are optional.",f7T:"Charge limit for a healthier battery",f7D:"Install the background charge helper once (approve it in System Settings) to hold your battery at a limit between 50% and 100%, with a 0–10% sailing range so it does not top up constantly. macOS 27 only allows cutting the power adapter, so the level cycles between 75% and 80% by default. It pauses automatically while an external display is connected, so your screen never drops out. Power is restored before sleep, below 20%, or whenever the level cannot be read, and turning it off or uninstalling restores the system defaults.",f6T:"Smarter battery care",f6D:"Battery health, cycle count, temperature and condition at a glance; every device's battery sorted by level; alerts at any percentages you choose, at your charge limit, on plug/unplug and when full, each with its own sound, plus an optional full-screen glow when critically low. Per-app energy use over 24 h / 7 d / 30 d with alerts for unusual drain. Anything intrusive is off by default.",
-u_mb:"All good",u_mem2:"Memory",u_qa:"Keep awake · Clean screen · Screenshot · Mic",u_bat:"Battery",u_health:"Health 86%",u_b1:"Low battery alerts: 20%, 10%",u_b2:"Alert at 80% to unplug",u_b3:"Top drain today: Chrome 2.1 Wh",
-safeT:"Safe by design",safeD:"It only does what's needed, and you stay in control of every step.",
-s1:"Never acts on its own",s1d:"Every action needs your pick and your click.",s2:"Never deletes files",s2d:"It only quits apps or restarts system services that come right back.",s3:"No admin password",s3d:"No background daemons, no changes to system files.",s4:"Fully open source",s4d:"All the code is on GitHub for anyone to read.",
-insT:"Install",i1:"Download the latest Mac-Optimizer-x.x.dmg from the Releases page.",i2:"Open the DMG and drag the app into Applications.",i3:"The app isn't notarized by Apple. If macOS says it can't verify the developer the first time, go to System Settings › Privacy & Security and click “Open Anyway” at the bottom. Or run this in Terminal:",
-endT:"Next time it lags, don't reach for restart",endD:"Free, open source, about 2 MB.",rel:"Releases",made:"vibe coded with ♥"}};
-let lang=localStorage.getItem("lang")||(navigator.language.startsWith("zh")?"zh":"en"),ri=0,timer;
-function apply(l){lang=l;localStorage.setItem("lang",l);const d=T[l];
- document.documentElement.lang=l=="zh"?"zh-CN":"en";document.title=l=="zh"?"Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手":"Mac Optimizer · Fix a laggy Mac without restarting";
- document.querySelectorAll("[data-i]").forEach(e=>{const v=d[e.dataset.i];if(v!==undefined)e.textContent=v});
- document.querySelectorAll(".lang button").forEach(b=>b.classList.toggle("on",b.dataset.l==l));
- ri=0;spin();clearInterval(timer);timer=setInterval(spin,1800)}
-function spin(){const w=T[lang].rot,el=document.querySelector("#rot");el.innerHTML="<span>"+w[ri%w.length]+"</span>";ri++}
-document.querySelectorAll(".lang button").forEach(b=>b.onclick=()=>apply(b.dataset.l));
+(function(){
+"use strict";
+var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- i18n ---------- */
+var ZH = {};
+document.querySelectorAll("[data-i]").forEach(function(e){ ZH[e.dataset.i] = e.innerHTML; });
+
+var EN = {
+  name:"Mac Optimizer",
+  nav_why:"Why", nav_core:"Core", nav_fn:"Features", nav_safe:"Safety", nav_dl:"Download",
+  badge_b:"Open source · Free", badge_a:"about 2 MB",
+  h1a:"No restart needed. Make", h1b:"your laggy Mac feel",
+  sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
+  cta1:'Download for free<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
+  cta2:"See what it does",
+  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> About 2 MB <i>·</i> Free &amp; open source",
+  scroll:"Scroll",
+  chip2:"2 issues fixed",
+  w_title:"Mac Optimizer", w_score:"Health", w_found:"3 issues you can fix", w_fix:"Fix selected (2)",
+  w_burden:"Under some strain", w_found2:"3 issues you can fix",
+  u_sp:"Spotlight index is stuck", u_vpn:"Several VPNs running", u_br:"4 browsers open at once",
+  m1:"Spotlight index stuck", m2:"Two VPNs fighting", m3:"4 browsers open at once", m4:"AI apps running VMs",
+  m5:"5K display render overload", m6:"Memory pressure too high", m7:"DNS hijacked by ISP", m8:"Battery health slipping",
+  pb_eb:"The problem",
+  pb_h2:"Lag is rarely one app's fault",
+  pb_p:"If you're like me, you run a MacBook Pro on an external display with lots of AI tools, apps and browser windows open. And every now and then the whole thing starts to stutter: the mouse and keyboard stop keeping up.",
+  pb_c1n:"Symptom", pb_c2n:"Illusion", pb_c3n:"The cost",
+  pb_c1t:"The mouse stops keeping up",
+  pb_c1d:"Window dragging drops frames, typing lags behind — yet the fans are silent and the chassis is cool. Nothing like thermal throttling.",
+  pb_c2t:"Activity Monitor looks calm",
+  pb_c2d:"No app is hogging the CPU or memory, and nothing has frozen. By all accounts, the Mac should be running fine.",
+  pb_c3t:"A restart fixes it, and ruins it",
+  pb_c3d:"Every open window, running task and bit of work in progress has to start over. The easiest fix is also the most expensive one.",
+  pb_q:"So I wondered: could I fix it without restarting?<span>That's how I vibe coded this little tool.</span>",
+  vs_ot:"Restart",
+  vs_oh:"It works — and everything starts over",
+  vs_o1:"Close every window and tab you had open",
+  vs_o2:"Lose whatever you hadn't saved yet",
+  vs_o3:"Wait for the reboot, then reopen it all",
+  vs_o4:"And a few days later, the same lag is back",
+  vs_nt:"One-click checkup",
+  vs_nh:"Fixed on the spot, nothing lost",
+  vs_n1:"Windows, tabs and tasks stay exactly as they were",
+  vs_n2:"A few seconds of scanning, then a health score",
+  vs_n3:"Only the items you ticked get touched",
+  vs_n4:"You learn why the problem keeps coming back",
+  co_eb:"The core",
+  co_h2:"One-click checkup.<br>Find the real cause.",
+  co_p:"Not another \"clean up junk\" tool. It checks exactly what Activity Monitor can't show: a stuck Spotlight index, VPNs fighting over the network, too many browsers, AI apps quietly running virtual machines in the background.",
+  co_s1t:"Check up", co_s1d:"One click scans the system and gives you a health score from 0 to 100.",
+  co_s2t:"Pick", co_s2d:"Every fixable issue is listed with what it costs you. You decide which ones to fix.",
+  co_s3t:"Fix", co_s3d:"One click to apply. No windows closed, no restart.",
+  r1:"Rebuilding the index takes about 40s", r1t:"Fixable",
+  r2:"2 VPNs are competing for the network", r3:"Keep just the one or two you use", r3t:"Suggestion",
+  bt_eb:"Everything",
+  bt_h2:'Everything you need,<br><span class="grad-text">nothing you don\'t</span>',
+  bt_p:"From lag hunting to everyday monitoring — nine small things, all in one app that weighs about 2 MB.",
+  f1t:"Live overview", f1d:"CPU load, free memory and uptime, refreshed every 5 seconds. You'll know right away when it's been running too long or memory is tight.",
+  f2t:"Background resource hogs", f2d:"Two VPNs at once fight over the network, and AI apps like Claude run virtual machines in the background. It finds them, shows what they cost, and leaves the decision to you.",
+  f3t:"Ease the load on big displays", f3d:"A 5K ultrawide plus Liquid Glass effects is a lot to render. Based on your macOS version, it opens the exact settings you need.",
+  f4t:"Menu bar dashboard", f4d:"A tiny live indicator in the menu bar; click for the full panel: CPU/GPU load and temperature, memory pressure, disk, network, fans, battery and accessories. Plus keep-awake, clean-screen, screenshot and mic-mute toggles.",
+  f5t:"Battery care", f5d:"Health, cycle count, temperature and condition at a glance; low-battery alerts at any percentage with their own sounds; per-app energy use over 24h / 7d / 30d.",
+  f6t:"Charge limit", f6d:"Hold your battery at a limit between 50 and 100% with a 0–10% sailing range so it doesn't top up constantly. Pauses automatically on an external display.",
+  f7t:"Display control", f7d:"With DDC/CI, adjust hardware brightness, contrast and input source directly. Four scenes — Day, Reading, Movie, Night — plus one-click resolution and HiDPI.",
+  f8t:"Network diagnostics", f8d:"One click measures latency and packet loss, checks DNS resolve times, and detects ISP hijacking with a non-existent domain. Switch to Alibaba Public DNS and flush the cache in one click.",
+  f9t:"Bluetooth battery", f9d:"Battery levels for mice, keyboards, headphones and remotes: system readings, AirPods (left, right, case) and the standard BLE battery service used by Logitech MX and others.",
+  st_eb:"The real thing", st_h2:"Here's what it actually looks like",
+  st_p:"These are real screenshots from the app, not mockups.",
+  s1k:"Battery · Charging", s1t:"A charge limit that protects your battery",
+  s1d:"Install the background charge helper once and hold your battery at a limit between 50 and 100%, with a 0–10% sailing range so it doesn't top up constantly. It pauses on an external display, so your screen never drops out.",
+  s2k:"Display", s2t:"Brightness, warmth and resolution in one place",
+  s2d:"With DDC/CI, adjust hardware brightness, contrast and input source directly. Four scenes switch automatically by time of day; software dimming stays off by default and gets out of the way of tools like MonitorBar.",
+  s3k:"Network", s3t:"Network diagnostics and a one-click DNS fix",
+  s3d:"One click measures latency and packet loss to your router, Alibaba DNS and popular sites, and detects ISP hijacking with a non-existent domain. Your original settings are saved and can be restored anytime.",
+  s4k:"Accessories", s4t:"Bluetooth device battery",
+  s4d:"Battery levels for mice, keyboards, headphones and remotes in one place. Devices that can't be read show why. Refreshes every 5 minutes with no continuous scanning.",
+  sf_eb:"Safety", sf_h2:"Safe to hand over",
+  sf_p:"It only does what's needed, and you stay in control of every step. No black-box \"one-click boost\", no invisible background agent.",
+  sf1t:"Never acts on its own", sf1d:"Every action needs your pick and your click.",
+  sf2t:"Never deletes files", sf2d:"It only quits apps or restarts system services that come right back.",
+  sf3t:"No admin password", sf3d:"No background daemons, no changes to system files.",
+  sf4t:"Fully open source", sf4d:"All the code is on GitHub for anyone to read.",
+  in_eb:"Install", in_h2:"Thirty seconds, done",
+  in_p:"No installer, no background service. Drag it into Applications and you're set.",
+  in1:"Download the latest Mac-Optimizer-x.x.dmg from the Releases page.",
+  in2:"Open the DMG and drag the app into Applications.",
+  in3:"The app isn't notarized by Apple. If macOS says it can't verify the developer the first time, go to System Settings › Privacy & Security and click \"Open Anyway\" at the bottom. Or run this in Terminal:",
+  copy:"Copy",
+  fi_h2:"Next time it lags,<br>don't reach for restart",
+  fi_p:"Free, open source, about 2 MB. Download and run — no sign-up, no account.",
+  fi_gh:"Read the source on GitHub",
+  ft_rel:"Releases", ft_made:"vibe coded with ♥"
+};
+var ROT = { zh:["跟手","流畅","顺手","起飞"], en:["smooth","snappy","fluid","crisp"] };
+var TITLE = {
+  zh:"Mac 一键优化 · 不用重启，也能让卡顿的 Mac 重新跟手",
+  en:"Mac Optimizer · Fix a laggy Mac without restarting"
+};
+
+var lang = localStorage.getItem("lang") || (navigator.language.toLowerCase().indexOf("zh")===0 ? "zh" : "en");
+var ri = 0, timer = null;
+
+function apply(l){
+  lang = l;
+  try{ localStorage.setItem("lang", l); }catch(e){}
+  var d = l === "zh" ? ZH : EN;
+  document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
+  document.title = TITLE[l];
+  document.querySelectorAll("[data-i]").forEach(function(e){
+    var v = d[e.dataset.i];
+    if(v !== undefined) e.innerHTML = v;
+  });
+  document.querySelectorAll(".lang button").forEach(function(b){
+    b.classList.toggle("on", b.dataset.l === l);
+  });
+  ri = 0;
+  spin();
+  if(timer) clearInterval(timer);
+  timer = setInterval(spin, 2200);
+}
+function spin(){
+  var el = document.getElementById("rot");
+  if(!el) return;
+  var w = ROT[lang];
+  el.innerHTML = "<span>" + w[ri % w.length] + "</span>";
+  ri++;
+}
+document.querySelectorAll(".lang button").forEach(function(b){
+  b.addEventListener("click", function(){ apply(b.dataset.l); });
+});
 apply(lang);
-const hd=document.getElementById("hd"),more=document.getElementById("more");
-addEventListener("scroll",()=>{hd.classList.toggle("scrolled",scrollY>40);more.classList.toggle("hide",scrollY>innerHeight*.6||innerHeight+scrollY>document.body.scrollHeight-300)});
-const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("on");io.unobserve(e.target)}}),{threshold:.15});
-document.querySelectorAll(".reveal").forEach(e=>io.observe(e));
+
+/* ---------- marquee duplicate ---------- */
+var mq = document.getElementById("mq");
+if(mq) mq.innerHTML += mq.innerHTML;
+
+/* ---------- header + progress ---------- */
+var hd = document.getElementById("hd");
+var prog = document.getElementById("prog");
+var ticking = false;
+function onScroll(){
+  var y = window.pageYOffset || document.documentElement.scrollTop;
+  hd.classList.toggle("scrolled", y > 30);
+  var h = document.documentElement.scrollHeight - window.innerHeight;
+  prog.style.width = (h > 0 ? (y / h) * 100 : 0) + "%";
+  if(!reduce) parallax(y);
+  ticking = false;
+}
+window.addEventListener("scroll", function(){
+  if(!ticking){ ticking = true; requestAnimationFrame(onScroll); }
+}, {passive:true});
+
+/* ---------- reveal ---------- */
+var io = new IntersectionObserver(function(es){
+  es.forEach(function(e){
+    if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+  });
+}, {threshold:.12, rootMargin:"0px 0px -8% 0px"});
+document.querySelectorAll(".rv").forEach(function(e){ io.observe(e); });
+
+/* ---------- ring + score ---------- */
+var ring = document.getElementById("ringfg");
+var numEl = document.getElementById("scoreNum");
+var C = 326.7;
+function animateScore(){
+  var target = 62, t0 = null, dur = 1700;
+  ring.style.strokeDashoffset = C;
+  function step(ts){
+    if(!t0) t0 = ts;
+    var p = Math.min(1, (ts - t0) / dur);
+    var e = 1 - Math.pow(1 - p, 3);
+    var v = Math.round(target * e);
+    numEl.textContent = v;
+    ring.style.strokeDashoffset = C * (1 - (target * e) / 100);
+    if(p < 1) requestAnimationFrame(step);
+  }
+  setTimeout(function(){ requestAnimationFrame(step); }, 520);
+}
+if(reduce){
+  numEl.textContent = "62";
+  ring.style.strokeDashoffset = C * (1 - .62);
+} else {
+  animateScore();
+}
+
+/* ---------- tilt + parallax ---------- */
+var tilt = document.getElementById("tilt");
+var hero = document.querySelector(".hero");
+if(tilt && !reduce && window.matchMedia("(hover:hover)").matches){
+  var tx = 0, ty = 0, cx = 0, cy = 0, raf = null;
+  hero.addEventListener("pointermove", function(e){
+    var r = hero.getBoundingClientRect();
+    tx = ((e.clientX - r.left) / r.width - .5) * 9;
+    ty = ((e.clientY - r.top) / r.height - .5) * -6;
+    if(!raf) raf = requestAnimationFrame(tiltLoop);
+  });
+  function tiltLoop(){
+    cx += (tx - cx) * .08;
+    cy += (ty - cy) * .08;
+    tilt.style.transform = "rotateY(" + cx.toFixed(2) + "deg) rotateX(" + cy.toFixed(2) + "deg)";
+    if(Math.abs(tx - cx) > .01 || Math.abs(ty - cy) > .01){ raf = requestAnimationFrame(tiltLoop); }
+    else { raf = null; }
+  }
+}
+var hv = document.querySelector(".hero-visual");
+function parallax(y){
+  if(hv && y < window.innerHeight * 1.4){
+    hv.style.transform = "translateY(" + (y * .1).toFixed(1) + "px)";
+    hv.style.opacity = String(Math.max(0, 1 - y / (window.innerHeight * .95)));
+  }
+}
+
+/* ---------- card spotlight ---------- */
+document.querySelectorAll(".card, .pcard, .sitem").forEach(function(c){
+  c.addEventListener("pointermove", function(e){
+    var r = c.getBoundingClientRect();
+    c.style.setProperty("--mx", (e.clientX - r.left) + "px");
+    c.style.setProperty("--my", (e.clientY - r.top) + "px");
+  });
+});
+
+/* ---------- sticky stack ---------- */
+var cards = Array.prototype.slice.call(document.querySelectorAll(".scard"));
+var stackOn = window.matchMedia("(min-width:881px)");
+function stackUpdate(){
+  if(!stackOn.matches) return;
+  for(var i = 0; i < cards.length; i++){
+    var c = cards[i];
+    var next = cards[i + 1];
+    var p = 0;
+    if(next){
+      var nr = next.getBoundingClientRect();
+      var start = window.innerHeight * .92;
+      var end = window.innerHeight * .14;
+      p = (start - nr.top) / (start - end);
+      p = Math.max(0, Math.min(1, p));
+    }
+    c.style.setProperty("--p", p.toFixed(3));
+  }
+}
+window.addEventListener("scroll", function(){
+  if(!reduce) requestAnimationFrame(stackUpdate);
+}, {passive:true});
+window.addEventListener("resize", stackUpdate);
+stackUpdate();
+
+/* ---------- magnetic buttons ---------- */
+if(!reduce && window.matchMedia("(hover:hover)").matches){
+  document.querySelectorAll(".btn").forEach(function(b){
+    b.addEventListener("pointermove", function(e){
+      var r = b.getBoundingClientRect();
+      var x = (e.clientX - r.left - r.width / 2) / r.width * 10;
+      var y = (e.clientY - r.top - r.height / 2) / r.height * 8;
+      b.style.transform = "translate(" + x.toFixed(1) + "px," + (y - 2).toFixed(1) + "px)";
+    });
+    b.addEventListener("pointerleave", function(){ b.style.transform = ""; });
+  });
+}
+
+/* ---------- copy ---------- */
+var cb = document.getElementById("copybtn");
+if(cb) cb.addEventListener("click", function(){
+  var txt = 'xattr -dr com.apple.quarantine "/Applications/Mac一键优化.app"';
+  var done = function(){ cb.textContent = lang === "zh" ? "已复制" : "Copied"; setTimeout(function(){ cb.textContent = lang === "zh" ? "复制" : "Copy"; }, 1600); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done, done);
+  } else {
+    var ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(e){} document.body.removeChild(ta); done();
+  }
+});
+
+onScroll();
+})();
 </script>
 </body>
 </html>
