@@ -26,7 +26,7 @@ struct BatteryPage: View {
                     Text("健康、外设电量、耗电排行和提醒").font(.system(size: 12)).foregroundColor(.secondary)
                 }
                 HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 8) { health(s); devices(s); sounds; limits }.frame(maxWidth: .infinity)
+                    VStack(spacing: 8) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
                     VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
                 }
             }.padding(28)

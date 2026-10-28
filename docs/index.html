@@ -206,6 +206,27 @@ footer nav{display:flex;gap:20px}
   </div>
 </section>
 
+<section class="g">
+  <div class="inner row reveal">
+    <div class="txt"><h2 data-i="f8T"></h2><p class="lead" data-i="f8D"></p></div>
+    <div class="media"><img src="display.png" alt="Display" style="width:100%;border-radius:14px;display:block"></div>
+  </div>
+</section>
+
+<section>
+  <div class="inner row reveal">
+    <div class="txt"><h2 data-i="f9T"></h2><p class="lead" data-i="f9D"></p></div>
+    <div class="media"><img src="network.png" alt="Network diagnostics" style="width:100%;border-radius:14px;display:block"></div>
+  </div>
+</section>
+
+<section class="g">
+  <div class="inner row reveal">
+    <div class="txt"><h2 data-i="f10T"></h2><p class="lead" data-i="f10D"></p></div>
+    <div class="media"><img src="bt.png" alt="Bluetooth battery" style="width:100%;border-radius:14px;display:block"></div>
+  </div>
+</section>
+
 <section>
   <div class="inner list reveal">
     <div><h2 data-i="safeT"></h2><p class="lead" data-i="safeD"></p></div>
@@ -263,7 +284,7 @@ u_ov:"概览",u_live:"实时",u_cpu:"CPU 负载",u_mem:"内存可用",u_up:"连�
 u_net:"网络与 VPN",u_run:"运行中",u_conf:"同时开着 2 个 VPN，建议只留一个",u_quit:"退出",u_vm:"后台虚拟机（Claude）",
 u_disp:"显示性能",u_lg:"调低 Liquid Glass 透明感",u_lgD:"外观 › Liquid Glass 滑块",u_rt:"降低透明度",u_rtD:"无障碍 › 显示",u_rm:"减弱动态效果",u_rmD:"无障碍 › 动态效果",u_go:"去设置",u_on:"已开启 ✓",
 f5T:"菜单栏里的实时仪表盘",f5D:"菜单栏常驻一个小指标（CPU、健康分或电池，可选），点开就是完整面板：CPU/GPU 占用和温度、内存压力、磁盘、网速、风扇、电池和外设电量、高占用进程（确认后正常退出）。还有常亮、擦屏、截图、麦克风静音等快捷开关。主窗口里同样能看。面板关着时每 5 秒采一次，常驻几乎不占资源。",
-f7T:"充电上限，养护电池",f7D:"装一次后台充电助手（系统设置里允许一次）即可把电量停在 50–100% 之间的上限，并设置 0–10% 的航行范围，避免反复小幅充电。macOS 27 只允许断开电源适配器，所以电量会在 75%–80%（默认）之间循环。接着外接显示器时自动暂停，不会让屏幕掉线；睡眠前、电量低于 20% 或读不到电量时自动恢复供电；关闭或卸载即恢复系统默认。",f6T:"更细致的电池管理",f6D:"电池健康度、循环次数、温度和状况一目了然；所有设备电量按高低排序；任意百分比的低电量提醒、充到上限、接电/断电、充满提醒，每种可配提示音，严重低电还能全屏发光提醒；记录每个应用 24 小时 / 7 天 / 30 天的耗电，发现异常耗电会提醒。打扰类功能默认关闭。",
+f8T:"显示器：亮度、色温、分辨率一处搞定",f8D:"外接显示器支持 DDC/CI 时，直接调硬件亮度、对比度和输入源（不支持的自动隐藏）。日间/阅读/观影/夜间四种场景，可按时间自动切换；软件调光与色温默认关闭，检测到 MonitorBar 等工具时不抢着改屏幕色彩。一键切分辨率、刷新率和 HiDPI，15 秒不确认自动还原。还有今日亮屏时间和 7 天柱状图（按锁屏/睡眠事件记账，不轮询）。",f9T:"网络诊断与 DNS 一键修复",f9D:"点一下测试路由器、阿里 DNS 和常用网站的延迟与丢包；检查各网络的 DNS、解析耗时，并用不存在的域名检测运营商劫持（VPN 虚拟地址不会误报）。一键把 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6 并清缓存，原设置自动保存、可随时恢复。开着 LetsVPN、鹊桥VPN 时会提醒 VPN 可能接管 DNS。",f10T:"蓝牙设备电量",f10D:"鼠标、键盘、耳机、遥控器的电量集中显示在电池页和菜单栏面板：读取系统电量、AirPods 左右耳与充电盒，以及罗技 MX 等低功耗蓝牙设备的标准电量服务。读不到的设备会写明原因（如经典蓝牙）。每 5 分钟刷新一次，不持续扫描；低电量通知可选。",f7T:"充电上限，养护电池",f7D:"装一次后台充电助手（系统设置里允许一次）即可把电量停在 50–100% 之间的上限，并设置 0–10% 的航行范围，避免反复小幅充电。macOS 27 只允许断开电源适配器，所以电量会在 75%–80%（默认）之间循环。接着外接显示器时自动暂停，不会让屏幕掉线；睡眠前、电量低于 20% 或读不到电量时自动恢复供电；关闭或卸载即恢复系统默认。",f6T:"更细致的电池管理",f6D:"电池健康度、循环次数、温度和状况一目了然；所有设备电量按高低排序；任意百分比的低电量提醒、充到上限、接电/断电、充满提醒，每种可配提示音，严重低电还能全屏发光提醒；记录每个应用 24 小时 / 7 天 / 30 天的耗电，发现异常耗电会提醒。打扰类功能默认关闭。",
 u_mb:"一切正常",u_mem2:"内存",u_qa:"常亮 · 擦屏 · 截图 · 麦克风",u_bat:"电池",u_health:"健康度 86%",u_b1:"低电量提醒：20%、10%",u_b2:"充到 80% 提醒拔电",u_b3:"今日耗电最多：Chrome 2.1 Wh",
 safeT:"放心交给它",safeD:"它只做必要的事，每一步都在你的掌控之中。",
 s1:"不会自动动手",s1d:"每一项操作都要你自己选、自己点。",s2:"不删任何文件",s2d:"只是退出程序，或者重启会自动恢复的系统服务。",s3:"不要管理员密码",s3d:"不装后台常驻服务，也不改系统文件。",s4:"完全开源",s4d:"所有代码都在 GitHub 上，随时可以查看。",
@@ -287,7 +308,7 @@ u_ov:"Overview",u_live:"Live",u_cpu:"CPU load",u_mem:"Free memory",u_up:"Uptime"
 u_net:"Network & VPN",u_run:"Running",u_conf:"2 VPNs running, keep just one",u_quit:"Quit",u_vm:"Background VM (Claude)",
 u_disp:"Display performance",u_lg:"Tone down Liquid Glass",u_lgD:"Appearance › Liquid Glass slider",u_rt:"Reduce transparency",u_rtD:"Accessibility › Display",u_rm:"Reduce motion",u_rmD:"Accessibility › Motion",u_go:"Open",u_on:"On ✓",
 f5T:"A live dashboard in your menu bar",f5D:"A tiny live indicator sits in the menu bar (CPU, health score or battery — your pick). Click it for the full panel: CPU/GPU load and temperature, memory pressure, disk, network, fans, battery and accessory levels, and top processes (quit normally after you confirm). Plus quick toggles: keep awake, clean-screen, screenshot, mic mute. The same dashboard lives in the main window. With the panel closed it samples every 5 s and uses almost nothing.",
-f7T:"Charge limit for a healthier battery",f7D:"Install the background charge helper once (approve it in System Settings) to hold your battery at a limit between 50% and 100%, with a 0–10% sailing range so it does not top up constantly. macOS 27 only allows cutting the power adapter, so the level cycles between 75% and 80% by default. It pauses automatically while an external display is connected, so your screen never drops out. Power is restored before sleep, below 20%, or whenever the level cannot be read, and turning it off or uninstalling restores the system defaults.",f6T:"Smarter battery care",f6D:"Battery health, cycle count, temperature and condition at a glance; every device's battery sorted by level; alerts at any percentages you choose, at your charge limit, on plug/unplug and when full, each with its own sound, plus an optional full-screen glow when critically low. Per-app energy use over 24 h / 7 d / 30 d with alerts for unusual drain. Anything intrusive is off by default.",
+f8T:"Display: brightness, warmth and resolution in one place",f8D:"If your external monitor supports DDC/CI, adjust its hardware brightness, contrast and input source directly (unsupported controls are hidden). Four scenes - Day, Reading, Movie and Night - with optional automatic day/night switching. Software dimming and color temperature are off by default and stay out of the way when MonitorBar or similar tools are running. Switch resolution, refresh rate and HiDPI in one click, with an automatic revert after 15 seconds unless you keep it. Plus today's screen-on time and a 7-day chart, tracked from lock/sleep events with no polling.",f9T:"Network diagnostics and one-click DNS fix",f9D:"One click measures latency and packet loss to your router, Alibaba DNS and popular sites; checks each network's DNS servers and resolve times, and detects ISP DNS hijacking with a non-existent domain (VPN fake-IP ranges are not flagged). Switch DNS to Alibaba Public DNS 223.5.5.5 / 223.6.6.6 and flush the cache in one click; your original settings are saved and can be restored anytime. A warning appears when LetsVPN or another VPN may override DNS.",f10T:"Bluetooth device battery",f10D:"Battery levels for mice, keyboards, headphones and remotes on the Battery page and in the menu-bar panel: from the system, AirPods (left, right and case), and the standard BLE battery service used by Logitech MX and others. Devices that cannot be read show why (for example Classic Bluetooth). Refreshes every 5 minutes with no continuous scanning; low-battery alerts are optional.",f7T:"Charge limit for a healthier battery",f7D:"Install the background charge helper once (approve it in System Settings) to hold your battery at a limit between 50% and 100%, with a 0–10% sailing range so it does not top up constantly. macOS 27 only allows cutting the power adapter, so the level cycles between 75% and 80% by default. It pauses automatically while an external display is connected, so your screen never drops out. Power is restored before sleep, below 20%, or whenever the level cannot be read, and turning it off or uninstalling restores the system defaults.",f6T:"Smarter battery care",f6D:"Battery health, cycle count, temperature and condition at a glance; every device's battery sorted by level; alerts at any percentages you choose, at your charge limit, on plug/unplug and when full, each with its own sound, plus an optional full-screen glow when critically low. Per-app energy use over 24 h / 7 d / 30 d with alerts for unusual drain. Anything intrusive is off by default.",
 u_mb:"All good",u_mem2:"Memory",u_qa:"Keep awake · Clean screen · Screenshot · Mic",u_bat:"Battery",u_health:"Health 86%",u_b1:"Low battery alerts: 20%, 10%",u_b2:"Alert at 80% to unplug",u_b3:"Top drain today: Chrome 2.1 Wh",
 safeT:"Safe by design",safeD:"It only does what's needed, and you stay in control of every step.",
 s1:"Never acts on its own",s1d:"Every action needs your pick and your click.",s2:"Never deletes files",s2d:"It only quits apps or restarts system services that come right back.",s3:"No admin password",s3d:"No background daemons, no changes to system files.",s4:"Fully open source",s4d:"All the code is on GitHub for anyone to read.",

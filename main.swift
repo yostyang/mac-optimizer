@@ -241,6 +241,8 @@ struct Sidebar: View {
                 item(-1, "square.grid.2x2", "概览")
                 item(-2, "waveform.path.ecg.rectangle", "实时监控")
                 item(-3, "battery.75", "电池")
+                item(-4, "display", "显示器")
+                item(-5, "network", "网络诊断")
                 Text("工具").font(.system(size: 10, weight: .semibold)).opacity(0.45).padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
                 ForEach(features) { f in item(f.id, f.icon, f.title) }
             }.padding(.horizontal, 8)
@@ -442,6 +444,8 @@ struct RootView: View {
                 if nav.sel == -1 { Overview(m: m, mon: mon) }
                 else if nav.sel == -2 { DashboardView(m: mon) }
                 else if nav.sel == -3 { BatteryPage(m: mon) }
+                else if nav.sel == -4 { DisplayPage() }
+                else if nav.sel == -5 { NetworkPage() }
                 else { ToolPage(feature: features[nav.sel]).id(nav.sel) }
             }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBG)
         }
@@ -476,6 +480,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         EnergyTracker.shared.onDrain = { BatteryAlerts.shared.drain($0, $1) }
         if args.contains("--snapshot") || args.contains("--uitest") { w.contentView = NSHostingView(rootView: RootView()); MOTests.runUI(args: args, window: w); return }
         mon.start()
+        DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
         if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }
         BatteryAlerts.shared.$settings.map(\.energyTracking).removeDuplicates().dropFirst().sink { $0 ? EnergyTracker.shared.start() : EnergyTracker.shared.stop() }.store(in: &subs)
@@ -490,7 +495,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { showMain(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !UIState.shared.menuBar }
-    func applicationWillTerminate(_ n: Notification) { EnergyTracker.shared.stop(); KeepAwake.shared.stop() }
+    func applicationWillTerminate(_ n: Notification) { EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
 }
 
 @main

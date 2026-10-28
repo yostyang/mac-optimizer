@@ -243,12 +243,16 @@ final class ChargeController {
     func setTopUp(_ on: Bool, reply: @escaping (Bool, String) -> Void)
     func setLED(_ on: Bool, reply: @escaping (Bool, String) -> Void)
     func resetDefaults(_ reply: @escaping (Bool, String) -> Void)
+    // v1.5 DNS：没有任何参数，只能设为固定的阿里 DNS 或恢复保存的原值
+    func dnsStatus(_ reply: @escaping (Data) -> Void)
+    func setAliDNS(_ reply: @escaping (Bool, String) -> Void)
+    func restoreDNS(_ reply: @escaping (Bool, String) -> Void)
 }
 
 enum ChargeValidate {
     static func limit(_ v: Int) -> Bool { ChargeConst.limitRange.contains(v) }
     static func sail(_ v: Int) -> Bool { ChargeConst.sailRange.contains(v) }
-    static let allowedSelectors: Set<String> = ["status:", "setLimit:enabled:reply:", "setSailing:reply:", "setAutoDischarge:reply:", "setTopUp:reply:", "setLED:reply:", "resetDefaults:"]
+    static let allowedSelectors: Set<String> = ["status:", "setLimit:enabled:reply:", "setSailing:reply:", "setAutoDischarge:reply:", "setTopUp:reply:", "setLED:reply:", "resetDefaults:", "dnsStatus:", "setAliDNS:", "restoreDNS:"]
 }
 
 /// 助手里的服务对象：所有调用转到主线程，参数严格校验后才改设置
@@ -259,6 +263,8 @@ final class ChargeService: NSObject, NSXPCListenerDelegate, ChargeHelperProtocol
     var persist: (ChargeSettings) -> Void
     /// 外接显示器检测（助手里用 IOKit；测试用模拟）
     var display: () -> Bool = { false }
+    /// DNS 修复（助手里用真实 networksetup；测试用模拟命令）
+    var dns: DNSFixer?
     init(ctl: ChargeController, reader: @escaping () -> (level: Int?, plugged: Bool, charging: Bool), persist: @escaping (ChargeSettings) -> Void) {
         self.ctl = ctl; self.reader = reader; self.persist = persist
     }
@@ -284,6 +290,12 @@ final class ChargeService: NSObject, NSXPCListenerDelegate, ChargeHelperProtocol
     func setAutoDischarge(_ on: Bool, reply: @escaping (Bool, String) -> Void) { change(true, "", reply) { ctl.settings.autoDischarge = on } }
     func setTopUp(_ on: Bool, reply: @escaping (Bool, String) -> Void) { change(true, "", reply) { ctl.setTopUp(on) } }
     func setLED(_ on: Bool, reply: @escaping (Bool, String) -> Void) { change(true, "", reply) { ctl.settings.led = on } }
+    func dnsStatus(_ reply: @escaping (Data) -> Void) {
+        guard let dns else { reply(Data()); return }
+        reply((try? JSONEncoder().encode(dns.status())) ?? Data())
+    }
+    func setAliDNS(_ reply: @escaping (Bool, String) -> Void) { guard let dns else { reply(false, "不支持"); return }; let r = dns.setAli(); reply(r.0, r.1) }
+    func restoreDNS(_ reply: @escaping (Bool, String) -> Void) { guard let dns else { reply(false, "不支持"); return }; let r = dns.restore(); reply(r.0, r.1) }
     func resetDefaults(_ reply: @escaping (Bool, String) -> Void) { onMain { ctl.resetDefaults(); persist(ctl.settings) }; reply(true, "") }
 }
 

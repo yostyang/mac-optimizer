@@ -205,9 +205,10 @@ struct BatteryTile: View {
                 }
                 Text(stateText).font(.system(size: 10)).foregroundColor(.secondary)
             } else { Text("没有内置电池").font(.system(size: 11)).foregroundColor(.secondary) }
-            if !s.devices.isEmpty {
+            let devs = BTBattery.shared.withBattery.isEmpty ? s.devices : BTBattery.shared.withBattery.map { DeviceBattery(name: $0.name, percent: $0.percent ?? 0, kind: $0.kind) }
+            if !devs.isEmpty {
                 HStack(spacing: 10) {
-                    ForEach(s.devices.prefix(4)) { d in
+                    ForEach(devs.prefix(4)) { d in
                         HStack(spacing: 3) { Image(systemName: d.kind).font(.system(size: 10)); Text("\(d.percent)%").font(.system(size: 10, weight: .medium)).monospacedDigit() }.foregroundColor(batteryColor(d.percent))
                     }
                 }
@@ -298,6 +299,7 @@ struct PanelContent: View {
     @ObservedObject var m: Monitor
     @ObservedObject var ui = UIState.shared
     @ObservedObject var alerts = BatteryAlerts.shared
+    @ObservedObject var dm = DisplayManager.shared
     var body: some View {
         let s = m.s; let h = s.health
         VStack(spacing: 10) {
@@ -326,6 +328,7 @@ struct PanelContent: View {
                 HStack(spacing: 5) {
                     Chip(icon: "clock", text: "已开机 " + Fmt.uptime(s.uptime))
                     Chip(icon: "network", text: s.proxy.isEmpty ? "—" : s.proxy)
+                    if let d = dm.displays.first(where: { !$0.builtin }) ?? dm.displays.first { Chip(icon: "display", text: "\(d.current.label) · \(d.current.refreshLabel)") }
                 }
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(LinearGradient(colors: [accent2, accent, Color(red: 0.36, green: 0.22, blue: 0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)))

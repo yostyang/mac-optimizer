@@ -14,5 +14,5 @@ BIN="$PWD/build/Mac一键优化.app/Contents/MacOS/MacOptimizer"
 "$BIN" --snapshot "$OUT/shots" --goldens "$PWD/goldens" ${APPROVE:-} > "$OUT/snapshot.log" 2>&1; P=$?
 grep -E "✗" "$OUT"/*.log
 for f in selftest uitest snapshot; do tail -1 "$OUT/$f.log"; done | tee "$OUT/summary.txt"
-for f in panel panel-dark dashboard battery overview dashboard-default-dark battery-default-dark charge-light charge-dark charge-paused-light charge-paused-dark; do [ -s "$OUT/shots/$f.png" ] || { echo "缺少截图 $f.png"; P=1; }; done
+for f in panel panel-dark dashboard battery overview dashboard-default-dark battery-default-dark charge-light charge-dark charge-paused-light charge-paused-dark display-light display-dark network-light network-dark bt-light bt-dark; do [ -s "$OUT/shots/$f.png" ] || { echo "缺少截图 $f.png"; P=1; }; done
 if [ $S -eq 0 ] && [ $U -eq 0 ] && [ $P -eq 0 ]; then echo "✅ 全部测试通过（截图在 $OUT/shots，发布前请查看）"; else echo "❌ 测试失败"; exit 1; fi

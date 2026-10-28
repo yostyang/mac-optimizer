@@ -11,3 +11,4 @@ build-test/
 ch_arm
 ch_x86
 MacOptimizerChargeHelper
+helper-cache/

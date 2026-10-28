@@ -52,8 +52,8 @@ final class ChargeClient: ObservableObject {
         }
         if phase == .ready { proxy(onError: finish) { $0.resetDefaults { _, _ in finish() } } } else { finish() }
     }
-    /// 升级后：替换 App 包会让 launchd 找不到旧路径的助手（EX_CONFIG）。新版本第一次启动时，
-    /// 如果助手已获授权，就注销再注册一次（授权保留，不需要重新允许），并确认能连上；最多重试 3 次。
+    /// 升级后：助手自己会在文件被替换后退出、由 launchd 拉起新版本。这里只确认能连上；
+    /// 连不上时注销再注册（授权按助手 cdhash 记录，build.sh 保证助手不变时 cdhash 不变）。
     static let buildKey = "chargeHelperBuild"
     func repairAfterUpdate(completion: ((Bool) -> Void)? = nil) {
         guard !offline, localCaps.any else { completion?(false); return }
@@ -65,14 +65,16 @@ final class ChargeClient: ObservableObject {
         }
         DispatchQueue.global(qos: .utility).async {
             var ok = false
-            for _ in 0..<3 where !ok {
-                try? self.daemon.unregister()        // 助手收到 SIGTERM 会先恢复默认（接通电源）
-                Thread.sleep(forTimeInterval: 3)
+            for _ in 0..<5 where !ok { ok = ChargeClient.ping(); if !ok { Thread.sleep(forTimeInterval: 2) } }
+            // 替换 App 包后 launchd 找不到包内相对路径（EX_CONFIG）：注销再注册一次即可恢复。
+            // 助手 cdhash 不变时用户授权会保留（v1.5 实测）；助手代码变化时才需要重新允许。
+            for _ in 0..<2 where !ok {
+                try? self.daemon.unregister(); Thread.sleep(forTimeInterval: 3)
                 do { try self.daemon.register() } catch { continue }
-                for _ in 0..<5 where !ok { Thread.sleep(forTimeInterval: 2); ok = ChargeClient.ping() }
+                for _ in 0..<6 where !ok { Thread.sleep(forTimeInterval: 2); ok = ChargeClient.ping() }
             }
             DispatchQueue.main.async {
-                if ok { d.set(build, forKey: Self.buildKey) } else { self.note = "升级后充电助手没有启动，请在「登录项与扩展」里重新允许" }
+                if ok { d.set(build, forKey: Self.buildKey) } else { self.note = "升级后充电助手没有启动，请在「登录项与扩展」里确认已允许" }
                 self.drop(); self.refresh(); completion?(ok)
             }
         }

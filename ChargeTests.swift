@@ -250,9 +250,12 @@ extension MOTests {
         let flags = ((info as? [String: Any])?[kSecCodeInfoFlags as String] as? UInt32) ?? 0
         check(flags & 0x10000 != 0, "助手启用强化运行时", String(format: "flags 0x%x", flags))
         let bin = (try? Data(contentsOf: helper)) ?? Data()
-        let banned = ["posix_spawn", "NSTask", "/bin/sh", "execve", "system\0", "dlopen"]
+        // v1.5 起助手要调用 networksetup 改 DNS：只允许固定的 4 个系统命令，不含任何 shell
+        let banned = ["/bin/sh", "/bin/bash", "/bin/zsh", "system\0", "dlopen", "osascript"]
         let found = banned.filter { bin.range(of: Data($0.utf8)) != nil }
-        check(!bin.isEmpty && found.isEmpty, "助手不含任何执行命令的能力", found.isEmpty ? "\(bin.count / 1024) KB" : found.joined(separator: ","))
+        check(!bin.isEmpty && found.isEmpty, "助手不含 shell / 任意命令能力", found.isEmpty ? "\(bin.count / 1024) KB" : found.joined(separator: ","))
+        let allowed = ["/usr/sbin/networksetup", "/usr/sbin/ipconfig", "/usr/bin/dscacheutil", "/usr/bin/killall"]
+        check(allowed.allSatisfy { bin.range(of: Data($0.utf8)) != nil }, "助手只含固定的系统命令路径")
     }
 
     static func chargeFixture() -> ChargeClient {

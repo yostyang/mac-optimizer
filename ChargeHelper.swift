@@ -1,4 +1,4 @@
-// 特权助手（launchd 守护进程，root）：只做充电控制；事件驱动 + 60 秒兜底
+// 特权助手（launchd 守护进程，root）：充电控制 + DNS 一键修复（固定值）；事件驱动 + 60 秒兜底
 import Foundation
 import IOKit
 import IOKit.ps
@@ -22,6 +22,7 @@ enum HelperMain {
             try? JSONEncoder().encode(s).write(to: file, options: .atomic)
         }
         svc.display = { DisplayProbe.externalCount() > 0 }
+        svc.dns = DNSFixer(runner: RealRunner(), backupURL: dir.appendingPathComponent("dns-backup.json"))
         watchDisplays()
         watchSelf()
         // 已启用不先 release 再切断（会闪断 USB-C 显示器）；未启用则恢复默认
@@ -85,13 +86,22 @@ enum HelperMain {
             }
         }
     }
-    // App 升级替换了助手文件：恢复默认后退出，launchd（KeepAlive）会启动新版本
+    // App 升级替换了助手文件：先恢复默认（接通电源），等新文件就位且稳定后再退出，
+    // 让 launchd（KeepAlive）直接拉起同一路径下的新版本。不再需要 App 注销/重新注册（那样会丢失用户授权）
     static var selfWatch: DispatchSourceFileSystemObject?
+    /// 每秒检查一次：新文件连续 3 秒存在就退出；3 分钟都没出现（被删除/卸载）也退出
+    static func waitForReplacementThenExit(_ path: String, stable: Int = 0, waited: Int = 0) {
+        let present = FileManager.default.isExecutableFile(atPath: path)
+        let st = present ? stable + 1 : 0
+        if st >= 3 || waited >= 180 { exit(0) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { waitForReplacementThenExit(path, stable: st, waited: waited + 1) }
+    }
     static func watchSelf() {
-        let fd = open(Bundle.main.executablePath ?? CommandLine.arguments[0], O_EVTONLY)
+        let path = Bundle.main.executablePath ?? CommandLine.arguments[0]
+        let fd = open(path, O_EVTONLY)
         guard fd >= 0 else { return }
         let src = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.delete, .rename, .revoke], queue: .main)
-        src.setEventHandler { svc.ctl.release(); exit(0) }
+        src.setEventHandler { svc.ctl.release(); selfWatch?.cancel(); waitForReplacementThenExit(path) }
         src.setCancelHandler { close(fd) }
         src.resume(); selfWatch = src
     }

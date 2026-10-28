@@ -68,6 +68,7 @@ enum MOTests {
         sec("耗电记录")
         energyTests()
         chargeTests()
+        v15Tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -346,6 +347,7 @@ enum MOTests {
             fits(host, "充电卡片 \(mode)")
             cw.orderOut(nil)
         }
+        v15Snapshots(out)
         let screen = NSScreen.main
         let defaultSize = Layout.defaultSize(for: screen)
         for (mode, ap) in modes {
@@ -497,6 +499,7 @@ enum MOTests {
         ChargeClient.shared = realClient; Nav.shared.sel = -2; settle(0.3); Nav.shared.sel = -3
         check(ChargeClient.shared.daemon.status == daemonBefore, "测试没有注册/卸载充电助手", "\(daemonBefore.rawValue)")
         check(waitUntil(4) { !EnergyTracker.shared.live.isEmpty }, "耗电实时数据", EnergyTracker.shared.live.prefix(3).map { "\($0.app) \(String(format: "%.2f", $0.watts))W" }.joined(separator: ", "))
+        v15UI(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")
