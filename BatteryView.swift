@@ -26,8 +26,8 @@ struct BatteryPage: View {
                     Text("健康、外设电量、耗电排行和提醒").font(.system(size: 12)).foregroundColor(.secondary)
                 }
                 HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 14) { health(s); devices(s); sounds; limits }.frame(maxWidth: .infinity)
-                    VStack(spacing: 14) { energy; alerts }.frame(maxWidth: .infinity)
+                    VStack(spacing: 8) { health(s); devices(s); sounds; limits }.frame(maxWidth: .infinity)
+                    VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
                 }
             }.padding(28)
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
@@ -60,7 +60,7 @@ struct BatteryPage: View {
     func advice(_ s: Snapshot) -> String {
         if let t = s.batteryTemp, t > 40 { return "⚠️ 电池温度偏高，避免边充电边高负载，放在通风处。" }
         if let h = s.batteryHealth, h < 80 || s.batteryCondition == "建议维修" { return "电池容量已低于 80%，可以考虑到 Apple 授权服务商检测或更换。" }
-        return "电池状态良好。长期插电使用时，可在系统设置里开启「充电上限」减少损耗。"
+        return "电池状态良好。长期插电时开启下方「充电上限」可减少损耗。"
     }
     func devices(_ s: Snapshot) -> some View {
         Card(title: "所有设备", icon: "dot.radiowaves.left.and.right") {
@@ -73,7 +73,7 @@ struct BatteryPage: View {
                     Text("\(d.percent)%").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 38, alignment: .trailing)
                 }
             }
-            Text("显示系统公开电量的设备（苹果键鼠、AirPods 等）。罗技、Keychron 等第三方蓝牙设备的电量 macOS 不对外提供，读不到时不显示。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("罗技、Keychron 等第三方设备的电量 macOS 不提供，读不到时不显示。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
     var energy: some View {
@@ -138,10 +138,5 @@ struct BatteryPage: View {
                 }
         }.disabled(!al.settings.alertsOn).opacity(al.settings.alertsOn ? 1 : 0.5).font(.system(size: 12))
     }
-    var limits: some View {
-        Card(title: "充电控制", icon: "bolt.batteryblock") {
-            Text("充电上限、航行模式、自动放电、一键充满、MagSafe 灯控制都需要写入 SMC，必须安装管理员权限的后台助手。为了安全本应用不安装任何特权组件，因此不提供这些开关。macOS 自带的「充电上限」和「低电量模式」可以在系统设置里直接调整：").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            Button { SystemPanes.battery() } label: { Label("打开系统设置 › 电池", systemImage: "gear") }.buttonStyle(PillButton(filled: false))
-        }
-    }
+    var limits: some View { ChargeCard(c: ChargeClient.shared).onAppear { ChargeClient.shared.refresh() } }
 }

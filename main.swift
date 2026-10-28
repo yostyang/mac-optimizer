@@ -453,7 +453,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     func applicationDidFinishLaunching(_ n: Notification) {
         let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
+        if !args.contains("--snapshot") && !args.contains("--uitest") { ChargeClient.shared.repairAfterUpdate() }
         let size = Layout.defaultSize(for: NSScreen.main)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         w.contentMinSize = NSSize(width: min(Layout.minSize.width, size.width), height: min(Layout.minSize.height, size.height))

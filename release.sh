@@ -14,6 +14,11 @@ pgrep -x MacOptimizer >/dev/null && { echo "Mac一键优化没有正常退出，
 rm -rf "/Applications/Mac一键优化.app" && cp -R "build/Mac一键优化.app" /Applications/ && open "/Applications/Mac一键优化.app"
 cp "build/Mac一键优化.dmg" "/tmp/Mac-Optimizer-$V.dmg"
 sleep 5; pgrep -x MacOptimizer >/dev/null || { echo "安装后没有启动"; exit 1; }
+# 升级路径：新版本 App 启动时自己重新注册充电助手，这里确认它已重启
+if launchctl print system/com.yost.macoptimizer.chargehelper >/dev/null 2>&1; then
+  for n in $(seq 1 45); do sleep 2; [ "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" = "$B" ] && "/Applications/Mac一键优化.app/Contents/MacOS/MacOptimizer" --charge status >/dev/null 2>&1 && break; done
+  [ "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" = "$B" ] && echo "充电助手已随新版本重启" || { echo "⚠️ 充电助手没有随新版本重启，停止发布"; exit 1; }
+fi
 git add -A && git commit -qm "v$V" && git push -q
 SUMMARY=$(cat build-test/summary.txt)
 ~/.local/bin/gh release create "v$V" "/tmp/Mac-Optimizer-$V.dmg" --repo yostyang/mac-optimizer --title "Mac一键优化 $V" --notes "$NOTES

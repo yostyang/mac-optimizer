@@ -8,3 +8,6 @@ dmg/
 .DS_Store
 build/
 build-test/
+ch_arm
+ch_x86
+MacOptimizerChargeHelper

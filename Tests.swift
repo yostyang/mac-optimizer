@@ -67,6 +67,7 @@ enum MOTests {
         alertTests()
         sec("耗电记录")
         energyTests()
+        chargeTests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -300,7 +301,8 @@ enum MOTests {
     }
     static func golden(_ rep: NSBitmapImageRep?, _ name: String, _ dir: String?, approve: Bool) {
         guard let rep, let dir else { return }
-        let path = dir + "/\(name).png"
+        // 主屏是 Retina（2x）还是 1x 外接屏，各用一套基准图
+        let path = dir + "/\(name)\(rep.pixelsWide > Int(rep.size.width) ? "@2x" : "").png"
         if approve || !FileManager.default.fileExists(atPath: path) {
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
             info("已更新基准图 \(name)"); return
@@ -328,9 +330,22 @@ enum MOTests {
         mon.panelOpen = true
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
         NSApp.activate(ignoringOtherApps: true)   // 让 SwiftUI 生成辅助功能树（用于对比度检查）
-        settle(7)
+        settle(10)
         check(mon.cpuHist.count >= 3, "已采样", "\(mon.cpuHist.count) 次")
         let modes: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
+        let realCharge = ChargeClient.shared; ChargeClient.shared = chargeFixture()   // 用最高的「已安装」状态检查布局
+        defer { ChargeClient.shared = realCharge }
+        let pausedFx = chargeFixture(); pausedFx.st.adapterCut = false; pausedFx.st.externalDisplay = true; pausedFx.st.displayPaused = true
+        for (mode, ap) in modes + [("paused-light", .aqua), ("paused-dark", .darkAqua)] {
+            NSApp.appearance = NSAppearance(named: ap)
+            let host = NSHostingView(rootView: ChargeCard(c: mode.hasPrefix("paused") ? pausedFx : ChargeClient.shared).padding(20).frame(width: 520).background(pageBG))
+            let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
+            let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
+            cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); settle(1.0)
+            if let rep = pngRep(host, out + "/charge-\(mode).png") { contrast(host, rep, "充电卡片 \(mode)") }
+            fits(host, "充电卡片 \(mode)")
+            cw.orderOut(nil)
+        }
         let screen = NSScreen.main
         let defaultSize = Layout.defaultSize(for: screen)
         for (mode, ap) in modes {
@@ -393,7 +408,7 @@ enum MOTests {
     static func uiChecks(_ w: NSWindow) {
         let mon = Monitor.shared
         let loginBefore = Actions.loginEnabled
-        check(!loginBefore, "测试开始时没有登录项")
+        info("测试开始时登录项状态：\(loginBefore ? "已开启（用户设置，保持不动）" : "关闭")")
         sec("菜单栏与采样频率")
         UIState.shared.menuBar = true
         StatusBar.shared.setup()
@@ -423,14 +438,16 @@ enum MOTests {
         check(waitUntil(1) { CleanStats.shared.quitApps == 1 }, "退出计入清理统计")
 
         sec("登录项（默认关闭）")
-        check(!Actions.loginEnabled && !UIState.shared.login, "登录时启动默认关闭")
+        check(Actions.loginEnabled == loginBefore && UIState.shared.login == loginBefore, "登录项开关反映真实状态且未被改动")
         StatusBar.shared.popover.performClose(nil)
         check(waitUntil(2) { !StatusBar.shared.popover.isShown && mon.interval == Monitor.lightInterval }, "关闭面板后降回 5 秒")
         check(waitUntil(1) { StatusBar.shared.popover.contentViewController == nil }, "关闭面板后释放面板视图")
 
         sec("主窗口")
         w.setFrameOrigin(NSPoint(x: -4000, y: 0)); w.orderFrontRegardless(); NSApp.activate(ignoringOtherApps: true); w.makeKey()
-        if let b = find(w.contentView!, label: "实时监控") { b.press() } else { check(false, "侧边栏「实时监控」") }
+        settle(1.5)
+        check(waitUntil(8) { find(w.contentView!, label: "实时监控") != nil }, "侧边栏「实时监控」")
+        if let b = find(w.contentView!, label: "实时监控") { b.press() }
         check(waitUntil(2) { Nav.shared.sel == -2 && mon.dashboardShown }, "侧边栏打开实时监控")
         sec("快捷操作")
         let pv = w.contentView!
@@ -459,12 +476,26 @@ enum MOTests {
 
         mon.mainWindowVisible = { true }; mon.reschedule()
         check(mon.interval == Monitor.detailInterval, "仪表盘可见时 2 秒采样")
-        if let t = find(w.contentView!, id: "dash.login") { check((t.value as? NSNumber)?.intValue == 0, "仪表盘登录项开关为关") } else { check(false, "找到登录项开关") }
+        if let t = find(w.contentView!, id: "dash.login") { check((t.value as? NSNumber)?.intValue == (loginBefore ? 1 : 0), "仪表盘登录项开关与系统一致") } else { check(false, "找到登录项开关") }
         mon.mainWindowVisible = { false }; mon.reschedule()
         check(mon.interval == Monitor.lightInterval, "窗口隐藏后降频")
         if let b = find(w.contentView!, label: "电池") { b.press() }
         check(waitUntil(2) { Nav.shared.sel == -3 }, "侧边栏打开电池页")
         if let t = find(w.contentView!, id: "bat.alertsOn") { check((t.value as? NSNumber)?.intValue == 0, "电量提醒默认关闭") } else { check(false, "找到提醒开关") }
+        sec("充电控制卡片")
+        let daemonBefore = ChargeClient.shared.daemon.status
+        if ChargeClient.shared.phase == .notInstalled { check(waitUntil(3) { find(w.contentView!, id: "charge.install") != nil }, "未安装时显示「安装充电助手」（测试不点击）") }
+        else { info("充电助手状态：\(ChargeClient.shared.phase)") }
+        let realClient = ChargeClient.shared
+        let fx = chargeFixture(); ChargeClient.shared = fx
+        Nav.shared.sel = -2; settle(0.5); Nav.shared.sel = -3
+        check(waitUntil(3) { find(w.contentView!, id: "charge.enabled") != nil && find(w.contentView!, id: "charge.limit") != nil && find(w.contentView!, id: "charge.uninstall") != nil }, "已安装时显示开关、上限滑块、卸载按钮")
+        if let t = find(w.contentView!, id: "charge.enabled") { t.press(); check(waitUntil(1) { !fx.st.settings.enabled }, "点开关关闭上限") }
+        settle(0.3); if let t = find(w.contentView!, id: "charge.enabled") { t.press(); check(waitUntil(1) { fx.st.settings.enabled }, "再点开启") }
+        settle(0.3)
+        if let b = find(w.contentView!, id: "charge.topup") { b.press(); check(waitUntil(1) { fx.st.topUp }, "点「充到 100%」进入临时充满") } else { check(false, "找到「充到 100%」") }
+        ChargeClient.shared = realClient; Nav.shared.sel = -2; settle(0.3); Nav.shared.sel = -3
+        check(ChargeClient.shared.daemon.status == daemonBefore, "测试没有注册/卸载充电助手", "\(daemonBefore.rawValue)")
         check(waitUntil(4) { !EnergyTracker.shared.live.isEmpty }, "耗电实时数据", EnergyTracker.shared.live.prefix(3).map { "\($0.app) \(String(format: "%.2f", $0.watts))W" }.joined(separator: ", "))
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
