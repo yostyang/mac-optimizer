@@ -13,14 +13,15 @@ struct NetworkPage: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("网络诊断").font(.system(size: 24, weight: .bold))
-                        Text("延迟、丢包、DNS 检测与一键修复（只在点击时检测）").font(.system(size: 12)).foregroundColor(.secondary)
+                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(.system(size: 12)).foregroundColor(.secondary)
                     }
                     Spacer()
                     // 双标签放在标题行，不另占一行：v1.7 三张新卡片叠在原诊断页上会超高 277 pt，
                     // 拆成两页后每页都能在默认/最小窗口里完整放下，不用滚动。
                     SegmentedTrack {
                         Button("诊断") { nav.netTab = 0 }.buttonStyle(PillButton(filled: nav.netTab == 0)).accessibilityIdentifier("net.tab.0")
-                        Button("测速与流量") { nav.netTab = 1 }.buttonStyle(PillButton(filled: nav.netTab == 1)).accessibilityIdentifier("net.tab.1")
+                        Button("测速") { nav.netTab = 1 }.buttonStyle(PillButton(filled: nav.netTab == 1)).accessibilityIdentifier("net.tab.1")
+                        Button("流量") { nav.netTab = 2 }.buttonStyle(PillButton(filled: nav.netTab == 2)).accessibilityIdentifier("net.tab.2")
                     }
                     if nav.netTab == 0 {
                         Button { nd.run(); dns.refresh() } label: { Label(nd.running ? "诊断中…" : "开始诊断", systemImage: "stethoscope") }.buttonStyle(PillButton()).disabled(nd.running).accessibilityIdentifier("net.run")
@@ -37,11 +38,10 @@ struct NetworkPage: View {
                         VStack(spacing: 10) { pingCard; fixCard }.frame(maxWidth: .infinity)
                         VStack(spacing: 10) { dnsCard }.frame(maxWidth: .infinity)
                     }
+                } else if nav.netTab == 1 {
+                    SpeedTab24()
                 } else {
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(spacing: 10) { SpeedCard(); NetInfoCard() }.frame(maxWidth: .infinity)
-                        VStack(spacing: 10) { TrafficCard() }.frame(maxWidth: .infinity)
-                    }
+                    TrafficTab24()
                 }
             }.padding(28)
         }.onAppear { dns.refresh() }

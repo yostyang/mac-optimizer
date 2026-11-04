@@ -571,6 +571,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         mon.alertsEnabled = V19Store.shared.settings.alertsOn
         mon.start()
+        AppTraffic.shared.start()
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in AppTraffic.shared.flush() }
         DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
         if DockMode.shared.enabled { DockMode.shared.start() }; DockMode.shared.evaluate()
@@ -598,7 +600,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { showMain(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !UIState.shared.menuBar }
-    func applicationWillTerminate(_ n: Notification) { EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DockMode.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
+    func applicationWillTerminate(_ n: Notification) { AppTraffic.shared.flush(); EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DockMode.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
 }
 
 @main

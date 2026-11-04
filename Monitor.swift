@@ -470,6 +470,7 @@ final class Monitor: ObservableObject {
             x.top = Readers.topProcesses()
             if tick % 5 == 1 { Readers.disk(into: &x); Readers.battery(into: &x); x.devices = Readers.devices() }
         } else if x.diskTotalGB == 0 { Readers.disk(into: &x) }
+        if !full && DispatchQueue.main.sync(execute: { BatteryAlerts.shared.settings.menuIndicator == "net" }) { Readers.network(into: &x) }
         if !full && alertsEnabled && tick % 6 == 1 { Readers.disk(into: &x); Readers.battery(into: &x) }
         let full2 = full
         DispatchQueue.main.async {

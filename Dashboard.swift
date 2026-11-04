@@ -131,7 +131,8 @@ final class UIState: ObservableObject {
 // MARK: - 共享卡片
 struct MetricTiles: View {
     @ObservedObject var m: Monitor
-    @ObservedObject var traffic = TrafficStore.shared
+    @ObservedObject var traffic = TrafficHistory.shared
+    @State private var showApps = false
     var columns = 2; var sparkH: CGFloat = 26
     var body: some View {
         let s = m.s
@@ -174,14 +175,21 @@ struct MetricTiles: View {
     }
     func netTile(_ s: Snapshot) -> some View {
             Tile(icon: "arrow.up.arrow.down", title: "网络", tint: accent2, trailing: s.netKind) {
-                HStack(spacing: 10) {
-                    Label(Fmt.rate(s.downBps), systemImage: "arrow.down").font(.system(size: 11, weight: .semibold)).monospacedDigit()
-                    Label(Fmt.rate(s.upBps), systemImage: "arrow.up").font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundColor(accent)
-                }.labelStyle(.titleAndIcon)
-                // 状态页网络卡片用流量历史趋势图（打开网络诊断页时每分钟记一笔）；没有历史时退回实时采样
-                let hist = traffic.buckets.suffix(30).map(\.downAvg)
-                ZStack { Spark(values: hist.isEmpty ? m.downHist : hist, color: accent2); Spark(values: m.upHist, color: accent) }.frame(height: sparkH)
-                Text(hist.isEmpty ? "代理：\(s.proxy.isEmpty ? "—" : s.proxy)" : "趋势：流量历史（最近 30 笔）· 代理 \(s.proxy.isEmpty ? "—" : s.proxy)").font(.system(size: 10)).foregroundColor(.secondary)
+                Button { showApps = true } label: {
+                    HStack(spacing: 10) {
+                        Label(Fmt.rate(s.downBps), systemImage: "arrow.down").font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                        Label(Fmt.rate(s.upBps), systemImage: "arrow.up").font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundColor(accent)
+                    }.labelStyle(.titleAndIcon).contentShape(Rectangle())
+                }.buttonStyle(.plain).help("点击查看哪些应用在用网络").accessibilityIdentifier("net.rates")
+                .popover(isPresented: $showApps, arrowEdge: .bottom) { AppTrafficPopover() }
+                // 2.4：与网络页「流量历史」同一份数据、同一种图（最近 30 分钟，每点 1 分钟平均，没记录的分钟留空）
+                let series = Array(traffic.series(.hour1).suffix(30))
+                if series.contains(where: { $0.down != nil }) {
+                    GapChart(series: series).frame(height: sparkH)
+                } else {
+                    ZStack { Spark(values: m.downHist, color: accent2); Spark(values: m.upHist, color: accent) }.frame(height: sparkH)
+                }
+                Text(series.contains(where: { $0.down != nil }) ? "趋势：最近 30 分钟流量历史 · 代理 \(s.proxy.isEmpty ? "—" : s.proxy)" : "代理：\(s.proxy.isEmpty ? "—" : s.proxy)").font(.system(size: 10)).foregroundColor(.secondary)
             }
     }
     func fanTile(_ s: Snapshot) -> some View {
@@ -359,6 +367,7 @@ struct PanelContent: View {
     @ObservedObject var ui = UIState.shared
     @ObservedObject var alerts = BatteryAlerts.shared
     @ObservedObject var dm = DisplayManager.shared
+    @State private var showApps = false
     var body: some View {
         let s = m.s; let h = s.health
         // 面板紧凑条加了一行后总高 1015 超过 1000 上限：面板间距收紧到 6、面板头内边距 14→12，省约 24pt，回到 1000 以内
@@ -373,7 +382,7 @@ struct PanelContent: View {
                     Spacer()
                     Button { ui.openMain() } label: { Image(systemName: "macwindow").font(.system(size: 13)) }.buttonStyle(.plain).help("打开主窗口").accessibilityIdentifier("panel.open")
                     Menu {
-                        Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) { Text("CPU 占用").tag("cpu"); Text("健康分").tag("score"); Text("电池图标").tag("battery") }
+                        Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) { Text("CPU 占用").tag("cpu"); Text("健康分").tag("score"); Text("电池图标").tag("battery"); Text("网速").tag("net") }
                         Toggle("登录时启动", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
                         Divider()
                         Button("隐藏菜单栏图标") { ui.menuBar = false }
@@ -393,10 +402,11 @@ struct PanelContent: View {
             }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(LinearGradient(colors: [accent2, accent, Color(red: 0.36, green: 0.22, blue: 0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)))
             MetricTiles(m: m)
-            Button { Nav.shared.sel = -5; Nav.shared.netTab = 1; UIState.shared.openMain() } label: {
-                HStack { Image(systemName: "arrow.up.arrow.down"); Text("查看联网应用").font(.system(size: 12, weight: .medium)); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)) }
+            Button { showApps = true } label: {
+                HStack { Image(systemName: "arrow.up.arrow.down"); Text("哪些应用在用网络").font(.system(size: 12, weight: .medium)); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)) }
                     .foregroundColor(accent).padding(.horizontal, 12).padding(.vertical, 8)
             }.buttonStyle(.plain).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(accent.opacity(0.08))).accessibilityIdentifier("panel.traffic")
+            .popover(isPresented: $showApps, arrowEdge: .trailing) { AppTrafficPopover() }
             BatteryTile(s: s)
             // v2.1 面板减负：进程只放前 4 条、快捷操作不放统计行，面板总高省约 55pt，
             // 底部「上限 80%」「接显示器」不再被折叠线截掉；主窗口仍是 5 条 + 统计行，不变
@@ -556,7 +566,11 @@ final class StatusBar: NSObject, NSPopoverDelegate {
         let mode = BatteryAlerts.shared.settings.menuIndicator
         defer { lastMode = mode }
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-        if mode == "battery", let p = s.battery {
+        if mode == "net" {
+            if lastMode != mode { let img = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: nil); img?.isTemplate = true; b.image = img; b.imagePosition = .imageLeading }
+            let str = " ↓" + StatusBar.short(s.downBps) + " ↑" + StatusBar.short(s.upBps)
+            if b.title != str || lastMode != mode { b.attributedTitle = NSAttributedString(string: str, attributes: [.font: font]) }
+        } else if mode == "battery", let p = s.battery {
             b.image = StatusBar.batteryIcon(p, charging: s.charging || s.onAC); b.title = ""; b.imagePosition = .imageOnly; lastMode = ""
         } else {
             let score = mode == "score"
@@ -566,6 +580,10 @@ final class StatusBar: NSObject, NSPopoverDelegate {
             let str = score ? " \(s.health.score)" : String(format: " %.0f%%", s.cpu)
             if b.title != str || lastMode != mode { b.attributedTitle = NSAttributedString(string: str, attributes: [.font: font]) }
         }
+    }
+    static func short(_ bps: Double) -> String {
+        if bps >= 1_048_576 { return String(format: "%.1fM", bps / 1_048_576) }
+        return String(format: "%.0fK", bps / 1024)
     }
     static func batteryIcon(_ p: Int, charging: Bool) -> NSImage {
         let img = NSImage(size: NSSize(width: 30, height: 14), flipped: false) { r in
