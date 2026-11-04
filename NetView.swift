@@ -5,27 +5,43 @@ struct NetworkPage: View {
     @ObservedObject var nd = NetDiag.shared
     @ObservedObject var dns = DNSClient.shared
     @ObservedObject var charge = ChargeClient.shared
+    @ObservedObject var nav = Nav.shared
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
+                let sm = nd.summary
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("网络诊断").font(.system(size: 24, weight: .bold))
                         Text("延迟、丢包、DNS 检测与一键修复（只在点击时检测）").font(.system(size: 12)).foregroundColor(.secondary)
                     }
                     Spacer()
-                    Button { nd.run(); dns.refresh() } label: { Label(nd.running ? "诊断中…" : "开始诊断", systemImage: "stethoscope") }.buttonStyle(PillButton()).disabled(nd.running).accessibilityIdentifier("net.run")
+                    // 双标签放在标题行，不另占一行：v1.7 三张新卡片叠在原诊断页上会超高 277 pt，
+                    // 拆成两页后每页都能在默认/最小窗口里完整放下，不用滚动。
+                    SegmentedTrack {
+                        Button("诊断") { nav.netTab = 0 }.buttonStyle(PillButton(filled: nav.netTab == 0)).accessibilityIdentifier("net.tab.0")
+                        Button("测速与流量") { nav.netTab = 1 }.buttonStyle(PillButton(filled: nav.netTab == 1)).accessibilityIdentifier("net.tab.1")
+                    }
+                    if nav.netTab == 0 {
+                        Button { nd.run(); dns.refresh() } label: { Label(nd.running ? "诊断中…" : "开始诊断", systemImage: "stethoscope") }.buttonStyle(PillButton()).disabled(nd.running).accessibilityIdentifier("net.run")
+                    }
                 }
-                let sm = nd.summary
-                HStack(spacing: 8) {
-                    Image(systemName: sm.1 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundColor(sm.1 ? good : .orange)
-                    Text(sm.0).font(.system(size: 13, weight: .medium))
-                    Spacer()
-                    if let t = nd.lastRun { Text("上次检测 " + t.formatted(date: .omitted, time: .shortened)).font(.system(size: 11)).foregroundColor(.secondary) }
-                }.padding(12).frame(maxWidth: .infinity).card()
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 10) { pingCard; fixCard }.frame(maxWidth: .infinity)
-                    VStack(spacing: 10) { dnsCard }.frame(maxWidth: .infinity)
+                if nav.netTab == 0 {
+                    HStack(spacing: 8) {
+                        Image(systemName: sm.1 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundColor(sm.1 ? good : .orange)
+                        Text(sm.0).font(.system(size: 13, weight: .medium))
+                        Spacer()
+                        if let t = nd.lastRun { Text("上次检测 " + t.formatted(date: .omitted, time: .shortened)).font(.system(size: 11)).foregroundColor(.secondary) }
+                    }.padding(12).frame(maxWidth: .infinity).card()
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(spacing: 10) { pingCard; fixCard }.frame(maxWidth: .infinity)
+                        VStack(spacing: 10) { dnsCard }.frame(maxWidth: .infinity)
+                    }
+                } else {
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(spacing: 10) { SpeedCard(); NetInfoCard() }.frame(maxWidth: .infinity)
+                        VStack(spacing: 10) { TrafficCard() }.frame(maxWidth: .infinity)
+                    }
                 }
             }.padding(28)
         }.onAppear { dns.refresh() }
@@ -52,6 +68,11 @@ struct NetworkPage: View {
                     Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
                     Text("丢包 " + String(format: "%.0f%%", t.result?.loss ?? 100)).font(.system(size: 11)).foregroundColor((t.result?.loss ?? 100) > 0 ? .orange : .secondary).monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
+            }
+            if nd.tcpOK == true {
+                Text("TCP 能连通：上面 ping 超时 / 丢包可能是 VPN / TUN 拦截了 ICMP，不是网络本身不稳定，丢包结论仅供参考。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else if nd.vpnActive && nd.targets.contains(where: { ($0.result?.loss ?? 0) >= 20 }) {
+                Text("VPN / TUN 正在运行：ping 丢包仅供参考，请以实际使用为准。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -85,10 +106,10 @@ struct NetworkPage: View {
     var fixCard: some View {
         Card(title: "DNS 一键修复", icon: "wrench.and.screwdriver") {
             Text("把正在使用的网络的 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6，并清除 DNS 缓存。修改前会保存原设置，随时可以恢复。").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            if !nd.vpns.isEmpty || !runningVPNs.isEmpty {
+            if !nd.vpns.isEmpty || !runningVPNs.isEmpty || nd.tun {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 11))
-                    Text("\((nd.vpns.isEmpty ? runningVPNs : nd.vpns).joined(separator: "、")) 正在运行：VPN 开启时会接管 DNS，改动可能要等 VPN 断开后才生效。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("\((nd.vpns.isEmpty ? (runningVPNs.isEmpty ? ["VPN / TUN"] : runningVPNs) : nd.vpns).joined(separator: "、")) 正在运行并可能接管 DNS：先不要用 DNS 一键修复，断开 VPN 后再试，否则改动可能被 VPN 覆盖、无效。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             HStack(spacing: 8) {

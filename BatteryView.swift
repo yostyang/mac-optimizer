@@ -16,21 +16,79 @@ struct BatteryPage: View {
     @ObservedObject var al = BatteryAlerts.shared
     @ObservedObject var en = EnergyTracker.shared
     @State private var range: EnergyStore.Range = .day
+    @State private var tab = 0
     var now = Date()
     var body: some View {
         let s = m.s
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("电池").font(.system(size: 24, weight: .bold))
-                    Text("健康、外设电量、耗电排行和提醒").font(.system(size: 12)).foregroundColor(.secondary)
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("电池").font(.system(size: 24, weight: .bold))
+                        Text("健康、外设电量、耗电排行和提醒").font(.system(size: 12)).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    // v2.0 双标签：功率卡片叠在原页上会超高，拆成两页后每页都放得下（与网络页双标签同款做法）
+                    SegmentedTrack {
+                        Button("电池概览") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("bat.tab.0")
+                        Button("功率与能耗") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("bat.tab.1")
+                    }
                 }
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 8) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
-                    VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
+                if tab == 0 {
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(spacing: 8) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
+                        VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
+                    }
+                } else {
+                    powerTab(s)
                 }
             }.padding(28)
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
+    }
+
+    func powerTab(_ s: Snapshot) -> some View {
+        let flow = PowerFlowCalc.fromSnapshot(s)
+        let top = PowerFlowCalc.topMW(store: en.store, now: now)
+        return VStack(alignment: .leading, spacing: 14) {
+            Card(title: "功率流向", icon: "bolt.fill") {
+                HStack(spacing: 6) { ClayDot(); Text(flow.charging ? "正在充电" : (flow.onAC ? "已接电源" : "电池供电")).font(.system(size: 11)).foregroundColor(.secondary) }
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 2) { Text("充电器输入").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.inputWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    VStack(alignment: .leading, spacing: 2) { Text("充入电池").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.chargeWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    VStack(alignment: .leading, spacing: 2) { Text("系统功耗").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.systemWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    Spacer()
+                }
+                Text("充电功率 ≈ 电压 × 电流；充电时系统功耗 = 输入 − 充电，输入读不到时系统功耗写不可读，不用额定功率凑数。显示器等分项目前没有公开可读接口，已并入系统功耗，不单独列数字。电池供电时系统功耗 = 电池放电功率。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Card(title: "电池详情", icon: "info.circle") {
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(spacing: 6) {
+                        kv("整机运行时间", fmtUptime(s.uptime))
+                        kv("电池电压", flow.voltageV.map { String(format: "%.2f V", $0) } ?? "不可读")
+                        kv("电池电流", flow.currentA.map { String(format: "%.2f A", $0) } ?? "不可读")
+                    }.frame(maxWidth: .infinity)
+                    VStack(spacing: 6) {
+                        kv("适配器额定功率", flow.adapterRatedWatts.map { String(format: "%.0f W", $0) } ?? "不可读")
+                        kv("循环次数", s.cycles.map { "\($0) 次" } ?? "—")
+                        kv("低电量模式", flow.lowPowerMode.map { $0 ? "开启" : "关闭" } ?? "不可读")
+                    }.frame(maxWidth: .infinity)
+                }
+                HStack(spacing: 10) {
+                    Button("打开系统电源设置") { SystemPanes.battery() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("bat.lowpower.settings")
+                    Text("低电量模式只展示状态，不在应用内直接改系统设置；要改请去系统电源设置。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Card(title: "CPU 能耗影响", icon: "cpu") {
+                if top.isEmpty { Text("最近一小时还没有耗电采样，几分钟后再看。").font(.system(size: 11)).foregroundColor(.secondary) }
+                ForEach(Array(top.enumerated()), id: \.offset) { _, r in
+                    HStack { Text(r.app).font(.system(size: 12)).lineLimit(1); Spacer(); Text(String(format: "%.1f mW", r.mw)).font(.system(size: 11, weight: .medium)).monospacedDigit() }
+                }
+                Text("口径：最近一完整小时平均（焦耳 ÷ 秒 × 1000），不是瞬时功率；没有上一小时数据时用本小时累计平均。不要把 24 小时 Wh 榜直接当 mW 榜。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Card(title: "紧凑条（菜单栏面板同款）", icon: "rectangle") {
+                BatteryCompactBar(s: s)
+            }
+        }
     }
 
     func kv(_ k: String, _ v: String, _ c: Color = .primary) -> some View {

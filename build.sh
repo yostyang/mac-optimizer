@@ -1,11 +1,13 @@
 #!/bin/bash
 # 编译通用版（Apple 芯片 + Intel）并打包 DMG
 set -e
+# SWIFTFLAGS：可选的额外编译参数（例如在受限沙盒里编译时传 -disable-sandbox）
+SWIFTFLAGS="${SWIFTFLAGS:-}"
 cd "$(dirname "$0")"
-SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift"
+SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift"
 HSRC="ChargeCore.swift ChargeHelper.swift DNSCore.swift"
-swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm
-swiftc -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86
+swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm
+swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86
 lipo -create mo_arm mo_x86 -output MacOptimizer
 # 充电助手：自签名（无 Team ID）时，macOS 按助手的 cdhash 记录用户授权（launchd LWCR）。
 # 助手二进制只要变一个字节，升级后就要用户重新允许。所以只有助手源码变化时才重新编译/签名，
@@ -13,8 +15,8 @@ lipo -create mo_arm mo_x86 -output MacOptimizer
 HKEY=$(cat $HSRC com.yost.macoptimizer.chargehelper.plist | shasum | cut -c1-16)
 HCACHE="helper-cache/$HKEY"
 if [ ! -f "$HCACHE/MacOptimizerChargeHelper" ]; then
-  swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $HSRC -o ch_arm
-  swiftc -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $HSRC -o ch_x86
+  swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $HSRC -o ch_arm
+  swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $HSRC -o ch_x86
   lipo -create ch_arm ch_x86 -output MacOptimizerChargeHelper
   HNEW=1
 else
@@ -37,6 +39,8 @@ if [ -f "$KC" ] && [ -f "$HOME/.filebutler-signing/pass" ]; then
 else
   codesign --force -s - -i com.yost.macoptimizer.chargehelper "$A/Contents/MacOS/MacOptimizerChargeHelper"; codesign --force -s - "$A"
 fi
+# NODMG=1：只编译签名、不打包 DMG（测试用，受限沙盒里 hdiutil 不可用）
+if [ -n "${NODMG:-}" ]; then echo "完成：build/Mac一键优化.app（跳过 DMG）"; exit 0; fi
 mkdir -p build/dmg; cp -R "$A" build/dmg/; ln -s /Applications build/dmg/Applications
 hdiutil create -volname "Mac一键优化" -srcfolder build/dmg -ov -format UDZO "build/Mac一键优化.dmg" >/dev/null
 echo "完成：build/Mac一键优化.dmg"

@@ -56,6 +56,19 @@ final class MockNet: NetProbe {
     func serviceDNS() -> [DNSServiceState] { [DNSServiceState(service: "Wi-Fi", device: "en0", servers: [])] }
     func vpnApps() -> [String] { ["LetsVPN"] }
 }
+/// VPN / TUN 下 ping 全超时：DNS 还能解析，TCP 是否连通决定结论是不是误报。
+final class MockNetVPNTimeout: NetProbe {
+    let tcpResult: Bool?
+    init(tcp: Bool?) { tcpResult = tcp }
+    func ping(_ host: String) -> PingResult { PingResult(avgMs: nil, loss: 100, sent: 5) }
+    func gateway() -> String? { "192.168.0.1" }
+    func resolve(_ host: String) -> (ms: Double?, addrs: [String]) { host.hasSuffix("-check.com") ? (12, []) : (22, ["110.242.68.66"]) }
+    func effectiveDNS() -> [String] { ["6.6.6.6"] }
+    func serviceDNS() -> [DNSServiceState] { [DNSServiceState(service: "Wi-Fi", device: "en0", servers: [])] }
+    func vpnApps() -> [String] { ["鹊桥VPN"] }
+    func tcp(_ host: String) -> Bool? { tcpResult }
+    func tunActive() -> Bool { true }
+}
 final class MockBT: BTSource {
     var gattCalls = 0
     func paired() -> [BTDevice] {
@@ -85,7 +98,7 @@ extension MOTests {
         check(abs(ds.secondsToNextSwitch(from: t2130, cal: cal) - 1800) < 1, "下一个切换点只定时一次（30 分钟后）")
         ds.dayStart = 22 * 60; ds.nightStart = 6 * 60
         check(ds.scheduled(minute: 23 * 60) == "day" && ds.scheduled(minute: 12 * 60) == "night", "跨午夜的时段")
-        let gm = MockGamma(), dm = DisplayManager(sys: md, gamma: gm); dm.offline = true
+        let gm = MockGamma(), dm = DisplayManager(sys: md, gamma: gm); dm.offline = true; dm.settings = DisplaySettings()
         let ddc = MockDDC(); dm.channels = { _ in ddc }
         dm.refresh(); dm.conflict = ""
         let done = DispatchSemaphore(value: 0); var probed = false
@@ -98,7 +111,7 @@ extension MOTests {
         dm.apply(scene: DScene.all[3]); check(dm.settings.scene == "night" && (gm.last?.2 ?? 1) < 0.6, "夜间场景：调暗+暖色")
         _ = waitUntil(1) { ddc.writes.count >= 2 }; check(ddc.writes.last.map { $0.0 == 0x10 && $0.1 == 30 } == true, "场景同时调硬件亮度")
         dm.setGamma(on: false); check(gm.restored >= 1 && gm.last == nil, "关闭即恢复系统原色")
-        let gm2 = MockGamma(), dm2 = DisplayManager(sys: md, gamma: gm2); dm2.offline = true; dm2.conflict = "MonitorBar"
+        let gm2 = MockGamma(), dm2 = DisplayManager(sys: md, gamma: gm2); dm2.offline = true; dm2.settings = DisplaySettings(); dm2.conflict = "MonitorBar"
         dm2.apply(scene: DScene.all[1]); check(!dm2.settings.gammaOn && gm2.last == nil, "检测到 MonitorBar 时场景不动 Gamma")
         dm.switchMode(3, to: d.modes[2]); check(md.applied.last == d.modes[2] && dm.pending != nil, "切换分辨率并等待确认")
         dm.revert(); check(md.list[0].current == d.modes[0] && dm.pending == nil, "还原到原分辨率")
@@ -122,6 +135,13 @@ extension MOTests {
         let nd = NetDiag(); nd.probe = MockNet(); var fin = false; nd.run { fin = true }
         check(waitUntil(5) { fin } && nd.targets.count == 6 && nd.targets[0].name.hasPrefix("路由器") && nd.resolves.count == 5, "按需诊断完成（模拟）")
         check(nd.summary.0.contains("丢包"), "汇总：部分网站丢包", nd.summary.0)
+        // VPN / TUN 下 ping 全超时：TCP 能连通 → 不再报“不稳定”，只给仅供参考的结论
+        let ndVPN = NetDiag(); ndVPN.probe = MockNetVPNTimeout(tcp: true); fin = false; ndVPN.run { fin = true }
+        check(waitUntil(5) { fin } && ndVPN.vpnActive && ndVPN.tcpOK == true, "VPN + TUN 检出，TCP 佐证连通", "vpn=\(ndVPN.vpns) tun=\(ndVPN.tun) tcp=\(String(describing: ndVPN.tcpOK))")
+        check(ndVPN.summary.0.contains("仅供参考") && !ndVPN.summary.0.contains("不太稳定"), "VPN 下 ping 全超时不再误报不稳定", ndVPN.summary.0)
+        // 同样全超时但 TCP 也连不通 → 仍按原来报不稳定，不把真断网掩盖掉
+        let ndDown = NetDiag(); ndDown.probe = MockNetVPNTimeout(tcp: false); fin = false; ndDown.run { fin = true }
+        check(waitUntil(5) { fin } && ndDown.tcpOK == false && ndDown.summary.0.contains("丢包") && !ndDown.summary.0.contains("仅供参考"), "TCP 也不通时仍报丢包，不掩盖真断网", ndDown.summary.0)
 
         sec("DNS 一键修复（模拟 networksetup，不改真实 DNS）")
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("mo-dns-\(getpid()).json"); try? FileManager.default.removeItem(at: tmp)
@@ -178,7 +198,7 @@ extension MOTests {
 
     // MARK: 界面
     static func v15Fixtures() -> (DisplayManager, NetDiag, DNSClient, BTBattery) {
-        let gm = MockGamma(), dm = DisplayManager(sys: MockDisplays(), gamma: gm); dm.offline = true
+        let gm = MockGamma(), dm = DisplayManager(sys: MockDisplays(), gamma: gm); dm.offline = true; dm.settings = DisplaySettings()   // 不受本机真实设置影响
         let ddc = MockDDC(); dm.channels = { _ in ddc }; dm.refresh(); dm.conflict = "MonitorBar"
         dm.ddc = [3: DDCState(available: true, caps: DDCCaps.parse(ddc.capabilities()), brightness: 80, contrast: 50, input: 0x0F)]
         let nd = NetDiag(); nd.probe = MockNet()

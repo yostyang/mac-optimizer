@@ -25,6 +25,7 @@ struct Snapshot: Equatable {
     var battery: Int? = nil; var batteryHealth: Int? = nil; var charging = false; var onAC = false; var cycles: Int? = nil; var timeRemaining: Int? = nil
     var devices: [DeviceBattery] = []
     var batteryTemp: Double? = nil; var batteryCondition = ""; var designMah = 0; var fullMah = 0
+    var batteryVoltageV: Double? = nil; var batteryCurrentA: Double? = nil; var batteryAdapterWatts: Double? = nil; var lowPowerMode: Bool? = nil
     var top: [ProcInfo] = []
     var memFraction: Double { memTotalGB > 0 ? memUsedGB / memTotalGB : 0 }
     var diskUsedFraction: Double { diskTotalGB > 0 ? 1 - diskFreeGB / diskTotalGB : 0 }
@@ -196,6 +197,32 @@ enum Readers {
         s.batteryHealth = design > 0 && full > 0 ? min(100, Int((full / design * 100).rounded())) : nil
         let t = (prop("TimeRemaining") as? NSNumber)?.intValue ?? 65535
         s.timeRemaining = t > 0 && t < 6000 ? t : nil
+        // v2.0 电池细化：电压（mV）、电流（mA，充电为正、放电为负，读不到 Amperage 时用 InstantAmperage）
+        // 读不到一律留 nil，界面写不可读，绝不用额定功率或别的值凑数。
+        if let mv = (prop("Voltage") as? NSNumber)?.doubleValue, mv > 0 { s.batteryVoltageV = mv / 1000 }
+        if let ma = (prop("Amperage") as? NSNumber)?.doubleValue { s.batteryCurrentA = ma / 1000 }
+        else if let ma = (prop("InstantAmperage") as? NSNumber)?.doubleValue { s.batteryCurrentA = ma / 1000 }
+        s.batteryAdapterWatts = Readers.adapterWatts()
+        s.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+
+    // 适配器额定功率：只读 AppleACPIACAdapter 的 AdapterDetails，读不到就返回 nil（不可读），
+    // 绝不拿充电器输入功率或电池电压电流反推额定功率。
+    static func adapterWatts() -> Double? {
+        var it: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("AppleACPIACAdapter"), &it) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(it) }
+        var o = IOIteratorNext(it)
+        while o != 0 {
+            defer { IOObjectRelease(o); o = IOIteratorNext(it) }
+            if let d = IORegistryEntryCreateCFProperty(o, "AdapterDetails" as CFString, nil, 0)?.takeRetainedValue() as? [String: Any] {
+                for k in ["Watts", "AdapterWatts", "Power"] {
+                    if let v = d[k] as? NSNumber, v.doubleValue > 0 { return v.doubleValue }
+                }
+            }
+            if let v = IORegistryEntryCreateCFProperty(o, "Watts" as CFString, nil, 0)?.takeRetainedValue() as? NSNumber, v.doubleValue > 0 { return v.doubleValue }
+        }
+        return nil
     }
 
     // 外接设备电量：系统已通过 IOKit 公开 BatteryPercent 的设备（苹果配件、部分 HID 设备）

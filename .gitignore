@@ -12,3 +12,5 @@ ch_arm
 ch_x86
 MacOptimizerChargeHelper
 helper-cache/
+.tmp/
+跑测试.command

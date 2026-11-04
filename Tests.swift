@@ -69,6 +69,12 @@ enum MOTests {
         energyTests()
         chargeTests()
         v15Tests()
+        v16Tests()
+        v17Tests()
+        v18Tests()
+        v19Tests()
+        v20Tests()
+        v21Tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -348,6 +354,21 @@ enum MOTests {
             cw.orderOut(nil)
         }
         v15Snapshots(out)
+        v16Snapshots(out)
+        // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
+        for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            NSApp.appearance = NSAppearance(named: ap)
+            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes")] {
+                let host = NSHostingView(rootView: view.frame(width: Layout.idealSize.width - 212, height: Layout.idealSize.height).background(pageBG))
+                let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
+                let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
+                cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); settle(1.0)
+                _ = pngRep(host, out + "/\(name)-\(mode).png")
+                fits(host, "\(name) \(mode)")
+                cw.orderOut(nil)
+            }
+        }
+        NSApp.appearance = NSAppearance(named: .aqua)
         let screen = NSScreen.main
         let defaultSize = Layout.defaultSize(for: screen)
         for (mode, ap) in modes {
@@ -500,6 +521,22 @@ enum MOTests {
         check(ChargeClient.shared.daemon.status == daemonBefore, "测试没有注册/卸载充电助手", "\(daemonBefore.rawValue)")
         check(waitUntil(4) { !EnergyTracker.shared.live.isEmpty }, "耗电实时数据", EnergyTracker.shared.live.prefix(3).map { "\($0.app) \(String(format: "%.2f", $0.watts))W" }.joined(separator: ", "))
         v15UI(w)
+        v16UI(w)
+        sec("清理与改动页入口（v1.8 / v1.9）")
+        if let b = find(w.contentView!, label: "清理与卸载") { b.press(); check(waitUntil(2) { Nav.shared.sel == -6 }, "侧边栏打开清理与卸载") } else { check(false, "找到清理与卸载") }
+        check(find(w.contentView!, id: "clean.scan") != nil, "清理页有开始扫描按钮")
+        if let b = find(w.contentView!, label: "改动与提醒") { b.press(); check(waitUntil(2) { Nav.shared.sel == -7 }, "侧边栏打开改动与提醒") } else { check(false, "找到改动与提醒") }
+        check(find(w.contentView!, id: "v19.alertsOn") != nil, "改动页有提醒开关（默认关闭）")
+        sec("网络页双标签（v1.7）")
+        if let b = find(w.contentView!, label: "网络诊断") { b.press(); check(waitUntil(2) { Nav.shared.sel == -5 }, "侧边栏打开网络诊断") } else { check(false, "找到网络诊断") }
+        if let b = find(w.contentView!, id: "net.tab.1") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 1 }, "点「测速与流量」切到第二标签") } else { check(false, "找到测速与流量标签") }
+        check(find(w.contentView!, id: "speed.run") != nil && find(w.contentView!, id: "traffic.apps.run") != nil && find(w.contentView!, id: "netinfo.refresh") != nil, "第二标签有测速、按应用、网络信息")
+        if let b = find(w.contentView!, id: "net.tab.0") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 0 }, "点「诊断」切回第一标签") } else { check(false, "找到诊断标签") }
+        check(find(w.contentView!, id: "net.run") != nil, "第一标签有开始诊断")
+        sec("电池页双标签（v2.0）")
+        if let b = find(w.contentView!, label: "电池") { b.press(); check(waitUntil(2) { Nav.shared.sel == -3 }, "侧边栏打开电池页") } else { check(false, "找到电池") }
+        if let b = find(w.contentView!, id: "bat.tab.1") { b.press(); check(find(w.contentView!, id: "bat.lowpower.settings") != nil, "功率标签有打开系统电源设置") } else { check(false, "找到功率与能耗标签") }
+        if let b = find(w.contentView!, id: "bat.tab.0") { b.press(); check(find(w.contentView!, id: "bat.alertsOn") != nil, "切回电池概览有电量提醒开关") } else { check(false, "找到电池概览标签") }
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

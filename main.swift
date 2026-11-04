@@ -13,7 +13,7 @@ func sh(_ cmd: String) -> String {
     return String(data: d, encoding: .utf8) ?? ""
 }
 
-struct Proc { let cpu: Double; let rss: Double; let comm: String
+struct Proc { var pid: Int32 = 0; let cpu: Double; let rss: Double; let comm: String
     var name: String { (comm as NSString).lastPathComponent } }
 
 struct AppUse { let name: String; let cpu: Double; let memGB: Double; let app: NSRunningApplication }
@@ -24,10 +24,10 @@ struct Row: Identifiable { let id = UUID(); let icon: NSImage?; let title: Strin
 
 enum Sys {
     static func procs() -> [Proc] {
-        sh("ps -Axo pcpu=,rss=,comm=").split(separator: "\n").compactMap { line in
-            let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-            guard parts.count == 3, let c = Double(parts[0]), let r = Double(parts[1]) else { return nil }
-            return Proc(cpu: c, rss: r, comm: String(parts[2]))
+        sh("ps -Axo pid=,pcpu=,rss=,comm=").split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
+            guard parts.count == 4, let pid = Int32(parts[0]), let c = Double(parts[1]), let r = Double(parts[2]) else { return nil }
+            return Proc(pid: pid, cpu: c, rss: r, comm: String(parts[3]))
         }
     }
     static func cpu(_ names: [String], _ ps: [Proc]) -> Double { ps.filter { names.contains($0.name) }.reduce(0) { $0 + $1.cpu } }
@@ -56,6 +56,7 @@ final class Model: ObservableObject {
     @Published var score = 100
     @Published var summary = ""
     @Published var log: [String] = []
+    @Published var verdict: Verdict?
 
     func scan(keepLog: Bool = false) {
         if !keepLog { log = [] }
@@ -106,10 +107,19 @@ final class Model: ObservableObject {
                 iss.append(Issue(title: "系统已连续运行 \(days) 天", detail: String(format: "WindowServer 当前占用 %.0f%% CPU，跑久了会让鼠标、视频变卡，找时间重启一次最有效", ws), action: nil, on: false))
             }
             let s = String(format: "开机 %d 天 · 负载 %.1f · 内存可用 %d%%", days, load, memFree)
+            let v = Diagnosis.make(Diagnosis.input(ps, memFreePct: memFree, load: load))
             DispatchQueue.main.async {
-                self.issues = iss; self.score = max(0, 100 - pen); self.summary = s; self.phase = .done
+                self.issues = iss; self.score = max(0, 100 - pen); self.summary = s; self.verdict = v; self.phase = .done
             }
         }
+    }
+
+    /// 结论旁边的处理按钮
+    func apply(_ f: Fix) {
+        guard FixRunner.run(f) else { return }
+        if case .displayTips = f { return }
+        phase = .fixing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { self.log = ["✔ 已处理：" + (f.title ?? "").replacingOccurrences(of: "…", with: "")]; self.scan(keepLog: true) }
     }
 
     func fix() {
@@ -170,20 +180,24 @@ enum Loaders {
     }
 }
 
-// MARK: - 视觉风格
+// MARK: - 视觉风格（v2.0 修订：颜色改回 v1.9 原配色，陶土橙不再作主色；圆角/动效/渐隐等非颜色优化保留）
 let accent = Color(red: 0.42, green: 0.36, blue: 0.98)
 let accent2 = Color(red: 0.18, green: 0.70, blue: 0.96)
 let good = Color(red: 0.16, green: 0.72, blue: 0.52)
 func dyn(_ light: NSColor, _ dark: NSColor) -> Color {
     Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .vibrantDark, .aqua, .vibrantLight]).map { [.darkAqua, .vibrantDark].contains($0) } == true ? dark : light })
 }
-/// 页面和卡片背景随系统外观切换（浅色 / 深色）
+/// 页面和卡片背景随系统外观切换（浅色 / 深色），v1.9 原值
 let pageBG = dyn(NSColor(red: 0.958, green: 0.960, blue: 0.978, alpha: 1), NSColor(red: 0.105, green: 0.108, blue: 0.135, alpha: 1))
 let cardBG = dyn(.white, NSColor(red: 0.165, green: 0.168, blue: 0.200, alpha: 1))
 
 struct CardBG: ViewModifier {
     func body(content: Content) -> some View {
-        content.background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.06), radius: 10, y: 3))
+        content.background(
+            RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG)
+                .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
+        )
+        .overlay(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
     }
 }
 extension View { func card() -> some View { modifier(CardBG()) } }
@@ -195,6 +209,7 @@ struct PillButton: ButtonStyle {
             .foregroundColor(filled ? .white : accent)
             .padding(.horizontal, 18).padding(.vertical, 9)
             .background(Capsule().fill(filled ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(accent.opacity(0.10))))
+            .scaleEffect(configuration.isPressed ? CDS.pressScale : 1)
             .opacity(configuration.isPressed ? 0.75 : 1)
     }
 }
@@ -243,6 +258,8 @@ struct Sidebar: View {
                 item(-3, "battery.75", "电池")
                 item(-4, "display", "显示器")
                 item(-5, "network", "网络诊断")
+                item(-6, "trash", "清理与卸载")
+                item(-7, "list.clipboard", "改动与提醒")
                 Text("工具").font(.system(size: 10, weight: .semibold)).opacity(0.45).padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
                 ForEach(features) { f in item(f.id, f.icon, f.title) }
             }.padding(.horizontal, 8)
@@ -275,45 +292,52 @@ struct MetricCard: View {
 
 struct CheckupCard: View {
     @ObservedObject var m: Model
+    @State private var expanded = false
+    static let folded = 3
     var busy: Bool { m.phase == .scanning || m.phase == .fixing }
     var selected: Int { m.issues.filter { $0.on && $0.action != nil }.count }
-    var scoreColor: Color { m.score >= 80 ? good : (m.score >= 60 ? .orange : .red) }
+    var levelColor: Color { guard m.phase == .done, let v = m.verdict else { return accent }; return [good, Color.orange, Color.red][v.level.rawValue] }
     var headline: String {
         switch m.phase {
-        case .idle: return "智能体检"
+        case .idle: return "一键体检"
         case .scanning: return "正在检查…"
-        case .fixing: return "正在优化…"
-        case .done: return m.score >= 80 ? "状态不错" : (m.score >= 60 ? "有点负担" : "需要处理一下")
+        case .fixing: return "正在处理…"
+        case .done: if let v = m.verdict { return v.title + "：" + v.reason }; return m.score >= 80 ? "不卡" : "有点卡"
         }
     }
+    var sub: String {
+        guard m.phase == .done else { return "打开概览就自动检查：卡不卡、为什么、怎么处理" }
+        let note = m.verdict?.note ?? ""
+        return "健康分 \(m.score) · " + (note.isEmpty ? "" : note + " · ") + m.summary
+    }
+    var icon: String {
+        guard m.phase == .done, let v = m.verdict else { return "waveform.path.ecg" }
+        return ["checkmark.seal.fill", "exclamationmark.triangle.fill", "flame.fill"][v.level.rawValue]
+    }
+    var fix: Fix { m.phase == .done ? (m.verdict?.fix ?? .none) : .none }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 16) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(m.phase == .done ? scoreColor.opacity(0.12) : accent.opacity(0.10)).frame(width: 60, height: 60)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(levelColor.opacity(m.phase == .done ? 0.13 : 0.10)).frame(width: 60, height: 60)
                     if busy { ProgressView().controlSize(.small) }
-                    else if m.phase == .done { Text("\(m.score)").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundColor(scoreColor) }
-                    else { Image(systemName: "waveform.path.ecg").font(.system(size: 24, weight: .medium)).foregroundColor(accent) }
+                    else { Image(systemName: icon).font(.system(size: 24, weight: .medium)).foregroundColor(levelColor) }
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(headline).font(.system(size: 17, weight: .semibold))
-                    Text(m.phase == .done ? "健康分 \(m.score) · " + m.summary : "找出让 Mac 变卡的原因，几秒钟就好").font(.system(size: 12)).foregroundColor(.secondary)
+                    Text(headline).font(.system(size: 17, weight: .semibold)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("verdict.title")
+                    Text(sub).font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
-                if m.phase == .done {
-                    Button("重新体检") { m.scan() }.buttonStyle(PillButton(filled: selected == 0))
-                    if selected > 0 { Button("修复所选（\(selected)）") { m.fix() }.buttonStyle(PillButton()) }
-                } else {
-                    Button("开始体检") { m.scan() }.buttonStyle(PillButton()).disabled(busy).opacity(busy ? 0.5 : 1)
+                Spacer(minLength: 12)
+                if let t = fix.title {
+                    Button(t) { m.apply(fix) }.buttonStyle(PillButton()).accessibilityIdentifier("verdict.fix")
                 }
+                Button(m.phase == .done ? "重新体检" : "开始体检") { m.scan() }.buttonStyle(PillButton(filled: fix.title == nil && m.phase != .done)).disabled(busy).opacity(busy ? 0.5 : 1).accessibilityIdentifier("verdict.rescan")
             }
-            if m.phase == .done {
+            if m.phase == .done && (!m.issues.isEmpty || !m.log.isEmpty) {
                 Divider()
                 ForEach(m.log, id: \.self) { Label($0.replacingOccurrences(of: "✔ ", with: ""), systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundColor(good) }
-                if m.issues.isEmpty {
-                    Label("没发现明显问题，这台 Mac 状态很好", systemImage: "checkmark.seal.fill").font(.system(size: 13)).foregroundColor(good).padding(.vertical, 6)
-                }
-                ForEach($m.issues) { $i in
+                ForEach(Array(m.issues.indices.prefix(expanded ? m.issues.count : Self.folded)), id: \.self) { idx in
+                    let i = m.issues[idx]
                     HStack(alignment: .center, spacing: 12) {
                         Image(systemName: i.action != nil ? "exclamationmark.circle.fill" : "info.circle.fill")
                             .font(.system(size: 16)).foregroundColor(i.action != nil ? .orange : accent2)
@@ -322,9 +346,18 @@ struct CheckupCard: View {
                             Text(i.detail).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 8)
-                        if i.action != nil { Toggle("", isOn: $i.on).toggleStyle(.switch).controlSize(.small).labelsHidden().tint(accent) }
+                        if i.action != nil { Toggle("", isOn: $m.issues[idx].on).toggleStyle(.switch).controlSize(.small).labelsHidden().tint(accent) }
                         else { Text("建议").font(.system(size: 10, weight: .medium)).foregroundColor(accent2).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(accent2.opacity(0.12))) }
                     }.padding(.vertical, 4)
+                }
+                if m.issues.count > Self.folded || selected > 0 {
+                    HStack {
+                        if m.issues.count > Self.folded {
+                            Button(expanded ? "收起" : "查看全部 \(m.issues.count) 项") { expanded.toggle() }.buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundColor(accent).accessibilityIdentifier("checkup.more")
+                        }
+                        Spacer()
+                        if selected > 0 { Button("处理所选（\(selected)）") { m.fix() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("checkup.fixSelected") }
+                    }
                 }
             }
         }.padding(20).card()
@@ -357,6 +390,7 @@ struct Overview: View {
                 CheckupCard(m: m)
             }.padding(28)
         }
+        .onAppear { if m.phase == .idle { m.scan() } }   // 打开概览就体检
     }
 }
 
@@ -419,9 +453,33 @@ struct ToolPage: View {
 
 // MARK: - 窗口
 /// 页面容器：默认尺寸和最小尺寸下内容都能完整放下（由测试保证），极端情况下才滚动且不显示滚动条
+/// v2.0 滚动渐隐：只有内容高于视口时，才在顶部/底部加渐隐（放得下的页不加）；渐隐是覆盖层，不进滚动文档，不影响 fits 检查。
+struct PageScrollContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
 struct PageScroll<C: View>: View {
     @ViewBuilder let content: C
-    var body: some View { ScrollView(.vertical, showsIndicators: false) { content } }
+    @State private var contentHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    content.background(GeometryReader { p in Color.clear.preference(key: PageScrollContentHeightKey.self, value: p.size.height) })
+                }
+                .onPreferenceChange(PageScrollContentHeightKey.self) { contentHeight = $0 }
+                .onAppear { viewportHeight = geo.size.height }
+                if CDS.shouldFade(contentHeight: contentHeight, viewportHeight: viewportHeight) {
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [pageBG, pageBG.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 24)
+                        Spacer()
+                        LinearGradient(colors: [pageBG.opacity(0), pageBG], startPoint: .top, endPoint: .bottom).frame(height: 24)
+                    }.allowsHitTesting(false)
+                }
+            }
+        }
+    }
 }
 enum Layout {
     static let minSize = NSSize(width: 1080, height: 720)
@@ -432,7 +490,7 @@ enum Layout {
         return NSSize(width: max(min(idealSize.width, vf.width - 40), min(minSize.width, vf.width)), height: max(min(idealSize.height, vf.height - 40), min(minSize.height, vf.height)))
     }
 }
-final class Nav: ObservableObject { static let shared = Nav(); @Published var sel = -1 }
+final class Nav: ObservableObject { static let shared = Nav(); @Published var sel = -1; @Published var netTab = 0 }
 struct RootView: View {
     @StateObject private var m = Model()
     @ObservedObject var mon = Monitor.shared
@@ -446,6 +504,8 @@ struct RootView: View {
                 else if nav.sel == -3 { BatteryPage(m: mon) }
                 else if nav.sel == -4 { DisplayPage() }
                 else if nav.sel == -5 { NetworkPage() }
+                else if nav.sel == -6 { CleanPage() }
+                else if nav.sel == -7 { ChangesPage() }
                 else { ToolPage(feature: features[nav.sel]).id(nav.sel) }
             }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBG)
         }
@@ -482,6 +542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mon.start()
         DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
+        if DockMode.shared.enabled { DockMode.shared.start() }; DockMode.shared.evaluate()
         if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }
         BatteryAlerts.shared.$settings.map(\.energyTracking).removeDuplicates().dropFirst().sink { $0 ? EnergyTracker.shared.start() : EnergyTracker.shared.stop() }.store(in: &subs)
         if args.contains("--background") && UIState.shared.menuBar { NSApp.setActivationPolicy(.accessory) } else { showMain() }
@@ -495,7 +556,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { showMain(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !UIState.shared.menuBar }
-    func applicationWillTerminate(_ n: Notification) { EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
+    func applicationWillTerminate(_ n: Notification) { EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DockMode.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
 }
 
 @main

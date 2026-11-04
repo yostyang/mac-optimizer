@@ -65,10 +65,52 @@ protocol NetProbe: AnyObject {
     func effectiveDNS() -> [String]
     func serviceDNS() -> [DNSServiceState]
     func vpnApps() -> [String]
+    func tcp(_ host: String) -> Bool?
+    func tunActive() -> Bool
+}
+extension NetProbe {
+    /// 旧模拟探针没实现时默认“没测过”，而不是“测了不通”，避免把没证据当成断网。
+    func tcp(_ host: String) -> Bool? { nil }
+    func tunActive() -> Bool { false }
 }
 final class RealNetProbe: NetProbe {
     let r = RealRunner()
     func ping(_ host: String) -> PingResult { NetParse.ping(r.run("/sbin/ping", ["-c", "5", "-i", "0.2", "-W", "1000", "-t", "4", host]).out) }
+    /// TCP 佐证：只在 ping 丢包时才跑。VPN / TUN 常拦截 ICMP 但放行 TCP，
+    /// 能连通 443 就说明网络本身没断，ping 丢包不能当成“不稳定”的证据。
+    /// 单次最多 2 秒，在诊断的后台队列上跑，不常驻、不改任何设置。
+    func tcp(_ host: String) -> Bool? {
+        var hints = addrinfo(); hints.ai_family = AF_INET; hints.ai_socktype = SOCK_STREAM
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, "443", &hints, &res) == 0, let first = res else { return false }
+        defer { freeaddrinfo(first) }
+        var p: UnsafeMutablePointer<addrinfo>? = first
+        while let a = p {
+            let fd = socket(a.pointee.ai_family, a.pointee.ai_socktype, a.pointee.ai_protocol)
+            if fd >= 0 {
+                var tv = timeval(tv_sec: 2, tv_usec: 0)
+                setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+                if let sa = a.pointee.ai_addr, connect(fd, sa, a.pointee.ai_addrlen) == 0 { close(fd); return true }
+                close(fd)
+            }
+            p = a.pointee.ai_next
+        }
+        return false
+    }
+    /// TUN 模式不一定有可见的 VPN 应用名，但系统里会多出 utun / tun 接口。
+    func tunActive() -> Bool {
+        var ifs: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifs) == 0, let first = ifs else { return false }
+        defer { freeifaddrs(first) }
+        var p: UnsafeMutablePointer<ifaddrs>? = first
+        while let a = p {
+            let name = String(cString: a.pointee.ifa_name)
+            if name.hasPrefix("utun") || name.hasPrefix("tun") { return true }
+            p = a.pointee.ifa_next
+        }
+        return false
+    }
     func gateway() -> String? { NetParse.gateway(r.run("/sbin/route", ["-n", "get", "default"]).out) }
     func resolve(_ host: String) -> (ms: Double?, addrs: [String]) {
         var hints = addrinfo(); hints.ai_family = AF_INET; hints.ai_socktype = SOCK_STREAM
@@ -101,6 +143,11 @@ final class NetDiag: ObservableObject {
     @Published var effective: [String] = []
     @Published var services: [DNSServiceState] = []
     @Published var vpns: [String] = []
+    @Published var tun = false
+    /// TCP 佐证结果：nil = 没跑过（ping 正常时不跑），true = 至少一个 443 能连通，false = 都连不通。
+    @Published var tcpOK: Bool?
+    /// VPN 应用在运行，或系统里有 TUN 接口，都算“可能拦截 ICMP / 接管 DNS”。
+    var vpnActive: Bool { !vpns.isEmpty || tun }
     @Published var running = false
     @Published var lastRun: Date?
     var probe: NetProbe = RealNetProbe()
@@ -123,10 +170,17 @@ final class NetDiag: ObservableObject {
                 let r = p.resolve(h)
                 rs.append(ResolveResult(host: h == nx ? "不存在的域名（劫持检测）" : h, ms: r.ms, addrs: r.addrs, verdict: NetParse.verdict(host: h, ms: r.ms, addrs: r.addrs, expectNX: h == nx)))
             }
-            let eff = p.effectiveDNS(), svc = p.serviceDNS(), v = p.vpnApps()
+            let eff = p.effectiveDNS(), svc = p.serviceDNS(), v = p.vpnApps(), tun = p.tunActive()
             grp.wait()
+            // 只有 ping 丢包时才做 TCP 佐证：平时不跑，不增加诊断耗时和流量。
+            let lossHigh = ts.contains { ($0.result?.loss ?? 0) >= 20 }
+            var tcp: Bool? = nil
+            if lossHigh {
+                let results = ["www.baidu.com", "www.apple.com", "github.com"].map { p.tcp($0) }
+                if results.contains(true) { tcp = true } else if results.contains(false) { tcp = false }
+            }
             DispatchQueue.main.async {
-                self.targets = ts; self.resolves = rs; self.effective = eff; self.services = svc; self.vpns = v
+                self.targets = ts; self.resolves = rs; self.effective = eff; self.services = svc; self.vpns = v; self.tun = tun; self.tcpOK = tcp
                 self.running = false; self.lastRun = Date(); done?()
             }
         }
@@ -135,8 +189,18 @@ final class NetDiag: ObservableObject {
         guard lastRun != nil else { return ("还没有诊断，点「开始诊断」检测一次（约 3 秒）", true) }
         if resolves.contains(where: { $0.verdict == .suspicious }) { return ("DNS 疑似被劫持，建议一键改用阿里 DNS", false) }
         if resolves.contains(where: { $0.verdict == .failed }) { return ("有域名解析失败，建议一键改用阿里 DNS", false) }
-        if let g = targets.first, g.name.hasPrefix("路由器"), (g.result?.loss ?? 100) >= 40 { return ("连路由器都丢包严重，请检查 Wi-Fi 信号或网线", false) }
-        if targets.contains(where: { ($0.result?.loss ?? 0) >= 20 }) { return ("部分网站丢包较多，网络不太稳定", false) }
+        let lossHigh = targets.contains { ($0.result?.loss ?? 0) >= 20 }
+        let gatewayLossHigh = targets.first.map { $0.name.hasPrefix("路由器") && ($0.result?.loss ?? 100) >= 40 } ?? false
+        // TCP 能连通时，ping 丢包很可能是 VPN / TUN 拦截 ICMP，不是网络本身不稳定：
+        // 不再报“不稳定”，只给仅供参考的结论。TCP 也连不通时，仍按原来的丢包结论报。
+        if tcpOK == true && (lossHigh || gatewayLossHigh) {
+            return ("TCP 能连通，ping 丢包可能是 VPN / TUN 拦截了 ICMP，网络不一定不稳定（丢包结论仅供参考）", false)
+        }
+        if vpnActive && tcpOK == nil && (lossHigh || gatewayLossHigh) {
+            return ("VPN / TUN 正在运行，ping 丢包仅供参考，请以实际使用为准", false)
+        }
+        if gatewayLossHigh { return ("连路由器都丢包严重，请检查 Wi-Fi 信号或网线", false) }
+        if lossHigh { return ("部分网站丢包较多，网络不太稳定", false) }
         return ("网络正常", true)
     }
 }
@@ -168,7 +232,9 @@ final class DNSClient: ObservableObject {
     }
     private func act(_ f: @escaping (ChargeHelperProtocol, @escaping (Bool, String) -> Void) -> Void, ok: String) {
         busy = true; note = ""
-        withProxy({ p in f(p) { success, msg in DispatchQueue.main.async { self.busy = false; self.note = success ? ok : msg; self.refresh(); NetDiag.shared.lastRun = nil } } },
+        withProxy({ p in f(p) { success, msg in DispatchQueue.main.async { self.busy = false; self.note = success ? ok : msg; self.refresh(); NetDiag.shared.lastRun = nil
+            if success { ChangeLog.shared.add(kind: .dns, title: ok, detail: "DNS 改动（经充电助手，改前已保存原设置）", reversible: ok != "已恢复原来的 DNS", restoreNote: "在“改动与提醒”页点恢复原 DNS，或在网络诊断页点恢复原 DNS") }
+        } } },
                   onError: { self.busy = false; self.note = "无法连接助手：\($0)" })
     }
     func setAli() { act({ $0.setAliDNS($1) }, ok: "已改为阿里 DNS 并清除了 DNS 缓存") }

@@ -59,7 +59,7 @@ struct DisplayPage: View {
                     Button { dm.refresh(); dm.probeDDC() } label: { Label(dm.probing ? "读取中…" : "刷新", systemImage: "arrow.clockwise") }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.refresh")
                 }
                 HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 10) { modeCard; ddcCard }.frame(maxWidth: .infinity)
+                    VStack(spacing: 10) { modeCard; ddcCard; DockModeCard() }.frame(maxWidth: .infinity)
                     VStack(spacing: 10) { eyeCard; usageCard }.frame(maxWidth: .infinity)
                 }
             }.padding(28)
