@@ -43,6 +43,8 @@ else
 fi
 # NODMG=1：只编译签名、不打包 DMG（测试用，受限沙盒里 hdiutil 不可用）
 if [ -n "${NODMG:-}" ]; then echo "完成：build/Mac一键优化.app（跳过 DMG）"; exit 0; fi
-mkdir -p build/dmg; cp -R "$A" build/dmg/; ln -s /Applications build/dmg/Applications
-hdiutil create -volname "Mac一键优化" -srcfolder build/dmg -ov -format UDZO "build/Mac一键优化.dmg" >/dev/null
+# 在非同步的临时目录里打包，避免 iCloud 文件提供程序给包加回 FinderInfo（codesign --strict 会判为不合规）
+STAGE=$(mktemp -d); ditto --noextattr "$A" "$STAGE/Mac一键优化.app"; xattr -cr "$STAGE/Mac一键优化.app"; ln -s /Applications "$STAGE/Applications"
+codesign --verify --strict "$STAGE/Mac一键优化.app"
+hdiutil create -volname "Mac一键优化" -srcfolder "$STAGE" -ov -format UDZO "build/Mac一键优化.dmg" >/dev/null; rm -rf "$STAGE"
 echo "完成：build/Mac一键优化.dmg"
