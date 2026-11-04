@@ -252,6 +252,14 @@ struct IOPMSleepAssertion: SleepAssertion {
     func release(_ id: UInt32) { IOPMAssertionRelease(id) }
 }
 
+/// 启动时恢复用户保存的常亮与接显示器模式（含 --background 启动）
+enum LaunchRestore {
+    static func run(keepAwake: KeepAwake, dock: DockMode) {
+        keepAwake.restore()
+        if dock.enabled && dock.observe { dock.start() }
+        dock.evaluate()
+    }
+}
 final class DockMode: ObservableObject {
     static var shared = DockMode()
     static let key = "dockMode.enabled"

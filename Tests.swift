@@ -78,6 +78,7 @@ enum MOTests {
         v22Tests()
         v23Tests()
         v24Tests()
+        v241Tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -214,7 +215,7 @@ enum MOTests {
         let out = args.firstIndex(of: snap ? "--snapshot" : "--uitest").flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil } ?? "/tmp/mo-test"
         try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
         // 隔离用户设置
-        let keys = [BatterySettings.key, "menuBar.enabled", "stats.optimized", "stats.quitApps", "stats.freedMB", DisplayManager.settingsKey]
+        let keys = [BatterySettings.key, "menuBar.enabled", "stats.optimized", "stats.quitApps", "stats.freedMB", DisplayManager.settingsKey, KeepAwake.key]
         let backup = keys.map { UserDefaults.standard.object(forKey: $0) }
         let suite = UserDefaults(suiteName: "mo-uitest")!; suite.removePersistentDomain(forName: "mo-uitest")
         CleanStats.shared = CleanStats(defaults: suite)
