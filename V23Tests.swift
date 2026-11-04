@@ -145,7 +145,11 @@ extension MOTests {
         check(DDCCaps.parse("(vcp(14(05\n08) DC(00\t02)))").values[0xdc] == [0, 2], "能力字符串换行和制表符")
 
         sec("2.3 ICC 操作与恢复")
-        check(DisplayProfile.sameURL(URL(fileURLWithPath: "/tmp/mo-profile.icc"), URL(fileURLWithPath: "/private/tmp/mo-profile.icc")), "ICC回读识别系统规范化的同一文件路径")
+        let profileName = "mo-profile-" + UUID().uuidString + ".icc"
+        let profileFile = URL(fileURLWithPath: "/private/tmp/" + profileName)
+        try? Data().write(to: profileFile)
+        defer { try? FileManager.default.removeItem(at: profileFile) }
+        check(DisplayProfile.sameURL(URL(fileURLWithPath: "/tmp/" + profileName), profileFile), "ICC回读识别系统规范化的同一文件路径")
         let profiles = V23Profiles(); manager.profileSystem = profiles; manager.refreshProfiles()
         check(waitUntil(2) { manager.profileStates[3]?.current == profiles.a }, "读取各屏幕当前ICC")
         manager.setProfile(3, url: profiles.b)
