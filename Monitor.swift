@@ -26,6 +26,7 @@ struct Snapshot: Equatable {
     var devices: [DeviceBattery] = []
     var batteryTemp: Double? = nil; var batteryCondition = ""; var designMah = 0; var fullMah = 0
     var batteryVoltageV: Double? = nil; var batteryCurrentA: Double? = nil; var batteryAdapterWatts: Double? = nil; var lowPowerMode: Bool? = nil
+    var batteryInputWatts: Double?; var batteryPowerUpdated: Date?; var batteryInputSource = ""; var batteryFullyCharged = false
     var top: [ProcInfo] = []
     var memFraction: Double { memTotalGB > 0 ? memUsedGB / memTotalGB : 0 }
     var diskUsedFraction: Double { diskTotalGB > 0 ? 1 - diskFreeGB / diskTotalGB : 0 }
@@ -174,12 +175,22 @@ enum Readers {
         return (util, cores)
     }
 
+    private static var previousBatteryAC: Bool?
+    private static var powerTransitionUntil = Date.distantPast
     // 电池
     static func battery(into s: inout Snapshot) {
         let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
-        guard svc != 0 else { s.battery = nil; return }
+        guard svc != 0 else {
+            s.battery = nil; s.batteryVoltageV = nil; s.batteryCurrentA = nil
+            s.batteryInputWatts = nil; s.batteryAdapterWatts = nil; s.batteryPowerUpdated = nil
+            s.batteryInputSource = ""; s.batteryFullyCharged = false; s.onAC = false; s.charging = false
+            return
+        }
         defer { IOObjectRelease(svc) }
-        func prop(_ k: String) -> Any? { IORegistryEntryCreateCFProperty(svc, k as CFString, nil, 0)?.takeRetainedValue() }
+        var raw: Unmanaged<CFMutableDictionary>?
+        IORegistryEntryCreateCFProperties(svc, &raw, nil, 0)
+        let properties = raw?.takeRetainedValue() as? [String: Any] ?? [:]
+        func prop(_ k: String) -> Any? { properties[k] }
         s.battery = (prop("CurrentCapacity") as? NSNumber)?.intValue
         s.charging = (prop("IsCharging") as? NSNumber)?.boolValue ?? false
         s.onAC = (prop("ExternalConnected") as? NSNumber)?.boolValue ?? false
@@ -189,7 +200,7 @@ enum Readers {
         let full = (prop("AppleRawMaxCapacity") as? NSNumber)?.doubleValue ?? (prop("NominalChargeCapacity") as? NSNumber)?.doubleValue ?? (bd?["NominalChargeCapacity"] as? NSNumber)?.doubleValue ?? 0
         s.designMah = Int(design); s.fullMah = Int(full)
         s.batteryTemp = (prop("Temperature") as? NSNumber).map { $0.doubleValue / 100 } ?? HIDTemp.batteryTemp()
-        s.batteryCondition = "正常"
+        s.batteryCondition = "未取得健康状态"
         if let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(), let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] {
             for ps in list { if let d = IOPSGetPowerSourceDescription(info, ps)?.takeUnretainedValue() as? [String: Any], let h = d[kIOPSBatteryHealthKey] as? String {
                 s.batteryCondition = h == "Good" ? "正常" : (h == "Fair" ? "一般" : (h == "Poor" ? "建议维修" : h)) } }
@@ -197,12 +208,12 @@ enum Readers {
         s.batteryHealth = design > 0 && full > 0 ? min(100, Int((full / design * 100).rounded())) : nil
         let t = (prop("TimeRemaining") as? NSNumber)?.intValue ?? 65535
         s.timeRemaining = t > 0 && t < 6000 ? t : nil
-        // v2.0 电池细化：电压（mV）、电流（mA，充电为正、放电为负，读不到 Amperage 时用 InstantAmperage）
-        // 读不到一律留 nil，界面写不可读，绝不用额定功率或别的值凑数。
-        if let mv = (prop("Voltage") as? NSNumber)?.doubleValue, mv > 0 { s.batteryVoltageV = mv / 1000 }
-        if let ma = (prop("Amperage") as? NSNumber)?.doubleValue { s.batteryCurrentA = ma / 1000 }
-        else if let ma = (prop("InstantAmperage") as? NSNumber)?.doubleValue { s.batteryCurrentA = ma / 1000 }
-        s.batteryAdapterWatts = Readers.adapterWatts()
+        let adapter = IOPSCopyExternalPowerAdapterDetails()?.takeRetainedValue() as? [String: Any]
+        PowerTelemetry.apply(properties, adapter: adapter, to: &s)
+        if let previous = previousBatteryAC, previous != s.onAC { powerTransitionUntil = Date().addingTimeInterval(3) }
+        previousBatteryAC = s.onAC
+        if s.onAC && Date() < powerTransitionUntil { s.batteryInputWatts = nil; s.batteryInputSource = "电源切换中，等待遥测更新" }
+        if s.onAC && s.batteryAdapterWatts == nil { s.batteryAdapterWatts = Readers.adapterWatts() }
         s.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
     }
 
@@ -227,21 +238,19 @@ enum Readers {
 
     // 外接设备电量：系统已通过 IOKit 公开 BatteryPercent 的设备（苹果配件、部分 HID 设备）
     static func devices() -> [DeviceBattery] {
+        var iterator: io_iterator_t = 0
+        guard IORegistryCreateIterator(kIOMainPortDefault, kIOServicePlane, IOOptionBits(kIORegistryIterateRecursively), &iterator) == KERN_SUCCESS else { return [] }
+        defer { IOObjectRelease(iterator) }
         var out: [DeviceBattery] = []
-        for cls in ["AppleDeviceManagementHIDEventService", "IOHIDDevice", "AppleHSBluetoothDevice"] {
-            var it: io_iterator_t = 0
-            guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(cls), &it) == KERN_SUCCESS else { continue }
-            var o = IOIteratorNext(it)
-            while o != 0 {
-                if let b = IORegistryEntryCreateCFProperty(o, "BatteryPercent" as CFString, nil, 0)?.takeRetainedValue() as? NSNumber {
-                    let name = IORegistryEntryCreateCFProperty(o, "Product" as CFString, nil, 0)?.takeRetainedValue() as? String ?? "设备"
-                    let l = name.lowercased()
-                    let kind = l.contains("mouse") || l.contains("mx master") || l.contains("trackpad") ? "computermouse" : (l.contains("keyboard") || l.contains("key") ? "keyboard" : (l.contains("airpods") ? "airpodspro" : "dot.radiowaves.left.and.right"))
-                    if !out.contains(where: { $0.name == name }) { out.append(DeviceBattery(name: name, percent: b.intValue, kind: kind)) }
-                }
-                IOObjectRelease(o); o = IOIteratorNext(it)
-            }
-            IOObjectRelease(it)
+        while case let entry = IOIteratorNext(iterator), entry != 0 {
+            defer { IOObjectRelease(entry) }
+            var className = [CChar](repeating: 0, count: 128); IOObjectGetClass(entry, &className)
+            guard !String(cString: className).hasPrefix("IODTNVRAM"),
+                  let percent = IORegistryEntryCreateCFProperty(entry, "BatteryPercent" as CFString, nil, 0)?.takeRetainedValue() as? NSNumber,
+                  (0...100).contains(percent.intValue) else { continue }
+            let flags = IOOptionBits(kIORegistryIterateRecursively | kIORegistryIterateParents)
+            guard let name = IORegistryEntrySearchCFProperty(entry, kIOServicePlane, "Product" as CFString, nil, flags) as? String, !name.isEmpty else { continue }
+            if !out.contains(where: { $0.name == name }) { out.append(DeviceBattery(name: name, percent: percent.intValue, kind: BTKind.symbol(name, minor: ""))) }
         }
         return out
     }

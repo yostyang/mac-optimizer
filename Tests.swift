@@ -76,6 +76,7 @@ enum MOTests {
         v20Tests()
         v21Tests()
         v22Tests()
+        v23Tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -212,7 +213,7 @@ enum MOTests {
         let out = args.firstIndex(of: snap ? "--snapshot" : "--uitest").flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil } ?? "/tmp/mo-test"
         try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
         // 隔离用户设置
-        let keys = [BatterySettings.key, "menuBar.enabled", "stats.optimized", "stats.quitApps", "stats.freedMB"]
+        let keys = [BatterySettings.key, "menuBar.enabled", "stats.optimized", "stats.quitApps", "stats.freedMB", DisplayManager.settingsKey]
         let backup = keys.map { UserDefaults.standard.object(forKey: $0) }
         let suite = UserDefaults(suiteName: "mo-uitest")!; suite.removePersistentDomain(forName: "mo-uitest")
         CleanStats.shared = CleanStats(defaults: suite)
@@ -356,6 +357,7 @@ enum MOTests {
         }
         v15Snapshots(out)
         v16Snapshots(out)
+        v23Snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
@@ -541,6 +543,7 @@ enum MOTests {
         if let b = find(w.contentView!, id: "bat.tab.1") { b.press(); check(find(w.contentView!, id: "bat.lowpower.settings") != nil, "功率标签有打开系统电源设置") } else { check(false, "找到功率与能耗标签") }
         if let b = find(w.contentView!, id: "bat.tab.0") { b.press(); check(find(w.contentView!, id: "bat.alertsOn") != nil, "切回电池概览有电量提醒开关") } else { check(false, "找到电池概览标签") }
         v22UI(w)
+        v23UI(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

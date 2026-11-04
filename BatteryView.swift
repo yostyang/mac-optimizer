@@ -53,12 +53,13 @@ struct BatteryPage: View {
             Card(title: "功率流向", icon: "bolt.fill") {
                 HStack(spacing: 6) { ClayDot(); Text(flow.supplyText).font(.system(size: 11)).foregroundColor(.secondary) }
                 HStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 2) { Text("充电器输入").font(.system(size: 11)).foregroundColor(.secondary); Text("暂不提供").font(.system(size: 20, weight: .semibold)).monospacedDigit() }
-                    VStack(alignment: .leading, spacing: 2) { Text("充入电池").font(.system(size: 11)).foregroundColor(.secondary); Text(flow.charging ? fmtW(flow.chargeWatts) : "未充电").font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    VStack(alignment: .leading, spacing: 2) { Text("充电器输入").font(.system(size: 11)).foregroundColor(.secondary); Text(flow.onAC ? fmtW(flow.inputWatts) : "—").font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    VStack(alignment: .leading, spacing: 2) { Text(flow.dischargeWatts != nil ? "电池放电" : "充入电池").font(.system(size: 11)).foregroundColor(.secondary); Text(flow.dischargeWatts.map { fmtW($0) } ?? (flow.charging ? fmtW(flow.chargeWatts) : "未充电")).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
                     VStack(alignment: .leading, spacing: 2) { Text("系统功耗").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.systemWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
                     Spacer()
                 }
-                Text("充电功率 ≈ 电压 × 电流；充电时系统功耗 = 输入 − 充电，输入读不到时系统功耗写不可读，不用额定功率凑数。显示器等分项目前没有公开可读接口，已并入系统功耗，不单独列数字。电池供电时系统功耗 = 电池放电功率。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(flow.inputNote + "；" + flow.systemNote + "。输入为进入 Mac 的功率，适配器上报功率单列；不表示插座侧实测，屏幕与外设不单独估算。跳变或数据未同步时暂不显示估算值。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let updated = s.batteryPowerUpdated { Text("更新于 " + updated.formatted(date: .omitted, time: .standard)).font(.system(size: 10)).foregroundColor(.secondary) }
             }
             Card(title: "电池详情", icon: "info.circle") {
                 HStack(alignment: .top, spacing: 20) {
@@ -68,7 +69,7 @@ struct BatteryPage: View {
                         kv("电池电流", flow.currentA.map { String(format: "%.2f A", $0) } ?? "不可读")
                     }.frame(maxWidth: .infinity)
                     VStack(spacing: 6) {
-                        kv("适配器额定功率", flow.adapterRatedWatts.map { String(format: "%.0f W", $0) } ?? "不可读")
+                        kv("适配器上报功率", flow.adapterRatedWatts.map { String(format: "%.0f W", $0) } ?? "不可读")
                         kv("循环次数", s.cycles.map { "\($0) 次" } ?? "—")
                         kv("低电量模式", flow.lowPowerMode.map { $0 ? "开启" : "关闭" } ?? "不可读")
                     }.frame(maxWidth: .infinity)
@@ -118,7 +119,7 @@ struct BatteryPage: View {
     func advice(_ s: Snapshot) -> String {
         if let t = s.batteryTemp, t > 40 { return "⚠️ 电池温度偏高，避免边充电边高负载，放在通风处。" }
         if let h = s.batteryHealth, h < 80 || s.batteryCondition == "建议维修" { return "电池容量已低于 80%，可以考虑到 Apple 授权服务商检测或更换。" }
-        return "电池状态良好。长期插电时开启下方「充电上限」可减少损耗。"
+        return s.batteryHealth != nil && s.batteryCondition == "正常" ? "电池状态良好。可在下方管理充电上限。" : "部分健康信息尚未取得，可在系统电池设置中查看。"
     }
     func devices(_ s: Snapshot) -> some View {
         Card(title: "所有设备", icon: "dot.radiowaves.left.and.right") {
@@ -131,7 +132,7 @@ struct BatteryPage: View {
                     Text("\(d.percent)%").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 38, alignment: .trailing)
                 }
             }
-            Text("罗技、Keychron 等第三方设备的电量 macOS 不提供，读不到时不显示。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("外设电量取决于设备、固件和连接方式；未取得的读数会标为未知。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
     var energy: some View {
@@ -183,6 +184,9 @@ struct BatteryPage: View {
     }
     var sounds: some View {
         Card(title: "提示音", icon: "speaker.wave.2") {
+            if !al.settings.alertsOn {
+                Text("开启电量提醒后，可设置接电、充满和低电量提示音。").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else {
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                     ForEach([[("plug", "接电"), ("unplug", "断电"), ("upper", "上限")], [("full", "充满"), ("low", "低电")]], id: \.first!.0) { row in
                         GridRow {
@@ -194,7 +198,8 @@ struct BatteryPage: View {
                         }
                     }
                 }
-        }.disabled(!al.settings.alertsOn).opacity(al.settings.alertsOn ? 1 : 0.5).font(.system(size: 12))
+            }
+        }.font(.system(size: 12))
     }
     var limits: some View { ChargeCard(c: ChargeClient.shared).onAppear { ChargeClient.shared.refresh() } }
 }

@@ -40,9 +40,10 @@ final class MockGamma: GammaSystem {
     var last: (Double, Double, Double)?; var restored = 0
     func set(_ id: CGDirectDisplayID, r: Double, g: Double, b: Double) -> Bool { last = (r, g, b); return true }
     func restore() { restored += 1; last = nil }
+    func restore(_ id: CGDirectDisplayID) -> Bool { restore(); return true }
 }
 final class MockDDC: DDCChannel {
-    var vals: [UInt8: Int] = [0x10: 80, 0x12: 50, 0x60: 0x0F]
+    var vals: [UInt8: Int] = [0x10: 80, 0x12: 50, 0x60: 0x0F, 0x14: 5, 0xdc: 0]
     var writes: [(UInt8, Int)] = []
     func read(_ code: UInt8) -> (value: Int, max: Int)? { vals[code].map { ($0, 100) } }
     func write(_ code: UInt8, _ value: Int) -> Bool { writes.append((code, value)); vals[code] = value; return true }
@@ -183,8 +184,8 @@ extension MOTests {
         let ap = pl.first { $0.name.contains("AirPods") }; check(ap?.percent == 80 && ap?.parts["盒"] == 40, "AirPods 左右耳和充电盒")
         let mg = BTParse.merge(paired: pl, ioreg: ["Magic Trackpad": 64], gatt: ["MX Master 2S": 90], gattIssue: nil)
         check(mg.first { $0.name == "MX Master 2S" }?.percent == 90 && mg.first { $0.name == "MX Master 2S" }?.source == "蓝牙标准电量服务", "罗技 BLE 设备：读标准电量服务")
-        check(mg.first { $0.name.hasPrefix("Keychron") }?.reason == "经典蓝牙设备，macOS 不公开电量", "经典蓝牙：写明原因")
-        check(mg.first { $0.name == "小米蓝牙语音遥控器" }?.reason == "设备没有提供标准电量服务", "BLE 无电量服务：写明原因")
+        check(mg.first { $0.name.hasPrefix("Keychron") }?.reason == "未取得经典蓝牙电量，可能与型号或固件有关", "经典蓝牙：写明原因")
+        check(mg.first { $0.name == "小米蓝牙语音遥控器" }?.reason == "未取得标准电量服务读数", "BLE 无电量服务：写明原因")
         check(mg.first { $0.name == "MX KEYS S" }?.reason == "未连接" && mg.first { $0.name == "Magic Trackpad" }?.percent == 64, "未连接 / IORegistry 设备")
         check(BTParse.merge(paired: pl, ioreg: [:], gatt: [:], gattIssue: "没有蓝牙权限").first { $0.name == "MX Master 2S" }?.reason == "没有蓝牙权限", "没有权限时提示")
         let bt = BTBattery(); bt.persist = false; bt.settings = BTSettings(); bt.source = MockBT(); var notes: [String] = []; bt.notify = { t, _ in notes.append(t) }
@@ -200,7 +201,8 @@ extension MOTests {
     static func v15Fixtures() -> (DisplayManager, NetDiag, DNSClient, BTBattery) {
         let gm = MockGamma(), dm = DisplayManager(sys: MockDisplays(), gamma: gm); dm.offline = true; dm.settings = DisplaySettings()   // 不受本机真实设置影响
         let ddc = MockDDC(); dm.channels = { _ in ddc }; dm.refresh(); dm.conflict = "MonitorBar"
-        dm.ddc = [3: DDCState(available: true, caps: DDCCaps.parse(ddc.capabilities()), brightness: 80, contrast: 50, input: 0x0F)]
+        dm.ddc = [3: DDCState(available: true, caps: DDCCaps.parse(ddc.capabilities()), brightness: 80, contrast: 50, input: 0x0F, colorPreset: 5, displayMode: 0)]
+        let profiles = V23Profiles(); dm.profileSystem = profiles; dm.profileStates = [3: profiles.read(3)]
         let nd = NetDiag(); nd.probe = MockNet()
         let mr = MockRunner(); mr.dns["Wi-Fi"] = []
         let svc = ChargeService(ctl: ChargeController(io: MockSMC.tahoe27(), settings: ChargeSettings()), reader: { (80, true, false) }, persist: { _ in })

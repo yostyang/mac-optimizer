@@ -44,6 +44,8 @@ struct DisplayPage: View {
     @ObservedObject var st = ScreenTime.shared
     @State private var sel: CGDirectDisplayID = 0
     @State private var hidpi = true
+    @State private var tab = 0
+    init(colorTab: Bool = false) { _tab = State(initialValue: colorTab ? 1 : 0) }
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
@@ -53,23 +55,35 @@ struct DisplayPage: View {
                         Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 12)).foregroundColor(.secondary)
                     }
                     Spacer()
+                    SegmentedTrack {
+                        Button("显示设置") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("disp.tab.0")
+                        Button("色彩模式") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("disp.tab.1")
+                    }
                     if dm.displays.count > 1 {
                         Picker("", selection: $sel) { ForEach(dm.displays) { Text($0.name).tag($0.id) } }.labelsHidden().frame(width: 200)
                     }
                     Button { dm.refresh(); dm.probeDDC() } label: { Label(dm.probing ? "读取中…" : "刷新", systemImage: "arrow.clockwise") }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.refresh")
                 }
                 HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 10) { modeCard; ddcCard; DockModeCard() }.frame(maxWidth: .infinity)
-                    VStack(spacing: 10) { eyeCard; usageCard }.frame(maxWidth: .infinity)
+                    if tab == 0 {
+                        VStack(spacing: 10) { modeCard; ddcCard; DockModeCard() }.frame(maxWidth: .infinity)
+                        VStack(spacing: 10) { eyeCard; usageCard }.frame(maxWidth: .infinity)
+                    } else {
+                        colorCard.frame(maxWidth: .infinity)
+                        eyeCard.frame(maxWidth: .infinity)
+                    }
                 }
             }.padding(28)
         }
         .onAppear {
             if dm.displays.isEmpty || !dm.offline { dm.refresh() }
             if sel == 0 || !dm.displays.contains(where: { $0.id == sel }) { sel = (dm.displays.first { !$0.builtin } ?? dm.displays.first)?.id ?? 0 }
+            dm.select(sel)
             hidpi = cur?.current.hidpi ?? true
             if !dm.offline && dm.ddc.isEmpty { dm.probeDDC() }
         }
+        .onChange(of: sel) { id in dm.select(id); hidpi = cur?.current.hidpi ?? true }
+        .onChange(of: dm.selectedID) { id in sel = id }
     }
     var cur: DisplayInfo? { dm.displays.first { $0.id == sel } ?? dm.displays.first }
 
@@ -131,9 +145,9 @@ struct DisplayPage: View {
             if let d = cur, d.builtin {
                 Text("内建屏幕请用键盘亮度键调节；硬件调节只适用于外接显示器。").font(.system(size: 11)).foregroundColor(.secondary)
             } else if let d = cur, let s = dm.ddc[d.id], s.available {
-                if s.brightness != nil { slider("亮度", "sun.max", value: s.brightness, max: s.brightnessMax, id: "ddc.brightness") { dm.setDDC(d.id, .brightness, $0) } }
-                if s.contrast != nil { slider("对比度", "circle.lefthalf.filled", value: s.contrast, max: s.contrastMax, id: "ddc.contrast") { dm.setDDC(d.id, .contrast, $0) } }
-                if s.volume != nil { slider("音量", "speaker.wave.2", value: s.volume, max: s.volumeMax, id: "ddc.volume") { dm.setDDC(d.id, .volume, $0) } }
+                if s.brightness != nil { slider("亮度", "sun.max", value: dm.displayedValue(d.id, .brightness), max: s.brightnessMax, id: "ddc.brightness") { dm.setDDC(d.id, .brightness, $0) } }
+                if s.contrast != nil { slider("对比度", "circle.lefthalf.filled", value: dm.displayedValue(d.id, .contrast), max: s.contrastMax, id: "ddc.contrast") { dm.setDDC(d.id, .contrast, $0) } }
+                if s.volume != nil { slider("音量", "speaker.wave.2", value: dm.displayedValue(d.id, .volume), max: s.volumeMax, id: "ddc.volume") { dm.setDDC(d.id, .volume, $0) } }
                 if s.caps.inputs.count > 1 {
                     HStack(spacing: 6) {
                         Image(systemName: "rectangle.connected.to.line.below").frame(width: 16).foregroundColor(accent)
@@ -144,12 +158,50 @@ struct DisplayPage: View {
                     }
                     Text("切到其他输入源后，这台 Mac 的画面会从该显示器上消失，需要用显示器按键切回。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
+                if let note = dm.ddcNotes[d.id] { Text(note).font(.system(size: 11)).foregroundColor(.secondary) }
                 let miss = [s.volume == nil ? "音量" : nil, s.caps.inputs.count > 1 ? nil : "输入源"].compactMap { $0 }
                 if !miss.isEmpty { Text("这台显示器不支持通过 DDC 调" + miss.joined(separator: "、") + "，已隐藏。").font(.system(size: 10)).foregroundColor(.secondary) }
             } else if dm.probing {
                 HStack { ProgressView().controlSize(.small); Text("正在读取显示器…").font(.system(size: 11)).foregroundColor(.secondary) }
             } else {
-                Text("这台显示器没有响应 DDC/CI。可以在显示器菜单里打开 DDC/CI 后点「刷新」，或使用右侧的软件调光。").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("未匹配到明确的 DDC/CI 通道或显示器未响应。请开启显示器的 DDC/CI 后刷新；同型号多屏身份不明确时不猜测控制目标。").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+    var colorCard: some View {
+        Card(title: "色彩模式", icon: "paintpalette") {
+            if let display = cur {
+                Text("仅控制 " + display.name).font(.system(size: 11)).foregroundColor(.secondary)
+                let profile = dm.profileStates[display.id]
+                Text("系统色彩描述文件（ICC）").font(.system(size: 12, weight: .medium))
+                if let profile, !profile.choices.isEmpty {
+                    Picker("ICC", selection: Binding(get: { profile.current?.path ?? "" }, set: { path in dm.setProfile(display.id, url: URL(fileURLWithPath: path)) })) {
+                        ForEach(profile.choices) { choice in Text(choice.name).tag(choice.id) }
+                    }.labelsHidden().disabled(dm.profileBusy.contains(display.id)).accessibilityIdentifier("disp.icc")
+                    if dm.originalProfiles[display.key] != nil { Button("恢复原描述文件") { dm.restoreProfile(display.id) }.buttonStyle(PillButton(filled: false)).disabled(dm.profileBusy.contains(display.id)).accessibilityIdentifier("disp.icc.restore") }
+                } else if dm.profilesLoading { ProgressView("正在读取描述文件…").controlSize(.small) }
+                else { Text("未取得可切换的显示器描述文件，可在系统显示器设置查看。").font(.system(size: 11)).foregroundColor(.secondary) }
+                if let note = dm.profileNotes[display.id] { Text(note).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("disp.icc.note") }
+                if let state = dm.ddc[display.id] {
+                    let colors = state.caps.values[VCP.colorPreset.rawValue] ?? []
+                    if !colors.isEmpty, state.colorPreset != nil {
+                        Text("显示器硬件色彩预设").font(.system(size: 12, weight: .medium))
+                        FlowRow(spacing: 6) { ForEach(colors, id: \.self) { value in
+                            ChoiceChip(text: DDCCaps.colorName(value), on: state.colorPreset == Int(value)) { dm.setDDC(display.id, .colorPreset, Int(value)) }.accessibilityIdentifier("disp.color.\(value)")
+                        } }
+                    }
+                    let modes = state.caps.values[VCP.displayMode.rawValue] ?? []
+                    if !modes.isEmpty, state.displayMode != nil {
+                        Picker("硬件显示模式", selection: Binding(get: { state.displayMode ?? -1 }, set: { dm.setDDC(display.id, .displayMode, $0) })) {
+                            ForEach(modes, id: \.self) { value in Text(String(format: "模式 0x%02X", value)).tag(Int(value)) }
+                        }.font(.system(size: 11)).accessibilityIdentifier("disp.hardwareMode")
+                    }
+                    if dm.originalDDC[display.key]?[VCP.colorPreset.rawValue] != nil || dm.originalDDC[display.key]?[VCP.displayMode.rawValue] != nil {
+                        Button("恢复原硬件色彩") { dm.restoreColor(display.id) }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.color.restore")
+                    }
+                }
+                if let note = dm.ddcNotes[display.id] { Text(note).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("disp.ddc.note") }
+                Text("ICC、硬件预设与下方软件色温分别控制；仅列出已提供的选项，硬件模式名称请对照显示器菜单。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -160,7 +212,7 @@ struct DisplayPage: View {
     }
 
     var eyeCard: some View {
-        Card(title: "护眼与场景", icon: "eye") {
+        Card(title: "护眼与场景 · 当前屏幕", icon: "eye") {
             HStack(spacing: 8) {
                 ForEach(DScene.all) { s in
                     Button { dm.apply(scene: s) } label: {
@@ -177,7 +229,8 @@ struct DisplayPage: View {
                     Text("检测到 \(dm.conflict) 正在运行，它也会调整屏幕色彩。为避免互相覆盖，软件调光默认不开；场景只调硬件亮度。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Toggle("软件调光与色温（关闭即恢复系统原色）", isOn: Binding(get: { dm.settings.gammaOn }, set: { dm.setGamma(on: $0) })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.gamma")
+            if let id = cur?.id, let note = dm.gammaNotes[id] { Text(note).font(.system(size: 10)).foregroundColor(.secondary) }
+            Toggle("软件调光与色温（关闭恢复原曲线）", isOn: Binding(get: { dm.settings.gammaOn }, set: { dm.setGamma(on: $0) })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.gamma")
             HStack(spacing: 8) {
                 Image(systemName: "sun.min").frame(width: 16).foregroundColor(accent); Text("调暗").font(.system(size: 12)).frame(width: 40, alignment: .leading)
                 Slider(value: Binding(get: { dm.settings.dim }, set: { dm.setDim($0) }), in: 0.3...1).controlSize(.small).disabled(!dm.settings.gammaOn)

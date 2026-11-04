@@ -4,6 +4,7 @@
 import Foundation
 import CoreBluetooth
 import UserNotifications
+import IOBluetooth
 
 struct BTDevice: Identifiable, Equatable, Codable {
     var id: String { address.isEmpty ? name : address }
@@ -35,11 +36,15 @@ enum BTKind {
 /// 数据来源抽象（测试用模拟）
 protocol BTSource: AnyObject {
     func paired() -> [BTDevice]                       // system_profiler（含 AirPods 电量）
+    func classic() -> [String: Int]
     func ioreg() -> [String: Int]                     // 名称 → 电量
     func gatt(_ done: @escaping ([String: Int], String?) -> Void)   // CoreBluetooth：名称 → 电量；第二个值 = 不可用原因
 }
 
+extension BTSource { func classic() -> [String: Int] { [:] } }
+
 enum BTParse {
+    static func address(_ value: String) -> String { value.lowercased().replacingOccurrences(of: "-", with: ":") }
     static func profiler(_ json: Data) -> [BTDevice] {
         guard let root = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
               let arr = root["SPBluetoothDataType"] as? [[String: Any]], let d = arr.first else { return [] }
@@ -53,8 +58,8 @@ enum BTParse {
                     var dev = BTDevice(name: name, address: p["device_address"] as? String ?? "", kind: BTKind.symbol(name, minor: minor), connected: connected,
                                        ble: (p["device_services"] as? String ?? "").contains("BLE"))
                     func pct(_ k: String) -> Int? { (p[k] as? String).flatMap { Int($0.replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)) } }
-                    for (k, label) in [("device_batteryLevelLeft", "左"), ("device_batteryLevelRight", "右"), ("device_batteryLevelCase", "盒")] { if let v = pct(k) { dev.parts[label] = v } }
-                    if let m = pct("device_batteryLevelMain") ?? pct("device_batteryLevel") { dev.percent = m }
+                    for (k, label) in [("device_batteryLevelLeft", "左"), ("device_batteryLevelRight", "右"), ("device_batteryLevelCase", "盒")] { if let v = pct(k), (0...100).contains(v) { dev.parts[label] = v } }
+                    if let m = pct("device_batteryLevelMain") ?? pct("device_batteryLevel"), (0...100).contains(m) { dev.percent = m }
                     else if !dev.parts.isEmpty { dev.percent = [dev.parts["左"], dev.parts["右"]].compactMap { $0 }.min() ?? dev.parts.values.min() }
                     if dev.percent != nil { dev.source = "系统蓝牙信息" }
                     out.append(dev)
@@ -64,18 +69,20 @@ enum BTParse {
         return out
     }
     /// 合并三方数据，并给读不到的设备写明原因
-    static func merge(paired: [BTDevice], ioreg: [String: Int], gatt: [String: Int], gattIssue: String?) -> [BTDevice] {
+    static func merge(paired: [BTDevice], ioreg: [String: Int], gatt: [String: Int], gattIssue: String?, classic: [String: Int] = [:]) -> [BTDevice] {
         var list = paired
         for i in list.indices {
+            guard list[i].connected else { list[i].percent = nil; list[i].reason = "未连接"; continue }
             guard list[i].percent == nil else { continue }
-            if let v = ioreg[list[i].name] { list[i].percent = v; list[i].source = "系统电量（IORegistry）"; continue }
-            if let v = gatt[list[i].name] { list[i].percent = v; list[i].source = "蓝牙标准电量服务"; continue }
-            if !list[i].connected { list[i].reason = "未连接"; continue }
+            if let value = classic[address(list[i].address)], (1...100).contains(value) { list[i].percent = value; list[i].source = "系统经典蓝牙读数"; continue }
+            let uniqueName = list.filter { $0.name == list[i].name && $0.connected }.count == 1
+            if uniqueName, let v = ioreg[list[i].name], (0...100).contains(v) { list[i].percent = v; list[i].source = "系统电量（IORegistry）"; continue }
+            if uniqueName, let v = gatt[list[i].name], (0...100).contains(v) { list[i].percent = v; list[i].source = "蓝牙标准电量服务"; continue }
             if let g = gattIssue, list[i].ble { list[i].reason = g; continue }
-            list[i].reason = list[i].ble ? "设备没有提供标准电量服务" : "经典蓝牙设备，macOS 不公开电量"
+            list[i].reason = list[i].ble ? "未取得标准电量服务读数" : "未取得经典蓝牙电量，可能与型号或固件有关"
         }
         // IORegistry 里有但不在配对列表的（如 USB 接收器连接的设备）
-        for (n, v) in ioreg where !list.contains(where: { $0.name == n }) {
+        for (n, v) in ioreg where (0...100).contains(v) && !list.contains(where: { $0.name == n }) {
             list.append(BTDevice(name: n, address: "", kind: BTKind.symbol(n, minor: ""), connected: true, ble: false, percent: v, source: "系统电量（IORegistry）"))
         }
         return list.sorted { ($0.connected ? 0 : 1, $0.percent == nil ? 1 : 0, $0.name) < ($1.connected ? 0 : 1, $1.percent == nil ? 1 : 0, $1.name) }
@@ -85,6 +92,35 @@ enum BTParse {
 final class RealBTSource: NSObject, BTSource, CBCentralManagerDelegate, CBPeripheralDelegate {
     func paired() -> [BTDevice] { BTParse.profiler(Data(RealRunner().run("/usr/sbin/system_profiler", ["-json", "SPBluetoothDataType"]).out.utf8)) }
     func ioreg() -> [String: Int] { Dictionary(Readers.devices().map { ($0.name, $0.percent) }, uniquingKeysWith: { a, _ in a }) }
+    func classic() -> [String: Int] {
+        guard CBManager.authorization != .denied && CBManager.authorization != .restricted else { return [:] }
+        guard CBManager.authorization != .notDetermined || BTBattery.shared.userAsked else { return [:] }
+        guard let executable = Bundle.main.executableURL else { return [:] }
+        let process = Process(), pipe = Pipe()
+        process.executableURL = executable; process.arguments = ["--read-classic-batteries"]
+        process.standardOutput = pipe; process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return [:] }
+        let timeout = DispatchWorkItem {
+            guard process.isRunning else { return }; process.terminate()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { if process.isRunning { kill(process.processIdentifier, SIGKILL) } }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: timeout)
+        defer { timeout.cancel(); try? pipe.fileHandleForReading.close() }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return [:] }
+        return (try? JSONDecoder().decode([String: Int].self, from: data)) ?? [:]
+    }
+    static func printClassicSnapshot() {
+        var values: [String: Int] = [:]
+        let selector = "batteryPercentSingle"
+        for device in IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? [] {
+            guard device.isConnected(), device.responds(to: NSSelectorFromString(selector)),
+                  let value = device.value(forKey: selector) as? NSNumber, (1...100).contains(value.intValue),
+                  let address = device.addressString else { continue }
+            values[BTParse.address(address)] = value.intValue
+        }
+        if let data = try? JSONEncoder().encode(values) { FileHandle.standardOutput.write(data) }
+    }
     private var cm: CBCentralManager?
     private var peers: [CBPeripheral] = []
     private var got: [String: Int] = [:]
@@ -131,7 +167,7 @@ final class RealBTSource: NSObject, BTSource, CBCentralManagerDelegate, CBPeriph
     func peripheral(_ p: CBPeripheral, didDiscoverServices e: Error?) { for s in p.services ?? [] where s.uuid == Self.battery { p.discoverCharacteristics([Self.level], for: s) } }
     func peripheral(_ p: CBPeripheral, didDiscoverCharacteristicsFor s: CBService, error e: Error?) { for ch in s.characteristics ?? [] where ch.uuid == Self.level { p.readValue(for: ch) } }
     func peripheral(_ p: CBPeripheral, didUpdateValueFor ch: CBCharacteristic, error e: Error?) {
-        if let v = ch.value?.first, let n = p.name { got[n] = min(100, Int(v)) }
+        if e == nil, ch.uuid == Self.level, let v = ch.value?.first, v <= 100, let n = p.name { got[n] = Int(v) }
         if got.count >= peers.count { complete(nil) }
     }
 }
@@ -173,10 +209,10 @@ final class BTBattery: ObservableObject {
         loading = true
         let src = source
         DispatchQueue.global(qos: .utility).async {
-            let paired = src.paired(), io = src.ioreg()
+            let paired = src.paired(), io = src.ioreg(), classic = src.classic()
             let needGatt = paired.contains { $0.connected && $0.ble && $0.percent == nil && io[$0.name] == nil }
             let finish: ([String: Int], String?) -> Void = { g, issue in
-                let list = BTParse.merge(paired: paired, ioreg: io, gatt: g, gattIssue: issue)
+                let list = BTParse.merge(paired: paired, ioreg: io, gatt: g, gattIssue: issue, classic: classic)
                 DispatchQueue.main.async { self.devices = list; self.updated = Date(); self.loading = false; self.checkAlerts(); done?() }
             }
             if needGatt { src.gatt(finish) } else { finish([:], nil) }
@@ -184,7 +220,7 @@ final class BTBattery: ObservableObject {
     }
     /// 低电量：每台设备跌破阈值时提醒一次，回升 10% 后才会再次提醒
     func checkAlerts() {
-        for d in devices { guard let p = d.percent else { continue }
+        for d in devices { guard d.connected, let p = d.percent else { continue }
             if p > settings.threshold + 10 { alerted.remove(d.id) }
             if settings.lowAlert, p <= settings.threshold, !alerted.contains(d.id) { alerted.insert(d.id); notify("\(d.name) 电量低", "剩余 \(p)%，记得充电") }
         }
