@@ -575,7 +575,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in AppTraffic.shared.flush() }
         DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
-        if DockMode.shared.enabled { DockMode.shared.start() }; DockMode.shared.evaluate()
+        LaunchRestore.run(keepAwake: KeepAwake.shared, dock: DockMode.shared)
         if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }
         BatteryAlerts.shared.$settings.map(\.energyTracking).removeDuplicates().dropFirst().sink { $0 ? EnergyTracker.shared.start() : EnergyTracker.shared.stop() }.store(in: &subs)
         if args.contains("--background") && UIState.shared.menuBar { NSApp.setActivationPolicy(.accessory) } else { showMain() }

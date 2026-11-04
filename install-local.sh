@@ -7,7 +7,8 @@ V="$1"
 [ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)" = "$V" ] || {
   B=$(( $(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Info.plist) + 1 ))
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" -c "Set :CFBundleVersion $B" Info.plist; }
-./test.sh || { echo "❌ 测试没通过，不安装"; exit 1; }
+. ./appstate.sh; mo_record
+MO_NO_RELAUNCH=1 ./test.sh || { echo "❌ 测试没通过，不安装"; mo_relaunch; exit 1; }
 osascript -e 'quit app "Mac一键优化"' || true
 for i in $(seq 1 20); do pgrep -x MacOptimizer >/dev/null || break; sleep 0.5; done
 pgrep -x MacOptimizer >/dev/null && { echo "Mac一键优化没有正常退出，停止安装"; exit 1; }
@@ -20,4 +21,5 @@ if [ -n "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" ]
   for n in $(seq 1 45); do sleep 2; [ "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" = "$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Info.plist)" ] && "/Applications/Mac一键优化.app/Contents/MacOS/MacOptimizer" --charge status >/dev/null 2>&1 && break; done
   pgrep -f MacOptimizerChargeHelper >/dev/null && echo "充电助手已随新版本重启" || { echo "⚠️ 充电助手没有启动（可能需要在 系统设置 › 登录项与扩展 里重新允许）"; exit 1; }
 fi
+mo_verify || { echo "❌ 安装后常亮/接显示器模式没有恢复"; exit 1; }
 echo "✅ 已在本机安装 ${V}（未发布）"

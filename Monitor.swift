@@ -488,10 +488,17 @@ final class Monitor: ObservableObject {
 
 // MARK: - 常亮 / 麦克风 / 截图
 final class KeepAwake: ObservableObject {
-    static let shared = KeepAwake()
+    static var shared = KeepAwake()
+    static let key = "keepAwake.enabled"
     @Published private(set) var on = false
     private var id: IOPMAssertionID = 0
-    func toggle() { on ? stop() : startAssertion() }
+    var defaults: UserDefaults
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+    /// 用户点按钮：切换并保存，下次启动（含 --background）按保存的状态恢复
+    func toggle() { on ? stop() : startAssertion(); defaults.set(on, forKey: Self.key) }
+    var savedOn: Bool { defaults.bool(forKey: Self.key) }
+    /// 启动时恢复；退出时 stop() 只释放断言，不改保存的状态
+    func restore() { if savedOn { startAssertion() } }
     func startAssertion() {
         guard !on else { return }
         if IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), "Mac一键优化：保持常亮" as CFString, &id) == kIOReturnSuccess { on = true }
