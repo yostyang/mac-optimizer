@@ -412,6 +412,7 @@ final class Monitor: ObservableObject {
     var dashboardShown = false { didSet { reschedule() } }
     var mainWindowVisible: () -> Bool = { true }
     var menuBarEnabled = true { didSet { reschedule() } }
+    var alertsEnabled = false { didSet { reschedule() } }
     var detail: Bool { panelOpen || (dashboardShown && mainWindowVisible()) }
     private var timer: DispatchSourceTimer?
     private let q = DispatchQueue(label: "monitor", qos: .utility)
@@ -429,7 +430,7 @@ final class Monitor: ObservableObject {
     /// 根据可见状态调整频率：面板/仪表盘可见 2 秒；只有菜单栏 5 秒；什么都不显示时停止
     func reschedule() {
         guard started else { return }
-        let want: TimeInterval = detail ? Monitor.detailInterval : (menuBarEnabled ? Monitor.lightInterval : 0)
+        let want: TimeInterval = detail ? Monitor.detailInterval : ((menuBarEnabled || alertsEnabled) ? Monitor.lightInterval : 0)
         if want == interval, timer != nil || want == 0 { return }
         timer?.cancel(); timer = nil; interval = want
         guard want > 0 else { return }
@@ -447,8 +448,8 @@ final class Monitor: ObservableObject {
         x.uptime = Readers.uptime()
         Readers.memory(into: &x)
         x.load = Readers.loadAvg()
+        tick += 1
         if full {
-            tick += 1
             let smc = SMC.shared
             if tick % 3 == 1 {   // 温度、风扇变化慢，每 3 次采样读一次 SMC
                 x.cpuTemp = smc.avgTemp(smc.cpuKeys) ?? HIDTemp.cpuDie()
@@ -460,6 +461,7 @@ final class Monitor: ObservableObject {
             x.top = Readers.topProcesses()
             if tick % 5 == 1 { Readers.disk(into: &x); Readers.battery(into: &x); x.devices = Readers.devices() }
         } else if x.diskTotalGB == 0 { Readers.disk(into: &x) }
+        if !full && alertsEnabled && tick % 6 == 1 { Readers.disk(into: &x); Readers.battery(into: &x) }
         let full2 = full
         DispatchQueue.main.async {
             self.s = x

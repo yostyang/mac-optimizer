@@ -315,11 +315,11 @@ struct TrafficCard: View {
     @ObservedObject var mon = Monitor.shared
     @State private var rangeDays = 1.0
     var body: some View {
-        Card(title: "按应用流量", icon: "arrow.up.arrow.down") {
+        Card(title: "联网应用与速率历史", icon: "arrow.up.arrow.down") {
             HStack(spacing: 10) {
                 Text("当前：" + Fmt.rate(mon.s.downBps) + " ↓ · " + Fmt.rate(mon.s.upBps) + " ↑").font(.system(size: 11, weight: .medium)).monospacedDigit()
                 Spacer()
-                Button("刷新按应用") { store.refreshApps() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("traffic.apps.run")
+                Button("刷新联网应用") { store.refreshApps() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("traffic.apps.run")
             }
             Picker("范围", selection: $rangeDays) {
                 Text("1 分钟").tag(1.0 / 1440)
@@ -333,7 +333,7 @@ struct TrafficCard: View {
                 Text("检测到 TUN 接口：总速率只按主接口统计，不重复加总 TUN 与物理接口").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if store.apps.isEmpty {
-                Text("点“刷新按应用”查看当前联网的应用（连接数口径，见下面说明）").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("点“刷新联网应用”查看当前连接数；此列表不表示应用流量大小。").font(.system(size: 11)).foregroundColor(.secondary)
             } else {
                 ForEach(store.apps.prefix(10)) { a in
                     HStack { Text(a.name).font(.system(size: 12)).lineLimit(1); Spacer(); Text("\(a.connections) 个连接").font(.system(size: 11)).foregroundColor(.secondary) }

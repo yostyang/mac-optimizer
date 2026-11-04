@@ -22,6 +22,7 @@ struct CleanRecord: Identifiable, Codable, Equatable {
     var path: String
     var size: Int64
     var trashed: Bool
+    var trashPath: String? = nil
 }
 enum CleanLogic {
     static let maxFilesPerRoot = 5000
@@ -30,11 +31,9 @@ enum CleanLogic {
     // 默认保护：系统、应用本身、用户文档类目录一律不出现在清理清单里
     static func isProtected(_ path: String) -> Bool {
         let h = home()
-        let prefixes = ["/System/", "/Library/", "/Applications/Mac一键优化.app",
-                        h + "/Documents/", h + "/Desktop/", h + "/Pictures/", h + "/Music/", h + "/Movies/"]
-        if prefixes.contains(where: { path.hasPrefix($0) }) { return true }
-        if path == h + "/Documents" || path == h + "/Desktop" { return true }
-        return false
+        let p = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
+        let roots = ["/System", "/Library", "/Applications/Mac一键优化.app"] + ["Documents", "Desktop", "Pictures", "Music", "Movies"].map { h + "/" + $0 }
+        return p == "/" || p == h || roots.contains { p == $0 || p.hasPrefix($0 + "/") }
     }
     static func isWhitelisted(_ path: String, whitelist: [String]) -> Bool {
         whitelist.contains { path == $0 || path.hasPrefix($0 + "/") }
@@ -106,6 +105,13 @@ final class CleanStore: ObservableObject {
     @Published var whitelist: [String] = []
     @Published var records: [CleanRecord] = []
     @Published var note = ""
+    @Published var trashing = false
+    @Published var failures: [String: String] = [:]
+    var moveToTrash: (URL) throws -> URL? = { url in
+        var result: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &result)
+        return result as URL?
+    }
     var whitelistURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("MacOptimizer/clean-whitelist.json")
     var recordsURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("MacOptimizer/clean-records.json")
     init() {
@@ -119,7 +125,8 @@ final class CleanStore: ObservableObject {
         try? JSONEncoder().encode(records).write(to: recordsURL)
     }
     func scan() {
-        guard !scanning else { return }
+        guard !scanning, !trashing else { return }
+        failures = [:]
         scanning = true; cancelled = false; note = ""
         DispatchQueue.global(qos: .userInitiated).async {
             let h = NSHomeDirectory()
@@ -167,7 +174,8 @@ final class CleanStore: ObservableObject {
         }
     }
     func scanLargeFiles() {
-        guard !scanning else { return }
+        guard !scanning, !trashing else { return }
+        failures = [:]
         scanning = true; cancelled = false
         DispatchQueue.global().async {
             let found = CleanLogic.largeFiles(root: NSHomeDirectory() + "/Downloads", minSize: 100 * 1_048_576, maxCount: 50, isCancelled: { self.cancelled })
@@ -176,29 +184,48 @@ final class CleanStore: ObservableObject {
         }
     }
     func trashSelected() {
-        let selected = items.filter { $0.selected }
+        guard !trashing, !scanning else { return }
+        var seen = Set<String>()
+        let selected = items.filter { $0.selected && seen.insert($0.path).inserted }
         guard !selected.isEmpty else { note = "请先勾选要清理的项"; return }
-        var done = 0
-        for it in selected {
-            var trashURL: NSURL?
-            do {
-                try FileManager.default.trashItem(at: URL(fileURLWithPath: it.path), resultingItemURL: &trashURL)
-                records.append(CleanRecord(date: Date(), path: it.path, size: it.size, trashed: true))
-                ChangeLog.shared.add(kind: .clean, title: "清理到废纸篓：" + (it.path as NSString).lastPathComponent, detail: it.path + "（" + CleanLogic.fmtSize(it.size) + "，可从废纸篓恢复）", reversible: true, restoreNote: "打开废纸篓，把该项放回原位置即可恢复")
-                done += 1
-            } catch {
-                note = "移到废纸篓失败：" + it.path + "（" + error.localizedDescription + "），其余未动"
-                break
+        trashing = true; failures = [:]; note = "正在移到废纸篓…"
+        let whitelist = self.whitelist, move = moveToTrash
+        DispatchQueue.global(qos: .userInitiated).async {
+            var completed: [CleanRecord] = [], errors: [String: String] = [:]
+            for (index, item) in selected.enumerated() {
+                let canonical = URL(fileURLWithPath: item.path).standardizedFileURL.resolvingSymlinksInPath().path
+                if CleanLogic.isProtected(item.path) || CleanLogic.isWhitelisted(item.path, whitelist: whitelist) || CleanLogic.isWhitelisted(canonical, whitelist: whitelist) {
+                    errors[item.path] = "已受保护或加入白名单，未移动"
+                } else {
+                    do {
+                        let destination = try move(URL(fileURLWithPath: item.path))
+                        completed.append(CleanRecord(date: Date(), path: item.path, size: item.size, trashed: true, trashPath: destination?.path))
+                    } catch { errors[item.path] = error.localizedDescription }
+                }
+                DispatchQueue.main.async { self.note = "正在处理 \(index + 1)/\(selected.count) 项…" }
+            }
+            DispatchQueue.main.async {
+                let paths = Set(completed.map(\.path))
+                self.items.removeAll { paths.contains($0.path) }
+                self.failures = errors; self.records += completed
+                for record in completed {
+                    ChangeLog.shared.add(kind: .clean, title: "清理到废纸篓：" + (record.path as NSString).lastPathComponent,
+                                         detail: record.path + "（" + CleanLogic.fmtSize(record.size) + "）", reversible: false,
+                                         restoreNote: "从废纸篓手动放回原位置")
+                }
+                self.note = "已移到废纸篓 \(completed.count) 项" + (errors.isEmpty ? "，可从废纸篓放回" : "；\(errors.count) 项未完成，已保留，可检查后重试")
+                self.trashing = false; self.saveMeta()
             }
         }
-        items.removeAll { $0.selected && done > 0 }
-        if done > 0 { note = "已把 \(done) 项移到废纸篓，可从废纸篓恢复"; saveMeta() }
     }
-    func addWhitelist(_ path: String) {
-        let p = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !p.isEmpty, !whitelist.contains(p) else { return }
-        whitelist.append(p); saveMeta()
+    @discardableResult func addWhitelist(_ path: String) -> Bool {
+        let expanded = (path.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        guard expanded.hasPrefix("/") else { note = "请输入完整路径，或以 ~/ 开头的路径"; return false }
+        let p = URL(fileURLWithPath: expanded).standardizedFileURL.resolvingSymlinksInPath().path
+        guard !whitelist.contains(p) else { note = "这个路径已在白名单中"; return false }
+        whitelist.append(p); saveMeta(); note = "已加入白名单"; return true
     }
+
 }
 
 struct CleanPage: View {
@@ -211,33 +238,35 @@ struct CleanPage: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("清理与卸载").font(.system(size: 24, weight: .bold))
+                        Text("清理预览").font(.system(size: 24, weight: .bold))
                         Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(.secondary)
                     }
                     Spacer()
-                    Button(store.scanning ? "扫描中…" : "开始扫描") { store.scan() }.buttonStyle(PillButton()).disabled(store.scanning).accessibilityIdentifier("clean.scan")
-                    Button("找大文件") { store.scanLargeFiles() }.buttonStyle(PillButton(filled: false)).disabled(store.scanning).accessibilityIdentifier("clean.large")
+                    Button(store.scanning ? "扫描中…" : "开始扫描") { store.scan() }.buttonStyle(PillButton()).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.scan")
+                    Button("找大文件") { store.scanLargeFiles() }.buttonStyle(PillButton(filled: false)).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.large")
                     if store.scanning { Button("取消") { store.cancelled = true }.buttonStyle(PillButton(filled: false)) }
                 }
-                if !store.note.isEmpty { Text(store.note).font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
+                if !store.note.isEmpty { Text(store.note).font(.system(size: 12)).foregroundColor(store.failures.isEmpty ? .secondary : .orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
                 Card(title: "清理清单", icon: "trash") {
                     if store.items.isEmpty {
-                        Text(store.scanning ? "正在扫描…" : "点“开始扫描”先看清单，不要直接删").font(.system(size: 11)).foregroundColor(.secondary)
+                        Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 11)).foregroundColor(.secondary)
+                        Text("“找大文件”仅查看下载目录；当前不提供应用卸载与残留识别。").font(.system(size: 10)).foregroundColor(.secondary)
                     } else {
                         Text("已选 \(store.items.filter { $0.selected }.count) 项 · 共 \(CleanLogic.fmtSize(selectedSize))").font(.system(size: 11, weight: .medium))
                         ForEach(store.items.indices, id: \.self) { i in
                             HStack(spacing: 8) {
-                                Toggle("", isOn: $store.items[i].selected).toggleStyle(.switch).controlSize(.small).labelsHidden()
+                                Toggle("", isOn: $store.items[i].selected).toggleStyle(.switch).controlSize(.small).labelsHidden().disabled(store.trashing)
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text((store.items[i].path as NSString).lastPathComponent).font(.system(size: 12, weight: .medium)).lineLimit(1)
                                     Text(store.items[i].path).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
+                                    if let error = store.failures[store.items[i].path] { Text(error).font(.system(size: 10)).foregroundColor(.orange).lineLimit(2) }
                                 }
                                 Spacer()
                                 Text(store.items[i].category).font(.system(size: 10)).foregroundColor(.secondary)
                                 Text(CleanLogic.fmtSize(store.items[i].size)).font(.system(size: 11, weight: .medium)).monospacedDigit()
                             }
                         }
-                        Button("移到废纸篓（\(store.items.filter { $0.selected }.count) 项）") { showConfirm = true }.buttonStyle(PillButton()).disabled(store.items.filter { $0.selected }.isEmpty).accessibilityIdentifier("clean.trash")
+                        Button(store.trashing ? "处理中…" : (store.failures.isEmpty ? "移到废纸篓（\(store.items.filter { $0.selected }.count) 项）" : "重试所选未完成项")) { showConfirm = true }.buttonStyle(PillButton()).disabled(store.items.filter { $0.selected }.isEmpty || store.trashing || store.scanning).accessibilityIdentifier("clean.trash")
                             .alert("移到废纸篓？", isPresented: $showConfirm) {
                                 Button("移到废纸篓", role: .destructive) { store.trashSelected() }
                                 Button("取消", role: .cancel) {}
@@ -246,14 +275,10 @@ struct CleanPage: View {
                             }
                     }
                 }
-                Card(title: "卸载应用", icon: "app.badge.checkmark") {
-                    Text("在访达里把应用拖到废纸篓后，再来这里看残留：下面是按应用名推导的常见残留路径，勾选前请先确认该应用确实已经卸载。").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Text("卸载残留示例：~/Library/Application Support/<应用名>、~/Library/Caches/<应用名>、~/Library/Preferences/<应用名>.plist（实际路径以扫描为准，不会凭空删除）").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
                 Card(title: "白名单与操作记录", icon: "shield") {
                     HStack(spacing: 8) {
                         TextField("输入要保护的路径，点添加", text: $newWhite).textFieldStyle(.roundedBorder)
-                        Button("添加白名单") { store.addWhitelist(newWhite); newWhite = "" }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("clean.whitelist.add")
+                        Button("添加白名单") { if store.addWhitelist(newWhite) { newWhite = "" } }.buttonStyle(PillButton(filled: false)).disabled(store.trashing).accessibilityIdentifier("clean.whitelist.add")
                     }
                     Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                     if store.whitelist.isEmpty { Text("暂无自定义白名单").font(.system(size: 11)).foregroundColor(.secondary) }
