@@ -145,6 +145,15 @@ struct BTCard: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 4) {
                 ForEach(items) { it in chip(it) }
             }
+            HStack {
+                let unknown = bt.devices.filter { $0.connected && $0.percent == nil }
+                if !unknown.isEmpty {
+                    Text("电量未知：" + unknown.map(\.name).joined(separator: "、")).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
+                        .help(unknown.map { $0.name + "：" + $0.reason }.joined(separator: "\n"))
+                }
+                Spacer(minLength: 4)
+                if let updated = bt.updated { Text("更新 " + updated.formatted(date: .omitted, time: .shortened)).font(.system(size: 10)).foregroundColor(.secondary) }
+            }
         }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 8) {

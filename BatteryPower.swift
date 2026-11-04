@@ -1,11 +1,3 @@
-// v2.0 电池细化：功率流向、详情、mW 榜、紧凑条（纯计算 + 界面，数据全部来自 Snapshot / EnergyStore）
-// 口径说明（界面上也要写清楚，不凑数）：
-// - 充电功率 ≈ 电压 × 电流（充电时电流为正才算，电池供电时不算充电功率）
-// - 电池供电时系统功耗 = 电池放电功率（电压 × 电流绝对值）
-// - 充电时系统功耗 = 充电器输入 − 充入电池；充电器输入读不到时，系统功耗写不可读，
-//   绝不用适配器额定功率代替实际输入，也不用显示器等分项去凑总数。
-// - 显示器等分项目前没有公开可读接口，已并入系统功耗，不单独列数字。
-// - 充满时间 = 剩余容量 ÷ 实际充电功率，是估算，充电功率一变它就变。
 import SwiftUI
 import AppKit
 
@@ -22,12 +14,15 @@ struct PowerFlow: Equatable {
     var onAC = false
     var percent: Int?
     var fullMah = 0
+    var fullyCharged = false
+    var inputNote = ""
+    var systemNote = ""
     var supplyText: String {
         guard percent != nil else { return "电池信息不可用" }
         if charging { return "正在充电" }
         if onAC {
             if dischargeWatts != nil { return "已接电源，电池正在放电" }
-            return percent == 100 ? "已充满，已接电源" : "已接电源，未充电"
+            return fullyCharged || percent == 100 ? "已充满，已接电源" : "已接电源，未充电"
         }
         return "电池供电"
     }
@@ -70,16 +65,26 @@ enum PowerFlowCalc {
         return src.map { (app: $0.key, mw: $0.value / seconds * 1000) }.sorted { $0.mw > $1.mw }.prefix(5).map { $0 }
     }
     static func fromSnapshot(_ s: Snapshot) -> PowerFlow {
-        let charge = chargeWatts(voltageV: s.batteryVoltageV, currentA: s.batteryCurrentA, charging: s.charging)
-        let discharge = dischargeWatts(voltageV: s.batteryVoltageV, currentA: s.batteryCurrentA)
-        // 充电器输入目前没有公开可读的实时接口：不编造，留 nil，界面写不可读。
-        // 系统功耗在充电时因此也是 nil，在电池供电时等于放电功率。
+        let fresh = s.batteryPowerUpdated.map { abs(Date().timeIntervalSince($0)) < 30 } ?? true
+        let current = fresh ? s.batteryCurrentA : nil
+        let charging = s.onAC && (current.map { $0 > 0 } ?? s.charging)
+        let charge = chargeWatts(voltageV: s.batteryVoltageV, currentA: current, charging: charging)
+        let discharge = dischargeWatts(voltageV: s.batteryVoltageV, currentA: current)
+        let input = fresh && s.onAC ? s.batteryInputWatts : nil
+        var system: Double?
+        if !s.onAC { system = discharge }
+        else if let input, let current {
+            let estimate = input - (charge ?? 0) + (discharge ?? 0)
+            if estimate >= 0 && current.isFinite { system = estimate }
+        }
+        let inputNote = !fresh ? "读数已过期，等待刷新" : (!s.onAC ? "电池供电，无外接输入" : (input == nil ? (s.batteryInputSource.isEmpty ? "未取得实时电源遥测" : s.batteryInputSource) : (s.batteryInputSource.isEmpty ? "电源遥测 · DC 输入" : s.batteryInputSource)))
         return PowerFlow(
-            voltageV: s.batteryVoltageV, currentA: s.batteryCurrentA,
-            chargeWatts: charge, dischargeWatts: discharge, inputWatts: nil,
-            systemWatts: systemWatts(inputWatts: nil, chargeWatts: charge, dischargeWatts: discharge, charging: s.charging),
-            adapterRatedWatts: s.batteryAdapterWatts, lowPowerMode: s.lowPowerMode,
-            charging: s.charging, onAC: s.onAC, percent: s.battery, fullMah: s.fullMah)
+            voltageV: s.batteryVoltageV, currentA: current,
+            chargeWatts: charge, dischargeWatts: discharge, inputWatts: input,
+            systemWatts: system, adapterRatedWatts: s.onAC ? s.batteryAdapterWatts : nil, lowPowerMode: s.lowPowerMode,
+            charging: charging, onAC: s.onAC, percent: s.battery, fullMah: s.fullMah,
+            fullyCharged: s.batteryFullyCharged, inputNote: inputNote,
+            systemNote: system == nil ? "功率数据不足或尚未同步" : "估算 · 按输入与电池功率计算")
     }
     /// EnergyStore 最近一小时：上一完整小时优先，否则本小时累计
     static func topMW(store: EnergyStore, now: Date) -> [(app: String, mw: Double)] {
@@ -118,11 +123,11 @@ struct BatteryCompactBar: View {
                 else { Text(flow.supplyText).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("v22.batterySupply") }
             }
             HStack(spacing: 16) {
-                Text("充电器输入：暂不提供").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("输入 " + (flow.onAC ? fmtW(flow.inputWatts) : "—")).font(.system(size: 11)).foregroundColor(.secondary)
                 Text(flow.charging ? "电池充电 \(fmtW(flow.chargeWatts))" : "电池未充电").font(.system(size: 11)).foregroundColor(.secondary)
                 Text("系统功耗 \(fmtW(flow.systemWatts))").font(.system(size: 11)).foregroundColor(.secondary)
             }
-            Text("当前不提供实时输入读数；电池供电时，系统功耗按电池放电功率显示。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(flow.inputNote + "；" + flow.systemNote).font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
