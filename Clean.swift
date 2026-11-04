@@ -232,6 +232,7 @@ struct CleanPage: View {
     @ObservedObject var store = CleanStore.shared
     @State private var newWhite = ""
     @State private var showConfirm = false
+    @State private var tab = 0
     var selectedSize: Int64 { store.items.filter { $0.selected }.reduce(0) { $0 + $1.size } }
     var body: some View {
         PageScroll {
@@ -242,15 +243,22 @@ struct CleanPage: View {
                         Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(.secondary)
                     }
                     Spacer()
+                    SegmentedTrack {
+                        Button("清理") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("clean.tab.0")
+                        Button("卸载应用") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("clean.tab.1")
+                    }
+                    if tab == 0 {
                     Button(store.scanning ? "扫描中…" : "开始扫描") { store.scan() }.buttonStyle(PillButton()).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.scan")
                     Button("找大文件") { store.scanLargeFiles() }.buttonStyle(PillButton(filled: false)).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.large")
                     if store.scanning { Button("取消") { store.cancelled = true }.buttonStyle(PillButton(filled: false)) }
+                    }
                 }
+                if tab == 1 { UninstallTab() } else {
                 if !store.note.isEmpty { Text(store.note).font(.system(size: 12)).foregroundColor(store.failures.isEmpty ? .secondary : .orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
                 Card(title: "清理清单", icon: "trash") {
                     if store.items.isEmpty {
                         Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 11)).foregroundColor(.secondary)
-                        Text("“找大文件”仅查看下载目录；当前不提供应用卸载与残留识别。").font(.system(size: 10)).foregroundColor(.secondary)
+                        Text("“找大文件”仅查看下载目录；卸载应用和残留在「卸载应用」标签。").font(.system(size: 10)).foregroundColor(.secondary)
                     } else {
                         Text("已选 \(store.items.filter { $0.selected }.count) 项 · 共 \(CleanLogic.fmtSize(selectedSize))").font(.system(size: 11, weight: .medium))
                         ForEach(store.items.indices, id: \.self) { i in
@@ -290,6 +298,7 @@ struct CleanPage: View {
                         }
                         Text("恢复办法：打开废纸篓，把对应项放回原位置").font(.system(size: 10)).foregroundColor(.secondary)
                     }
+                }
                 }
             }.padding(28)
         }

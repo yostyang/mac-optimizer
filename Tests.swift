@@ -77,6 +77,7 @@ enum MOTests {
         v21Tests()
         v22Tests()
         v23Tests()
+        v24Tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -358,6 +359,7 @@ enum MOTests {
         v15Snapshots(out)
         v16Snapshots(out)
         v23Snapshots(out)
+        v24Snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
@@ -534,8 +536,10 @@ enum MOTests {
         check(find(w.contentView!, id: "v19.alertsOn") != nil, "改动页有提醒开关（默认关闭）")
         sec("网络页双标签（v1.7）")
         if let b = find(w.contentView!, label: "网络诊断") { b.press(); check(waitUntil(2) { Nav.shared.sel == -5 }, "侧边栏打开网络诊断") } else { check(false, "找到网络诊断") }
-        if let b = find(w.contentView!, id: "net.tab.1") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 1 }, "点「测速与流量」切到第二标签") } else { check(false, "找到测速与流量标签") }
-        check(find(w.contentView!, id: "speed.run") != nil && find(w.contentView!, id: "traffic.apps.run") != nil && find(w.contentView!, id: "netinfo.refresh") != nil, "第二标签有测速、按应用、网络信息")
+        if let b = find(w.contentView!, id: "net.tab.1") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 1 }, "点「测速」切到第二标签") } else { check(false, "找到测速标签") }
+        check(find(w.contentView!, id: "speed.run") != nil, "第二标签有测速")
+        if let b = find(w.contentView!, id: "net.tab.2") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 2 }, "点「流量」切到第三标签") } else { check(false, "找到流量标签") }
+        check(find(w.contentView!, id: "netcard.refresh") != nil && find(w.contentView!, id: "traffic.range") != nil, "第三标签有按应用流量、历史、网络卡片")
         if let b = find(w.contentView!, id: "net.tab.0") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 0 }, "点「诊断」切回第一标签") } else { check(false, "找到诊断标签") }
         check(find(w.contentView!, id: "net.run") != nil, "第一标签有开始诊断")
         sec("电池页双标签（v2.0）")
@@ -544,6 +548,7 @@ enum MOTests {
         if let b = find(w.contentView!, id: "bat.tab.0") { b.press(); check(find(w.contentView!, id: "bat.alertsOn") != nil, "切回电池概览有电量提醒开关") } else { check(false, "找到电池概览标签") }
         v22UI(w)
         v23UI(w)
+        v24UI(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

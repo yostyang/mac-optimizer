@@ -4,7 +4,7 @@ set -e
 # SWIFTFLAGS：可选的额外编译参数（例如在受限沙盒里编译时传 -disable-sandbox）
 SWIFTFLAGS="${SWIFTFLAGS:-}"
 cd "$(dirname "$0")"
-SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift"
+SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift V24.swift V24View.swift V24Tests.swift"
 HSRC="ChargeCore.swift ChargeHelper.swift DNSCore.swift"
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86
@@ -25,6 +25,8 @@ else
 fi
 A="build/Mac一键优化.app"; rm -rf build; mkdir -p "$A/Contents/MacOS" "$A/Contents/Resources" "$A/Contents/Library/LaunchDaemons"
 cp MacOptimizer MacOptimizerChargeHelper "$A/Contents/MacOS/"; cp com.yost.macoptimizer.chargehelper.plist "$A/Contents/Library/LaunchDaemons/"; cp AppIcon.icns "$A/Contents/Resources/"; cp Info.plist "$A/Contents/"
+# 仓库在 iCloud 同步的「文稿」目录里时，文件提供程序会给包目录加 FinderInfo 扩展属性，codesign 会拒签；签名前清掉
+xattr -cr "$A" 2>/dev/null || true
 # 固定自签名证书：登录项、通知授权在更新后保持有效；没有证书时退回临时签名
 KC="$HOME/.filebutler-signing/signing.keychain-db"
 if [ -f "$KC" ] && [ -f "$HOME/.filebutler-signing/pass" ]; then
@@ -41,6 +43,8 @@ else
 fi
 # NODMG=1：只编译签名、不打包 DMG（测试用，受限沙盒里 hdiutil 不可用）
 if [ -n "${NODMG:-}" ]; then echo "完成：build/Mac一键优化.app（跳过 DMG）"; exit 0; fi
-mkdir -p build/dmg; cp -R "$A" build/dmg/; ln -s /Applications build/dmg/Applications
-hdiutil create -volname "Mac一键优化" -srcfolder build/dmg -ov -format UDZO "build/Mac一键优化.dmg" >/dev/null
+# 在非同步的临时目录里打包，避免 iCloud 文件提供程序给包加回 FinderInfo（codesign --strict 会判为不合规）
+STAGE=$(mktemp -d); ditto --noextattr "$A" "$STAGE/Mac一键优化.app"; xattr -cr "$STAGE/Mac一键优化.app"; ln -s /Applications "$STAGE/Applications"
+codesign --verify --strict "$STAGE/Mac一键优化.app"
+hdiutil create -volname "Mac一键优化" -srcfolder "$STAGE" -ov -format UDZO "build/Mac一键优化.dmg" >/dev/null; rm -rf "$STAGE"
 echo "完成：build/Mac一键优化.dmg"
