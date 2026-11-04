@@ -200,19 +200,19 @@ enum FixRunner {
         case let .quitApp(pid, name, mem):
             return Actions.quit(ProcInfo(id: pid, name: name, cpu: 0, memMB: mem))
         case let .closeTab(pid, owner, cpu, mem):
-            guard pid != getpid(), confirm("关闭 \(owner) 里这个占 \(Int(cpu.rounded()))% CPU 的标签页？",
+            guard pid > 1, pid != getpid(), confirm("关闭 \(owner) 里这个占 \(Int(cpu.rounded()))% CPU 的标签页？",
                                           "只结束这一个标签页：它会显示「页面已崩溃」，点刷新就能重新打开。\(owner) 本身和其他标签页不受影响。", "关闭标签页") else { return false }
             let ok = kill(pid, SIGTERM) == 0
-            if ok { CleanStats.shared.addOptimized(1); _ = mem }
+            if ok { OperationCheck.wait(until: { !OperationCheck.processExists(pid) }) { verified in if verified { CleanStats.shared.addOptimized(1) } }; _ = mem }
             Monitor.shared.sampleNow()
             return ok
         case .restartSpotlight:
             DispatchQueue.global().async { Sys.restartSpotlight() }
-            CleanStats.shared.addOptimized(1); return true
+            return true
         case .quitClaude:
             guard confirm("退出 Claude？", "会像在 Claude 里选「退出」一样正常关闭，后台虚拟机随之停止。", "退出") else { return false }
             DispatchQueue.global().async { Sys.quitClaude() }
-            CleanStats.shared.addOptimized(1); return true
+            return true
         case .displayTips:
             Nav.shared.sel = 6; UIState.shared.openMain(); return true
         }

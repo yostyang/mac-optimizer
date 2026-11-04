@@ -22,6 +22,15 @@ struct PowerFlow: Equatable {
     var onAC = false
     var percent: Int?
     var fullMah = 0
+    var supplyText: String {
+        guard percent != nil else { return "电池信息不可用" }
+        if charging { return "正在充电" }
+        if onAC {
+            if dischargeWatts != nil { return "已接电源，电池正在放电" }
+            return percent == 100 ? "已充满，已接电源" : "已接电源，未充电"
+        }
+        return "电池供电"
+    }
 }
 
 enum PowerFlowCalc {
@@ -106,14 +115,14 @@ struct BatteryCompactBar: View {
                 Spacer()
                 if flow.charging, let m = minutes { Text("预计 \(fmtMinutes(m)) 充满（估算，会变）").font(.system(size: 11)).foregroundColor(.secondary) }
                 else if flow.charging { Text("正在充电，充满时间不可读").font(.system(size: 11)).foregroundColor(.secondary) }
-                else { Text("电池供电").font(.system(size: 11)).foregroundColor(.secondary) }
+                else { Text(flow.supplyText).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("v22.batterySupply") }
             }
             HStack(spacing: 16) {
-                Text("充电器输入 \(fmtW(flow.inputWatts))").font(.system(size: 11)).foregroundColor(.secondary)
-                Text("电池充电 \(fmtW(flow.chargeWatts))").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("充电器输入：暂不提供").font(.system(size: 11)).foregroundColor(.secondary)
+                Text(flow.charging ? "电池充电 \(fmtW(flow.chargeWatts))" : "电池未充电").font(.system(size: 11)).foregroundColor(.secondary)
                 Text("系统功耗 \(fmtW(flow.systemWatts))").font(.system(size: 11)).foregroundColor(.secondary)
             }
-            Text("充电器输入读不到时写不可读，不用额定功率凑数；电池供电时系统功耗 = 电池放电功率。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("当前不提供实时输入读数；电池供电时，系统功耗按电池放电功率显示。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

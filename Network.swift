@@ -215,29 +215,101 @@ final class DNSClient: ObservableObject {
     var helperReady: () -> Bool = { ChargeClient.shared.phase == .ready }
     /// 测试注入：直接调用服务对象（模拟助手）
     var direct: ChargeHelperProtocol?
+    private var revision = 0
     private func withProxy(_ f: @escaping (ChargeHelperProtocol) -> Void, onError: @escaping (String) -> Void) {
         if let d = direct { f(d); return }
-        guard !offline else { return }
+        guard !offline else { onError("助手未连接"); return }
         let c = NSXPCConnection(machServiceName: ChargeConst.label, options: .privileged)
         c.remoteObjectInterface = NSXPCInterface(with: ChargeHelperProtocol.self)
         if #available(macOS 13.0, *) { c.setCodeSigningRequirement("identifier \"\(ChargeConst.label)\" and certificate leaf = H\"\(ChargeConst.certLeaf)\"") }
         c.resume()
-        guard let p = c.remoteObjectProxyWithErrorHandler({ e in DispatchQueue.main.async { onError(e.localizedDescription) }; c.invalidate() }) as? ChargeHelperProtocol else { return }
+        guard let p = c.remoteObjectProxyWithErrorHandler({ e in DispatchQueue.main.async { onError(e.localizedDescription) }; c.invalidate() }) as? ChargeHelperProtocol else { onError("无法创建助手连接"); c.invalidate(); return }
         f(p)
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) { c.invalidate() }
     }
     func refresh() {
-        guard direct != nil || (!offline && helperReady()) else { return }
-        withProxy({ p in p.dnsStatus { d in let s = try? JSONDecoder().decode(DNSStatus.self, from: d); DispatchQueue.main.async { self.status = s } } }, onError: { self.note = "无法连接助手：\($0)" })
+        guard !busy, direct != nil || (!offline && helperReady()) else { return }
+        revision += 1; let requestRevision = revision
+        withProxy({ proxy in proxy.dnsStatus { data in
+            DispatchQueue.main.async {
+                guard requestRevision == self.revision, !self.busy else { return }
+                self.status = try? JSONDecoder().decode(DNSStatus.self, from: data)
+            }
+        } }, onError: { error in
+            guard requestRevision == self.revision, !self.busy else { return }
+            self.note = "无法连接助手：" + error
+        })
     }
-    private func act(_ f: @escaping (ChargeHelperProtocol, @escaping (Bool, String) -> Void) -> Void, ok: String) {
-        busy = true; note = ""
-        withProxy({ p in f(p) { success, msg in DispatchQueue.main.async { self.busy = false; self.note = success ? ok : msg; self.refresh(); NetDiag.shared.lastRun = nil
-            if success { ChangeLog.shared.add(kind: .dns, title: ok, detail: "DNS 改动（经充电助手，改前已保存原设置）", reversible: ok != "已恢复原来的 DNS", restoreNote: "在“改动与提醒”页点恢复原 DNS，或在网络诊断页点恢复原 DNS") }
-        } } },
-                  onError: { self.busy = false; self.note = "无法连接助手：\($0)" })
+
+    var requestTimeout: TimeInterval = 15
+    private var actionID: UUID?
+    private func act(restoring: Bool, completion: ((Bool, String) -> Void)?) {
+        guard !busy else { completion?(false, "已有 DNS 操作正在进行，请等待核对结果"); return }
+        guard direct != nil || (!offline && helperReady()) else {
+            note = "助手尚未连接，请先到电池页检查授权"; completion?(false, note); return
+        }
+        revision += 1
+        let id = UUID(); actionID = id; busy = true; note = "正在执行并核对 DNS…"
+        func finish(_ success: Bool, _ message: String) {
+            guard self.actionID == id else { return }
+            self.actionID = nil; self.busy = false; self.note = message
+            if success {
+                NetDiag.shared.lastRun = nil
+                ChangeLog.shared.add(kind: .dns, title: message, detail: "已读取系统 DNS 并核对操作结果", reversible: !restoring,
+                                     restoreNote: "在网络诊断或改动记录中恢复原 DNS")
+            }
+            completion?(success, message)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + requestTimeout) {
+            finish(false, "未在时限内确认 DNS 结果，请刷新状态后再试")
+        }
+        withProxy({ proxy in
+            func perform(backup: [DNSServiceState]?) {
+                let reply: (Bool, String) -> Void = { success, error in
+                    DispatchQueue.main.async {
+                        guard self.actionID == id else { return }
+                        guard success else { finish(false, error.isEmpty ? "DNS 操作失败，原记录已保留" : error); return }
+                        proxy.dnsStatus { data in
+                            DispatchQueue.main.async {
+                                guard self.actionID == id else { return }
+                                guard let current = try? JSONDecoder().decode(DNSStatus.self, from: data) else {
+                                    finish(false, "操作已发起，但无法读取 DNS 结果，请刷新后核对"); return
+                                }
+                                self.status = current
+                                let verified: Bool
+                                if restoring, let backup {
+                                    verified = current.backup == nil && !backup.isEmpty && backup.allSatisfy { old in
+                                        current.services.contains { $0.service == old.service && $0.servers == old.servers }
+                                    }
+                                } else {
+                                    verified = !current.services.isEmpty && current.backup != nil && current.services.allSatisfy { $0.servers == DNSConst.ali }
+                                }
+                                finish(verified, verified ? (restoring ? "已恢复并核对原 DNS" : "已设置并核对阿里 DNS") : "操作已返回，但 DNS 状态与预期不一致，请刷新后检查")
+                            }
+                        }
+                    }
+                }
+                if restoring { proxy.restoreDNS(reply) } else { proxy.setAliDNS(reply) }
+            }
+            if restoring {
+                proxy.dnsStatus { data in
+                    let useStatus = {
+                        guard self.actionID == id else { return }
+                        guard let current = try? JSONDecoder().decode(DNSStatus.self, from: data) else {
+                            finish(false, "无法读取最新 DNS 状态，未执行恢复"); return
+                        }
+                        self.status = current
+                        guard let backup = current.backup, !backup.isEmpty else {
+                            finish(false, "没有 DNS 备份，无法恢复"); return
+                        }
+                        perform(backup: backup)
+                    }
+                    if Thread.isMainThread { useStatus() } else { DispatchQueue.main.async(execute: useStatus) }
+                }
+            } else { perform(backup: nil) }
+        }, onError: { finish(false, "无法连接助手：" + $0) })
     }
-    func setAli() { act({ $0.setAliDNS($1) }, ok: "已改为阿里 DNS 并清除了 DNS 缓存") }
-    func restore() { act({ $0.restoreDNS($1) }, ok: "已恢复原来的 DNS") }
+    func setAli(completion: ((Bool, String) -> Void)? = nil) { act(restoring: false, completion: completion) }
+    func restore(completion: ((Bool, String) -> Void)? = nil) { act(restoring: true, completion: completion) }
     var isAli: Bool { guard let s = status, !s.services.isEmpty else { return false }; return s.services.allSatisfy { $0.servers == DNSConst.ali } }
 }

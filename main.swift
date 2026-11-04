@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import UserNotifications
 
 @discardableResult
 func sh(_ cmd: String) -> String {
@@ -18,7 +19,7 @@ struct Proc { var pid: Int32 = 0; let cpu: Double; let rss: Double; let comm: St
 
 struct AppUse { let name: String; let cpu: Double; let memGB: Double; let app: NSRunningApplication }
 
-struct Issue: Identifiable { let id = UUID(); let title: String; let detail: String; let action: (() -> Void)?; var on: Bool }
+struct Issue: Identifiable { let id = UUID(); let title: String; let detail: String; let action: (() -> Void)?; var on: Bool; var verify: (() -> Bool)? = nil }
 
 struct Row: Identifiable { let id = UUID(); let icon: NSImage?; let title: String; let subtitle: String; let actionTitle: String?; let action: (() -> Void)? }
 
@@ -41,7 +42,7 @@ enum Sys {
     static let browserWords = ["Chrome", "Edge", "Safari", "Firefox", "Arc", "豆包", "Doubao", "夸克", "Quark", "浏览器", "Browser"]
     static func isBrowser(_ n: String) -> Bool { browserWords.contains { n.contains($0) } && !n.contains("工作") }
     static func isVPN(_ n: String) -> Bool { n.contains("VPN") || n.contains("鹊桥") }
-    static func quitClaude() { sh("osascript -e 'tell application \"Claude\" to quit'") }
+    static func quitClaude() { for app in NSWorkspace.shared.runningApplications where app.bundleIdentifier == "com.anthropic.claudefordesktop" { _ = app.terminate() } }
     static func restartSpotlight() { sh("killall corespotlightd helpd mds_stores") }
     static let osMajor = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
     static func openAppearance() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!) }
@@ -57,6 +58,7 @@ final class Model: ObservableObject {
     @Published var summary = ""
     @Published var log: [String] = []
     @Published var verdict: Verdict?
+    var verificationTimeout: TimeInterval = 8
 
     func scan(keepLog: Bool = false) {
         if !keepLog { log = [] }
@@ -72,32 +74,32 @@ final class Model: ObservableObject {
             let cores = Double(ProcessInfo.processInfo.activeProcessorCount)
 
             let sp = Sys.cpu(["corespotlightd", "helpd", "mds_stores"], ps)
-            if sp > 40 { pen += 15; iss.append(Issue(title: "Spotlight 索引卡住", detail: "占用 \(Int(sp))% CPU，重启它不会丢任何数据", action: Sys.restartSpotlight, on: true)) }
+            if sp > 40 { pen += 15; iss.append(Issue(title: "Spotlight 索引卡住", detail: "占用 \(Int(sp))% CPU，重启它不会丢任何数据", action: Sys.restartSpotlight, on: true, verify: { ps.filter { ["corespotlightd", "helpd", "mds_stores"].contains($0.name) }.allSatisfy { !OperationCheck.processExists($0.pid) } })) }
 
             let vm = ps.filter { $0.name == Sys.vmName }
             if !vm.isEmpty {
                 let c = vm.reduce(0) { $0 + $1.cpu }, g = vm.reduce(0) { $0 + $1.rss } / 1048576
                 let claudeOn = apps.contains { $0.name.hasPrefix("Claude") }
                 if c > 50 { pen += 20 } else { pen += 5 }
-                iss.append(Issue(title: "后台虚拟机在运行" + (claudeOn ? "（Claude）" : ""), detail: String(format: "占用 %.0f%% CPU、%.1f GB 内存；没有任务在跑就可以退出", c, g), action: claudeOn ? Sys.quitClaude : nil, on: c > 50 && claudeOn))
+                iss.append(Issue(title: "后台虚拟机在运行" + (claudeOn ? "（Claude）" : ""), detail: String(format: "占用 %.0f%% CPU、%.1f GB 内存；没有任务在跑就可以退出", c, g), action: claudeOn ? Sys.quitClaude : nil, on: c > 50 && claudeOn, verify: { !NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == "com.anthropic.claudefordesktop" } }))
             }
 
             let vpns = apps.filter { Sys.isVPN($0.name) }
             if vpns.count > 1 {
                 pen += 10
-                for v in vpns.dropFirst() { let a = v.app; iss.append(Issue(title: "多个 VPN 同时运行：\(v.name)", detail: "VPN 互相冲突容易让视频卡顿，建议只留一个", action: { _ = a.terminate() }, on: v.name.contains("Lets"))) }
+                for v in vpns.dropFirst() { let a = v.app; iss.append(Issue(title: "多个 VPN 同时运行：\(v.name)", detail: "VPN 互相冲突容易让视频卡顿，建议只留一个", action: { _ = a.terminate() }, on: v.name.contains("Lets"), verify: { a.isTerminated })) }
             }
             if ps.contains(where: { $0.comm.contains("鹊桥VPN.app/Contents/MacOS/console") }) {
-                pen += 5; iss.append(Issue(title: "鹊桥VPN 控制台窗口", detail: "网页窗口持续占用 CPU，关掉不影响 VPN 连接", action: { sh("pkill -f '鹊桥VPN.app/Contents/MacOS/console'") }, on: true))
+                pen += 5; iss.append(Issue(title: "鹊桥VPN 控制台窗口", detail: "网页窗口持续占用 CPU，关掉不影响 VPN 连接", action: { for p in ps where p.comm.contains("鹊桥VPN.app/Contents/MacOS/console") && p.pid > 1 && p.pid != getpid() { _ = kill(p.pid, SIGTERM) } }, on: true, verify: { ps.filter { $0.comm.contains("鹊桥VPN.app/Contents/MacOS/console") }.allSatisfy { !OperationCheck.processExists($0.pid) } }))
             }
 
             let browsers = apps.filter { Sys.isBrowser($0.name) }
             if browsers.count > 1 {
                 pen += 10
-                for b in browsers { let a = b.app; iss.append(Issue(title: "浏览器：\(b.name)", detail: String(format: "占用 %.1f GB 内存（同时开着 %d 个浏览器）", b.memGB, browsers.count), action: { _ = a.terminate() }, on: false)) }
+                for b in browsers { let a = b.app; iss.append(Issue(title: "浏览器：\(b.name)", detail: String(format: "占用 %.1f GB 内存（同时开着 %d 个浏览器）", b.memGB, browsers.count), action: { _ = a.terminate() }, on: false, verify: { a.isTerminated })) }
             }
             for h in apps where h.memGB > 2.5 && !Sys.isBrowser(h.name) && !h.name.contains("Grok") {
-                let a = h.app; iss.append(Issue(title: "占内存较多：\(h.name)", detail: String(format: "占用 %.1f GB 内存", h.memGB), action: { _ = a.terminate() }, on: false))
+                let a = h.app; iss.append(Issue(title: "占内存较多：\(h.name)", detail: String(format: "占用 %.1f GB 内存", h.memGB), action: { _ = a.terminate() }, on: false, verify: { a.isTerminated }))
             }
             if memFree < 20 { pen += 20 } else if memFree < 40 { pen += 8 }
             if load > cores { pen += 10 }
@@ -106,7 +108,8 @@ final class Model: ObservableObject {
                 pen += days >= 14 ? 8 : 5
                 iss.append(Issue(title: "系统已连续运行 \(days) 天", detail: String(format: "WindowServer 当前占用 %.0f%% CPU，跑久了会让鼠标、视频变卡，找时间重启一次最有效", ws), action: nil, on: false))
             }
-            let s = String(format: "开机 %d 天 · 负载 %.1f · 内存可用 %d%%", days, load, memFree)
+            var memory = Snapshot(); Readers.memory(into: &memory)
+            let s = String(format: "开机 %d 天 · 负载 %.1f · 内存压力：%@", days, load, Fmt.pressure(memory.memPressure).0)
             let v = Diagnosis.make(Diagnosis.input(ps, memFreePct: memFree, load: load))
             DispatchQueue.main.async {
                 self.issues = iss; self.score = max(0, 100 - pen); self.summary = s; self.verdict = v; self.phase = .done
@@ -114,25 +117,39 @@ final class Model: ObservableObject {
         }
     }
 
-    /// 结论旁边的处理按钮
+    /// 用户确认后执行，并等待进程状态核验，不把发出请求当成成功。
     func apply(_ f: Fix) {
-        guard FixRunner.run(f) else { return }
-        if case .displayTips = f { return }
+        guard phase != .fixing else { return }
+        if case .displayTips = f { _ = FixRunner.run(f); return }
         phase = .fixing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { self.log = ["✔ 已处理：" + (f.title ?? "").replacingOccurrences(of: "…", with: "")]; self.scan(keepLog: true) }
+        if !FixRunner.perform(f, completion: { _, message in self.log = [message]; self.scan(keepLog: true) }) { phase = .done }
     }
 
     func fix() {
-        let acts = issues.filter { $0.on }.compactMap { i -> (String, () -> Void)? in
-            guard let a = i.action else { return nil }; return (i.title, a) }
-        phase = .fixing
-        DispatchQueue.global().async {
-            for (_, a) in acts { a() }
-            Thread.sleep(forTimeInterval: 3)
-            CleanStats.shared.addOptimized(acts.count)
-            DispatchQueue.main.async { self.log = acts.map { "✔ 已处理：\($0.0)" }; self.scan(keepLog: true) }
+        guard phase != .fixing else { return }
+        let selected = issues.filter { $0.on && $0.action != nil }
+        guard !selected.isEmpty, FixRunner.confirm("处理选中的 \(selected.count) 项？", selected.map(\.title).joined(separator: "、") + "。应用只会正常退出，未保存内容可能阻止退出。", "处理") else { return }
+        phase = .fixing; log = []
+        func next(_ index: Int) {
+            guard index < selected.count else { self.scan(keepLog: true); return }
+            let issue = selected[index]
+            DispatchQueue.global(qos: .userInitiated).async {
+                issue.action?()
+                DispatchQueue.main.async {
+                    guard let verify = issue.verify else {
+                        self.log.append("已发起：" + issue.title + "，请手动核对结果"); next(index + 1); return
+                    }
+                    OperationCheck.wait(timeout: self.verificationTimeout, until: verify) { done in
+                        self.log.append(OperationCheck.message(title: issue.title, verified: done))
+                        if done { CleanStats.shared.addOptimized(1) }
+                        next(index + 1)
+                    }
+                }
+            }
         }
+        next(0)
     }
+
 }
 
 enum Loaders {
@@ -258,13 +275,13 @@ struct Sidebar: View {
                 item(-3, "battery.75", "电池")
                 item(-4, "display", "显示器")
                 item(-5, "network", "网络诊断")
-                item(-6, "trash", "清理与卸载")
+                item(-6, "trash", "清理预览")
                 item(-7, "list.clipboard", "改动与提醒")
                 Text("工具").font(.system(size: 10, weight: .semibold)).opacity(0.45).padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
                 ForEach(features) { f in item(f.id, f.icon, f.title) }
             }.padding(.horizontal, 8)
             Spacer()
-            Label("不会删除你的任何文件", systemImage: "lock.shield").font(.system(size: 10)).opacity(0.55).padding(16)
+            Label("清理先预览，确认后进废纸篓", systemImage: "lock.shield").font(.system(size: 10)).opacity(0.55).padding(16)
         }
         .foregroundColor(.white)
         .frame(width: 212).frame(maxHeight: .infinity)
@@ -369,20 +386,20 @@ struct Overview: View {
     @ObservedObject var mon: Monitor
     var body: some View {
         let s = mon.s
-        let v = (load: s.load[0], cores: Double(ProcessInfo.processInfo.activeProcessorCount), memFree: Int((1 - s.memFraction) * 100), days: Int(s.uptime / 86400))
+        let v = (load: s.load[0], cores: Double(ProcessInfo.processInfo.activeProcessorCount), days: Int(s.uptime / 86400))
         PageScroll {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("概览").font(.system(size: 24, weight: .bold))
-                    Text("下面的数字每 5 秒自动刷新（读系统接口，几乎不占资源）").font(.system(size: 12)).foregroundColor(.secondary)
+                    Text("状态自动刷新，详细指标可在实时监控中查看").font(.system(size: 12)).foregroundColor(.secondary)
                 }
                 HStack(spacing: 14) {
                     MetricCard(icon: "cpu", title: "CPU 负载", value: String(format: "%.1f", v.load),
                                note: "\(Int(v.cores)) 核 · " + (v.load > v.cores ? "偏高" : "正常"), frac: v.load / max(1, v.cores),
                                color: v.load > v.cores ? .orange : accent2)
-                    MetricCard(icon: "memorychip", title: "内存可用", value: "\(v.memFree)%",
-                               note: v.memFree < 20 ? "很紧张" : (v.memFree < 40 ? "一般" : "充足"), frac: Double(100 - v.memFree) / 100,
-                               color: v.memFree < 20 ? .red : (v.memFree < 40 ? .orange : accent))
+                    MetricCard(icon: "memorychip", title: "内存压力", value: Fmt.pressure(s.memPressure).0,
+                               note: String(format: "已用 %.1f / %.0f GB", s.memUsedGB, s.memTotalGB), frac: s.memFraction,
+                               color: Fmt.pressure(s.memPressure).1)
                     MetricCard(icon: "clock", title: "连续运行", value: "\(v.days) 天",
                                note: v.days >= 14 ? "跑太久了，有空重启一次" : "正常", frac: Double(v.days) / 14,
                                color: v.days >= 14 ? .orange : good)
@@ -399,6 +416,7 @@ struct ToolPage: View {
     let feature: Feature
     @State private var rows: [Row] = []
     @State private var loading = true
+    @State private var actionNote = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center) {
@@ -409,6 +427,7 @@ struct ToolPage: View {
                 Spacer()
                 Button { loading = true; reload() } label: { Label("刷新", systemImage: "arrow.clockwise") }.buttonStyle(PillButton(filled: false))
             }
+            if !actionNote.isEmpty { Text(actionNote).font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
             if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if rows.isEmpty {
                 VStack(spacing: 10) {
@@ -431,9 +450,17 @@ struct ToolPage: View {
                                 }
                                 Spacer()
                                 if let t = r.actionTitle, let act = r.action {
-                                    Button(t) { let isQuit = t.contains("退出"); let memMB = isQuit ? (Double(r.subtitle.components(separatedBy: "内存 ").last?.components(separatedBy: " GB").first ?? "") ?? Double(r.subtitle.components(separatedBy: "占用 ").last?.components(separatedBy: " GB").first ?? "") ?? 0) * 1024 : 0
-                                        DispatchQueue.global().async { act(); if isQuit { CleanStats.shared.addQuit(memMB: memMB) } else { CleanStats.shared.addOptimized(1) }; DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { reload() } } }
-                                        .buttonStyle(PillButton(filled: false))
+                                    Button(t) {
+                                        guard FixRunner.confirm(t + "？", r.title + "。操作后会重新读取列表；未确认的结果不会计入优化统计。", t) else { return }
+                                        actionNote = "正在执行：" + r.title
+                                        DispatchQueue.global().async {
+                                            act()
+                                            DispatchQueue.main.async {
+                                                actionNote = "已发起：" + r.title + "，请核对刷新后的状态"
+                                                reload()
+                                            }
+                                        }
+                                    }.buttonStyle(PillButton(filled: false))
                                 }
                             }.padding(.horizontal, 16).padding(.vertical, 11)
                             if idx < rows.count - 1 { Divider().padding(.leading, 58) }
@@ -513,7 +540,7 @@ struct RootView: View {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     var window: NSWindow!
     func applicationDidFinishLaunching(_ n: Notification) {
         let args = CommandLine.arguments
@@ -536,9 +563,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async { w.contentView = NSView(); if UIState.shared.menuBar { NSApp.setActivationPolicy(.accessory) } }
         }
         UIState.shared.openMain = { [weak self] in self?.showMain() }
-        mon.onSample = { BatteryAlerts.shared.handle($0) }
+        mon.onSample = { BatteryAlerts.shared.handle($0); V19Store.shared.handle($0) }
         EnergyTracker.shared.onDrain = { BatteryAlerts.shared.drain($0, $1) }
         if args.contains("--snapshot") || args.contains("--uitest") { w.contentView = NSHostingView(rootView: RootView()); MOTests.runUI(args: args, window: w); return }
+        UNUserNotificationCenter.current().delegate = self
+        mon.alertsEnabled = V19Store.shared.settings.alertsOn
         mon.start()
         DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
@@ -549,6 +578,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if args.contains("--open-panel"), let b = StatusBar.shared.item?.button { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { StatusBar.shared.show(from: b) } }
     }
     var subs: Set<AnyCancellable> = []
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list])
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            if let page = response.notification.request.content.userInfo["page"] as? Int, [-2, -6, -3].contains(page) { Nav.shared.sel = page }
+            self.showMain(); completionHandler()
+        }
+    }
     func showMain() {
         NSApp.setActivationPolicy(.regular)
         if !(window.contentView is NSHostingView<RootView>) { window.contentView = NSHostingView(rootView: RootView()) }

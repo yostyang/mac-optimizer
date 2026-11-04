@@ -51,10 +51,10 @@ struct BatteryPage: View {
         let top = PowerFlowCalc.topMW(store: en.store, now: now)
         return VStack(alignment: .leading, spacing: 14) {
             Card(title: "功率流向", icon: "bolt.fill") {
-                HStack(spacing: 6) { ClayDot(); Text(flow.charging ? "正在充电" : (flow.onAC ? "已接电源" : "电池供电")).font(.system(size: 11)).foregroundColor(.secondary) }
+                HStack(spacing: 6) { ClayDot(); Text(flow.supplyText).font(.system(size: 11)).foregroundColor(.secondary) }
                 HStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 2) { Text("充电器输入").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.inputWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
-                    VStack(alignment: .leading, spacing: 2) { Text("充入电池").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.chargeWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    VStack(alignment: .leading, spacing: 2) { Text("充电器输入").font(.system(size: 11)).foregroundColor(.secondary); Text("暂不提供").font(.system(size: 20, weight: .semibold)).monospacedDigit() }
+                    VStack(alignment: .leading, spacing: 2) { Text("充入电池").font(.system(size: 11)).foregroundColor(.secondary); Text(flow.charging ? fmtW(flow.chargeWatts) : "未充电").font(.system(size: 20, weight: .semibold)).monospacedDigit() }
                     VStack(alignment: .leading, spacing: 2) { Text("系统功耗").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.systemWatts)).font(.system(size: 20, weight: .semibold)).monospacedDigit() }
                     Spacer()
                 }

@@ -1,4 +1,4 @@
-// v1.9 测试：提醒防抖、磁盘与电池阈值、改动记录、自动执行最小版（不发真实通知、不删文件）
+// v1.9 测试：提醒防抖、磁盘与电池阈值、改动记录（不发真实通知、不删文件）
 import SwiftUI
 import AppKit
 
@@ -19,7 +19,7 @@ extension MOTests {
         check(!AlertCheck.batteryHealthDrop(oldHealth: nil, newHealth: 79), "读不到旧值不乱提醒")
         check(!AlertCheck.debounceChanged(true, lastValue: false, stableCount: 1, required: 3), "阈值附近只变一次不算真正变化")
         check(AlertCheck.debounceChanged(true, lastValue: false, stableCount: 3, required: 3), "连续 3 次同值才算变化")
-        sec("改动记录与自动执行")
+        sec("改动记录")
         let log = ChangeLog()
         log.records = []
         log.add(kind: .clean, title: "清理测试", detail: "测试路径", reversible: true, restoreNote: "从废纸篓恢复")
@@ -27,12 +27,6 @@ extension MOTests {
         let r = log.records[0]
         log.remove(r)
         check(log.records.isEmpty, "记录可删除")
-        check(V19Settings().alertsOn == false && V19Settings().autoTrashTemp == false, "提醒和自动执行默认关闭")
-        var s = V19Store()
-        s.settings.autoTrashTemp = true
-        let items = [CleanItem(category: "缓存", path: "/tmp/a", size: 100), CleanItem(category: "安装包", path: "/tmp/b.dmg", size: 100)]
-        check(s.autoCandidates(items: items).count == 1, "自动执行只认缓存和日志类")
-        s.settings.autoTrashTemp = false
-        check(s.autoCandidates(items: items).isEmpty, "自动执行开关关闭时不自动认领")
+        check(V19Settings().alertsOn == false, "异常提醒默认关闭")
     }
 }

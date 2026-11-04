@@ -108,10 +108,10 @@ enum Actions {
         return a.runModal() == .alertFirstButtonReturn
     }
     @discardableResult static func quit(_ p: ProcInfo) -> Bool {
-        guard p.id != getpid(), confirmQuit(p) else { return false }
+        guard p.id > 1, p.id != getpid(), confirmQuit(p) else { return false }
         let ok: Bool
         if let app = NSRunningApplication(processIdentifier: p.id) { ok = app.terminate() } else { ok = kill(p.id, SIGTERM) == 0 }
-        if ok { CleanStats.shared.addQuit(memMB: p.memMB) }
+        if ok { OperationCheck.wait(until: { !OperationCheck.processExists(p.id) }) { verified in if verified { CleanStats.shared.addQuit(memMB: p.memMB) } } }
         Monitor.shared.sampleNow()
         return ok
     }
@@ -244,6 +244,7 @@ enum IconCache {
 }
 struct ProcList: View {
     @ObservedObject var m: Monitor
+    @ObservedObject var feedback = OperationFeedback.shared
     var limit = 5
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -259,13 +260,14 @@ struct ProcList: View {
                     Text(Fmt.mem(p.memMB)).font(.system(size: 10)).foregroundColor(.secondary).monospacedDigit().frame(width: 52, alignment: .trailing)
                     let f = ProcActions.fix(for: p)
                     if let t = f.short {
-                        Button(t) { DispatchQueue.main.async { FixRunner.run(f) } }
+                        Button(t) { DispatchQueue.main.async { FixRunner.perform(f) } }
                             .buttonStyle(.plain).font(.system(size: 10, weight: .medium)).foregroundColor(accent)
                             .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(accent.opacity(0.10)))
-                            .frame(width: 44).help(f.title ?? "").accessibilityIdentifier("proc.fix.\(p.id)")
+                            .disabled(feedback.busy).frame(width: 44).help(f.title ?? "").accessibilityIdentifier("proc.fix.\(p.id)")
                     } else { Color.clear.frame(width: 44, height: 1) }
                 }
             }
+            if !feedback.note.isEmpty { Text(feedback.note).font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
         }.padding(11).background(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.06), radius: 10, y: 4))
     }
 }
@@ -392,7 +394,7 @@ struct PanelContent: View {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(LinearGradient(colors: [accent2, accent, Color(red: 0.36, green: 0.22, blue: 0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)))
             MetricTiles(m: m)
             Button { Nav.shared.sel = -5; Nav.shared.netTab = 1; UIState.shared.openMain() } label: {
-                HStack { Image(systemName: "arrow.up.arrow.down"); Text("查看按应用流量").font(.system(size: 12, weight: .medium)); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)) }
+                HStack { Image(systemName: "arrow.up.arrow.down"); Text("查看联网应用").font(.system(size: 12, weight: .medium)); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)) }
                     .foregroundColor(accent).padding(.horizontal, 12).padding(.vertical, 8)
             }.buttonStyle(.plain).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(accent.opacity(0.08))).accessibilityIdentifier("panel.traffic")
             BatteryTile(s: s)

@@ -75,6 +75,7 @@ enum MOTests {
         v19Tests()
         v20Tests()
         v21Tests()
+        v22Tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -358,7 +359,9 @@ enum MOTests {
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
-            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes")] {
+            var powerSnapshot = fixture(); powerSnapshot.charging = false; powerSnapshot.onAC = true
+            powerSnapshot.batteryVoltageV = 12.8; powerSnapshot.batteryCurrentA = 0
+            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes"), (AnyView(BatteryPage(m: mon).powerTab(powerSnapshot)), "power-paused")] {
                 let host = NSHostingView(rootView: view.frame(width: Layout.idealSize.width - 212, height: Layout.idealSize.height).background(pageBG))
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
@@ -523,7 +526,7 @@ enum MOTests {
         v15UI(w)
         v16UI(w)
         sec("清理与改动页入口（v1.8 / v1.9）")
-        if let b = find(w.contentView!, label: "清理与卸载") { b.press(); check(waitUntil(2) { Nav.shared.sel == -6 }, "侧边栏打开清理与卸载") } else { check(false, "找到清理与卸载") }
+        if let b = find(w.contentView!, label: "清理预览") { b.press(); check(waitUntil(2) { Nav.shared.sel == -6 }, "侧边栏打开清理预览") } else { check(false, "找到清理预览") }
         check(find(w.contentView!, id: "clean.scan") != nil, "清理页有开始扫描按钮")
         if let b = find(w.contentView!, label: "改动与提醒") { b.press(); check(waitUntil(2) { Nav.shared.sel == -7 }, "侧边栏打开改动与提醒") } else { check(false, "找到改动与提醒") }
         check(find(w.contentView!, id: "v19.alertsOn") != nil, "改动页有提醒开关（默认关闭）")
@@ -537,6 +540,7 @@ enum MOTests {
         if let b = find(w.contentView!, label: "电池") { b.press(); check(waitUntil(2) { Nav.shared.sel == -3 }, "侧边栏打开电池页") } else { check(false, "找到电池") }
         if let b = find(w.contentView!, id: "bat.tab.1") { b.press(); check(find(w.contentView!, id: "bat.lowpower.settings") != nil, "功率标签有打开系统电源设置") } else { check(false, "找到功率与能耗标签") }
         if let b = find(w.contentView!, id: "bat.tab.0") { b.press(); check(find(w.contentView!, id: "bat.alertsOn") != nil, "切回电池概览有电量提醒开关") } else { check(false, "找到电池概览标签") }
+        v22UI(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")
