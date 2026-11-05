@@ -516,7 +516,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
 .fx b{display:block;font-size:14px;margin-bottom:4px;color:var(--ink)}
 .fx span{font-size:12.6px;line-height:1.6;color:var(--mute)}
 .fx i{font-style:normal;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;margin-right:7px;font-size:11px;font-weight:700;background:rgba(109,99,245,.3);color:#d9d6ff;vertical-align:1px}
-.actions-shot{margin:16px auto 0;max-width:400px;padding:6px;border-radius:18px;background:linear-gradient(160deg,rgba(109,99,245,.55),rgba(74,168,248,.35));box-shadow:0 0 30px -6px rgba(109,99,245,.7)}
+.actions-shot{margin:16px auto 0;max-width:400px;padding:6px;border-radius:18px;background:rgba(120,120,140,.14);border:1px solid rgba(140,140,160,.18);box-shadow:0 12px 30px -12px rgba(0,0,0,.35)}
 .actions-shot img{border-radius:13px}
 .actions-cap{text-align:center;font-size:12px;color:var(--mute);margin-top:10px}
 .metrics{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
@@ -606,7 +606,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
   <!-- ============ HERO ============ -->
   <section class="hero">
     <div class="hero-inner">
-      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">v2.3</span></span></div>
+      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">v2.5</span></span></div>
       <h1>
         <span class="line rise" style="--d:.12s" data-i="h1a">不用重启，也能让</span>
         <span class="line rise" style="--d:.2s"><span data-i="h1b">卡顿的 Mac 重新</span> <span class="rot" id="rot"><span>跟手</span></span></span>
@@ -619,7 +619,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </a>
         <a class="btn btn-ghost" href="#core" data-i="cta2">看看它能做什么</a>
       </div>
-      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.3 <i>·</i> 开源免费</div>
+      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.5 <i>·</i> 开源免费</div>
     </div>
 
     <!-- app window mockup -->
@@ -686,7 +686,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         <div class="rv">
           <div class="eyebrow"><span class="dotp"></span><span data-i="mb_eb">菜单栏</span></div>
           <h2 data-i="mb_h2">常驻状态栏，<br>常用操作就在手边</h2>
-          <p class="lead" data-i="mb_p">菜单栏图标可显示 CPU、健康分或电池电量。展开后查看指标和进程，底部有截图、麦克风、常亮、擦屏、充电上限与接显示器模式。</p>
+          <p class="lead" data-i="mb_p">菜单栏图标可显示 CPU、健康分或电池电量。面板是紧凑列表：一行结论、指标与迷你曲线、带开关的快捷操作。↑↓ 选进程，↵ 处理，⌘K 看更多操作。</p>
           <div class="mb"><div class="mb-bar"><span class="on" data-i="mb_cpu">CPU 23%</span><span data-i="mb_score">♡ 健康分 100</span><span class="batt"><b></b>76</span></div></div>
           <div class="fx">
             <div><b><i>1</i><span data-i="fx1t">截图</span></b><span data-i="fx1d">直接打开系统的「截屏」工具，截图、录屏都行。</span></div>
@@ -696,9 +696,9 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
           </div>
         </div>
         <div class="glass rv" style="--d:.1s">
-          <div class="panel-shot"><img src="panel-dark-2x.png" width="760" height="1685" alt="菜单栏面板真实截图" loading="lazy"></div>
-          <div class="actions-shot"><img src="panel-actions-2x.png" width="760" height="215" alt="面板底部的四个功能" loading="lazy"></div>
-          <div class="actions-cap" data-i="mb_cap">↑ 菜单栏提供截图、麦克风、常亮、擦屏等快捷操作</div>
+          <div class="panel-shot"><img src="panel-dark-2x.png" width="760" height="1314" alt="菜单栏面板真实截图" loading="lazy"></div>
+          <div class="actions-shot"><img src="panel-actions-2x.png" width="760" height="376" alt="面板里的快捷操作列表" loading="lazy"></div>
+          <div class="actions-cap" data-i="mb_cap">↑ 六个快捷操作改成列表项，带开关状态和快捷键提示</div>
         </div>
       </div>
     </div>
@@ -710,9 +710,9 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
       <div class="sec-head center rv">
         <div class="live"><i></i><span data-i="lv_tag">LIVE</span></div>
         <h2 data-i="lv_h2">实时监控，一眼看清</h2>
-        <p class="lead" data-i="lv_p">CPU、GPU、内存、磁盘、网络、风扇、电池和高占用进程放在同一个页面。窗口可见时每 2 秒刷新，关掉窗口自动降频，监控本身几乎不占资源。</p>
+        <p class="lead" data-i="lv_p">CPU、GPU、内存、磁盘、网络、风扇、电池和高占用进程放在同一个页面。顶部搜索栏能搜页面、操作和进程；⌘K 列出选中项的全部操作，⌥Space 可在任何地方唤起命令面板。窗口可见时每 2 秒刷新，关掉窗口自动降频。</p>
         <div class="metrics" style="justify-content:center">
-          <span data-i="lv_m1">CPU 占用 · 温度 · 负载</span><span data-i="lv_m2">GPU 占用 · 温度</span><span data-i="lv_m3">内存压力 · 交换</span><span data-i="lv_m4">磁盘可用空间</span><span data-i="lv_m5">网络上下行 · 代理</span><span data-i="lv_m6">风扇转速</span><span data-i="lv_m7">电池 · 健康度 · 外设电量</span><span data-i="lv_m8">高占用进程</span>
+          <span data-i="lv_m1">CPU 占用 · 温度 · 负载</span><span data-i="lv_m2">GPU 占用 · 温度</span><span data-i="lv_m3">内存压力 · 交换</span><span data-i="lv_m4">磁盘可用空间</span><span data-i="lv_m5">网络上下行 · 代理</span><span data-i="lv_m6">风扇转速</span><span data-i="lv_m7">电池 · 健康度 · 外设电量</span><span data-i="lv_m8">高占用进程</span><span data-i="lv_m9">⌘K 操作 · 全局快捷键</span>
         </div>
       </div>
       <div class="glass rv" style="margin-top:48px;--d:.1s"><img src="dashboard-dark-2x.png" width="1800" height="1190" alt="实时监控页真实截图" loading="lazy"></div>
@@ -1019,7 +1019,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </a>
         <a class="btn btn-ghost" href="https://github.com/yostyang/mac-optimizer" data-i="fi_gh">在 GitHub 上看源码</a>
       </div>
-      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.3 <i>·</i> 开源免费</div>
+      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.5 <i>·</i> 开源免费</div>
     </div>
   </section>
 
@@ -1049,12 +1049,12 @@ document.querySelectorAll("[data-i]").forEach(function(e){ ZH[e.dataset.i] = e.i
 var EN = {
   name:"Mac Optimizer",
   nav_why:"Why", nav_core:"Core", nav_fn:"Features", nav_safe:"Safety", nav_dl:"Download",
-  badge_b:"Open source · Free", badge_a:"v2.3",
+  badge_b:"Open source · Free", badge_a:"v2.5",
   h1a:"No restart needed. Make", h1b:"your laggy Mac feel",
   sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
   cta1:'Download for free<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
   cta2:"See what it does",
-  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.3 <i>·</i> Free &amp; open source",
+  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.5 <i>·</i> Free &amp; open source",
   scroll:"Scroll",
   chip2:"2 issues fixed",
   w_title:"Mac Optimizer", w_score:"Health", w_found:"3 issues you can fix", w_fix:"Fix selected (2)",
@@ -1106,16 +1106,16 @@ var EN = {
   f8t:"Network diagnostics", f8d:"Check latency, packet loss and DNS, with TCP connectivity context under VPN/TUN. Run download/upload tests and view total traffic history and per-app connection counts.",
   f9t:"Bluetooth battery", f9d:"Battery levels for mice, keyboards, headphones and remotes: system readings, AirPods (left, right, case) and the standard BLE battery service used by Logitech MX and others.",
   mb_eb:"Menu bar", mb_h2:"Always in your menu bar,<br>with handy quick actions",
-  mb_p:"Show CPU, health score or battery in the menu bar. Open the adaptive panel for metrics and processes, plus screenshots, microphone, keep-awake, clean-screen, charge-limit and dock-mode controls.",
-  mb_cap:"↑ Menu-bar shortcuts include Screenshot, Microphone, Keep awake and Clean screen",
+  mb_p:"Show CPU, health score or battery in the menu bar. The panel is a compact list: one-line verdict, metrics with sparklines, and quick actions with switches. Use ↑↓ to pick a process, ↵ to act, ⌘K for more.",
+  mb_cap:"↑ Six quick actions as list rows, with on/off state and shortcut hints",
   mb_cpu:"CPU 23%", mb_score:"♡ Health 100",
   fx1t:"Screenshot", fx1d:"Opens the macOS Screenshot tool for captures and screen recordings.",
   fx2t:"Microphone", fx2d:"Mute or unmute the system microphone in one click, and see at a glance whether it's off.",
   fx3t:"Keep awake", fx3d:"Stops your Mac from sleeping or dimming during long tasks or presentations. Click again to turn it off.",
   fx4t:"Clean screen", fx4d:"Turns every display black for 60 seconds so you can wipe the screen without clicking anything.",
   lv_tag:"LIVE", lv_h2:"Live monitoring at a glance",
-  lv_p:"CPU, GPU, memory, disk, network, fans, battery and the busiest processes on one page. It refreshes every 2 seconds while the window is visible and slows down when it's closed, so monitoring costs almost nothing.",
-  lv_m1:"CPU usage · temp · load", lv_m2:"GPU usage · temp", lv_m3:"Memory pressure · swap", lv_m4:"Free disk space", lv_m5:"Network up/down · proxy", lv_m6:"Fan speed", lv_m7:"Battery · health · accessories", lv_m8:"Top processes",
+  lv_p:"CPU, GPU, memory, disk, network, fans, battery and the busiest processes on one page. The top search finds pages, actions and processes; ⌘K lists every action for the selection; ⌥Space opens the command palette anywhere. Refreshes every 2 seconds while visible.",
+  lv_m1:"CPU usage · temp · load", lv_m2:"GPU usage · temp", lv_m3:"Memory pressure · swap", lv_m4:"Free disk space", lv_m5:"Network up/down · proxy", lv_m6:"Fan speed", lv_m7:"Battery · health · accessories", lv_m8:"Top processes", lv_m9:"⌘K actions · global hotkey",
   md_eb:"Appearance", md_h2:"Looks great day and night",
   md_p:"Follows your system's light or dark mode automatically, with contrast tuned for both on every page. Drag the slider to compare the same page.",
   md_l:"☀︎ Light mode", md_d:"Dark mode ☾", md_l2:"Light mode", md_d2:"Dark mode",

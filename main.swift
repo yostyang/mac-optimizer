@@ -197,24 +197,36 @@ enum Loaders {
     }
 }
 
-// MARK: - 视觉风格（v2.0 修订：颜色改回 v1.9 原配色，陶土橙不再作主色；圆角/动效/渐隐等非颜色优化保留）
-let accent = Color(red: 0.42, green: 0.36, blue: 0.98)
-let accent2 = Color(red: 0.18, green: 0.70, blue: 0.96)
-let good = Color(red: 0.16, green: 0.72, blue: 0.52)
+// MARK: - 视觉风格（v2.5：中性灰阶 + 品牌紫）
+// 品牌紫取自 App 图标那道弧线（浅色 #6B5CFA，深色提亮到 #7C6BFF，保证深色下按钮底色仍压得住白字）。
+// 文字用的紫单独一档：深色下用更浅的 #A99BFF，避免对比度不足。
+let accent = dyn(NSColor(srgbRed: 0.42, green: 0.36, blue: 0.98, alpha: 1),
+                 NSColor(srgbRed: 0.486, green: 0.42, blue: 1.0, alpha: 1))
+let accentText = dyn(NSColor(srgbRed: 0.357, green: 0.294, blue: 0.910, alpha: 1),
+                     NSColor(srgbRed: 0.663, green: 0.608, blue: 1.0, alpha: 1))
+/// 青蓝色只留给图表的数据线，不再和品牌紫抢眼
+let accent2 = dyn(NSColor(srgbRed: 0.18, green: 0.70, blue: 0.96, alpha: 1),
+                  NSColor(srgbRed: 0.30, green: 0.76, blue: 1.0, alpha: 1))
+/// 状态色单独一套：绿 / 橙 / 红只表示正常、注意、危险
+let good = dyn(NSColor(srgbRed: 0.055, green: 0.624, blue: 0.431, alpha: 1),
+               NSColor(srgbRed: 0.204, green: 0.827, blue: 0.600, alpha: 1))
+let warn = dyn(NSColor(srgbRed: 0.698, green: 0.416, blue: 0.0, alpha: 1),
+               NSColor(srgbRed: 1.0, green: 0.702, blue: 0.251, alpha: 1))
+let bad = dyn(NSColor(srgbRed: 0.851, green: 0.231, blue: 0.231, alpha: 1),
+              NSColor(srgbRed: 1.0, green: 0.420, blue: 0.420, alpha: 1))
 func dyn(_ light: NSColor, _ dark: NSColor) -> Color {
     Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .vibrantDark, .aqua, .vibrantLight]).map { [.darkAqua, .vibrantDark].contains($0) } == true ? dark : light })
 }
-/// 页面和卡片背景随系统外观切换（浅色 / 深色），v1.9 原值
-let pageBG = dyn(NSColor(red: 0.958, green: 0.960, blue: 0.978, alpha: 1), NSColor(red: 0.105, green: 0.108, blue: 0.135, alpha: 1))
-let cardBG = dyn(.white, NSColor(red: 0.165, green: 0.168, blue: 0.200, alpha: 1))
+/// 页面和卡片背景：中性灰阶，深色接近图标的深蓝黑
+let pageBG = DS.window
+let cardBG = DS.card
 
 struct CardBG: ViewModifier {
     func body(content: Content) -> some View {
         content.background(
-            RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG)
-                .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
+            RoundedRectangle(cornerRadius: DS.r.card, style: .continuous).fill(DS.card)
         )
-        .overlay(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous).strokeBorder(DS.border, lineWidth: 1))
     }
 }
 extension View { func card() -> some View { modifier(CardBG()) } }
@@ -222,70 +234,14 @@ extension View { func card() -> some View { modifier(CardBG()) } }
 struct PillButton: ButtonStyle {
     var filled = true
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 13, weight: .semibold))
-            .foregroundColor(filled ? .white : accent)
-            .padding(.horizontal, 18).padding(.vertical, 9)
-            .background(Capsule().fill(filled ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(accent.opacity(0.10))))
-            .scaleEffect(configuration.isPressed ? CDS.pressScale : 1)
-            .opacity(configuration.isPressed ? 0.75 : 1)
-    }
-}
-
-// MARK: - 侧边栏
-struct Feature: Identifiable { let id: Int; let icon: String; let title: String; let sub: String }
-let features = [
-    Feature(id: 0, icon: "chart.bar.xaxis", title: "资源排行", sub: "看看谁最占内存和 CPU"),
-    Feature(id: 1, icon: "power", title: "开机启动", sub: "关掉不需要的开机自启"),
-    Feature(id: 2, icon: "globe", title: "浏览器", sub: "同时开太多浏览器会拖慢系统"),
-    Feature(id: 3, icon: "magnifyingglass", title: "Spotlight", sub: "索引卡住时一键重启"),
-    Feature(id: 4, icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机"),
-    Feature(id: 5, icon: "network", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突"),
-    Feature(id: 6, icon: "display", title: "显示性能", sub: "减轻大屏幕的渲染负担"),
-]
-
-struct Sidebar: View {
-    @Binding var sel: Int
-    func item(_ id: Int, _ icon: String, _ title: String) -> some View {
-        Button { sel = id } label: {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.system(size: 13)).frame(width: 18)
-                Text(title).font(.system(size: 13, weight: sel == id ? .semibold : .regular))
-                Spacer()
-            }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(sel == id ? 0.16 : 0)))
-            .contentShape(Rectangle())
-        }.buttonStyle(.plain)
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(LinearGradient(colors: [accent2, accent], startPoint: .topLeading, endPoint: .bottomTrailing)).frame(width: 34, height: 34)
-                    Image(systemName: "speedometer").font(.system(size: 17, weight: .semibold))
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Mac 一键优化").font(.system(size: 14, weight: .semibold))
-                    Text("让 Mac 重新轻快").font(.system(size: 10)).opacity(0.6)
-                }
-            }.padding(.horizontal, 16).padding(.top, 46).padding(.bottom, 24)
-            Group {
-                item(-1, "square.grid.2x2", "概览")
-                item(-2, "waveform.path.ecg.rectangle", "实时监控")
-                item(-3, "battery.75", "电池")
-                item(-4, "display", "显示器")
-                item(-5, "network", "网络诊断")
-                item(-6, "trash", "清理预览")
-                item(-7, "list.clipboard", "改动与提醒")
-                Text("工具").font(.system(size: 10, weight: .semibold)).opacity(0.45).padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
-                ForEach(features) { f in item(f.id, f.icon, f.title) }
-            }.padding(.horizontal, 8)
-            Spacer()
-            Label("清理先预览，确认后进废纸篓", systemImage: "lock.shield").font(.system(size: 10)).opacity(0.55).padding(16)
-        }
-        .foregroundColor(.white)
-        .frame(width: 212).frame(maxHeight: .infinity)
-        .background(LinearGradient(colors: [Color(red: 0.10, green: 0.10, blue: 0.22), Color(red: 0.21, green: 0.15, blue: 0.40)], startPoint: .top, endPoint: .bottom))
+        configuration.label.font(DS.body(.medium))
+            .foregroundColor(filled ? .white : .primary)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
+                .fill(filled ? AnyShapeStyle(accent) : AnyShapeStyle(Color.primary.opacity(0.06))))
+            .overlay(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
+                .strokeBorder(filled ? Color.clear : DS.border, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.78 : 1)
     }
 }
 
@@ -293,17 +249,16 @@ struct Sidebar: View {
 struct MetricCard: View {
     let icon: String; let title: String; let value: String; let note: String; let frac: Double; let color: Color
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) { Image(systemName: icon).foregroundColor(color); Text(title).font(.system(size: 12)).foregroundColor(.secondary); Spacer() }
-            Text(value).font(.system(size: 28, weight: .semibold, design: .rounded))
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(color.opacity(0.14))
-                    Capsule().fill(color).frame(width: max(6, g.size.width * CGFloat(min(1, max(0, frac)))))
-                }
-            }.frame(height: 6).animation(.easeOut(duration: 0.6), value: frac)
-            Text(note).font(.system(size: 11)).foregroundColor(.secondary)
-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).card()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                IconBadge(symbol: icon, tint: color, size: 18)
+                Text(title).font(DS.sub()).foregroundColor(.secondary)
+                Spacer()
+            }
+            Text(value).font(DS.num(17, .semibold))
+            Bar(frac: frac, color: color, height: 3)
+            Text(note).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+        }.padding(12).frame(maxWidth: .infinity, alignment: .leading).card()
     }
 }
 
@@ -333,51 +288,75 @@ struct CheckupCard: View {
     }
     var fix: Fix { m.phase == .done ? (m.verdict?.fix ?? .none) : .none }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
+            // 结论：一行说清卡不卡、为什么
+            HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(levelColor.opacity(m.phase == .done ? 0.13 : 0.10)).frame(width: 60, height: 60)
+                    RoundedRectangle(cornerRadius: DS.r.card, style: .continuous)
+                        .fill(levelColor.opacity(0.14)).frame(width: 34, height: 34)
                     if busy { ProgressView().controlSize(.small) }
-                    else { Image(systemName: icon).font(.system(size: 24, weight: .medium)).foregroundColor(levelColor) }
+                    else { Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundColor(levelColor) }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(headline).font(.system(size: 17, weight: .semibold)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("verdict.title")
-                    Text(sub).font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headline).font(DS.title()).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("verdict.title")
+                    Text(sub).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: 8)
                 if let t = fix.title {
                     Button(t) { m.apply(fix) }.buttonStyle(PillButton()).accessibilityIdentifier("verdict.fix")
                 }
-                Button(m.phase == .done ? "重新体检" : "开始体检") { m.scan() }.buttonStyle(PillButton(filled: fix.title == nil && m.phase != .done)).disabled(busy).opacity(busy ? 0.5 : 1).accessibilityIdentifier("verdict.rescan")
+                Button(m.phase == .done ? "重新体检" : "开始体检") { m.scan() }
+                    .buttonStyle(PillButton(filled: false)).disabled(busy).opacity(busy ? 0.5 : 1)
+                    .accessibilityIdentifier("verdict.rescan")
             }
-            if m.phase == .done && (!m.issues.isEmpty || !m.log.isEmpty) {
-                Divider()
-                ForEach(m.log, id: \.self) { Label($0.replacingOccurrences(of: "✔ ", with: ""), systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundColor(good) }
-                ForEach(Array(m.issues.indices.prefix(expanded ? m.issues.count : Self.folded)), id: \.self) { idx in
-                    let i = m.issues[idx]
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: i.action != nil ? "exclamationmark.circle.fill" : "info.circle.fill")
-                            .font(.system(size: 16)).foregroundColor(i.action != nil ? .orange : accent2)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(i.title).font(.system(size: 13, weight: .medium))
-                            Text(i.detail).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 8)
-                        if i.action != nil { Toggle("", isOn: $m.issues[idx].on).toggleStyle(.switch).controlSize(.small).labelsHidden().tint(accent) }
-                        else { Text("建议").font(.system(size: 10, weight: .medium)).foregroundColor(accent2).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(accent2.opacity(0.12))) }
-                    }.padding(.vertical, 4)
-                }
-                if m.issues.count > Self.folded || selected > 0 {
-                    HStack {
-                        if m.issues.count > Self.folded {
-                            Button(expanded ? "收起" : "查看全部 \(m.issues.count) 项") { expanded.toggle() }.buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundColor(accent).accessibilityIdentifier("checkup.more")
-                        }
-                        Spacer()
-                        if selected > 0 { Button("处理所选（\(selected)）") { m.fix() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("checkup.fixSelected") }
+            // 问题清单：Raycast 列表样式
+            if m.phase == .done && !m.issues.isEmpty {
+                let shown = min(m.issues.count, expanded ? m.issues.count : Self.folded)
+                VStack(spacing: 1) {
+                    ForEach(0..<shown, id: \.self) { idx in
+                        let i = m.issues[idx]
+                        HStack(spacing: 10) {
+                            IconBadge(symbol: i.action != nil ? "exclamationmark" : "info",
+                                      tint: i.action != nil ? warn : Color(nsColor: .tertiaryLabelColor), size: 18)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(i.title).font(DS.body(.medium))
+                                Text(i.detail).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            if i.action != nil {
+                                Toggle("", isOn: $m.issues[idx].on).toggleStyle(.switch).controlSize(.small)
+                                    .labelsHidden().tint(accent)
+                            } else {
+                                Text("建议").font(DS.cap()).foregroundColor(accentText)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill(accent.opacity(0.10)))
+                            }
+                        }.padding(.horizontal, 8).padding(.vertical, 7)
+                    }
+                }.padding(6).card()
+            }
+            if m.phase == .done && (m.issues.count > Self.folded || selected > 0) {
+                HStack(spacing: 10) {
+                    if m.issues.count > Self.folded {
+                        Button(expanded ? "收起" : "查看全部 \(m.issues.count) 项") { expanded.toggle() }
+                            .buttonStyle(.plain).font(DS.sub(.medium)).foregroundColor(accentText)
+                            .accessibilityIdentifier("checkup.more")
+                    }
+                    Spacer()
+                    if selected > 0 {
+                        Button("处理所选（\(selected)）") { m.fix() }.buttonStyle(PillButton(filled: false))
+                            .accessibilityIdentifier("checkup.fixSelected")
                     }
                 }
             }
-        }.padding(20).card()
+        }
+        // 处理结果不再堆在卡片里，改成底部 Toast
+        .onChange(of: m.log) { log in
+            guard let last = log.last else { return }
+            ToastCenter.shared.show(last.replacingOccurrences(of: "✔ ", with: ""),
+                                    symbol: last.hasPrefix("✔") ? "checkmark.circle.fill" : "info.circle.fill",
+                                    tint: last.hasPrefix("✔") ? good : warn)
+        }
     }
 }
 
@@ -388,93 +367,118 @@ struct Overview: View {
         let s = mon.s
         let v = (load: s.load[0], cores: Double(ProcessInfo.processInfo.activeProcessorCount), days: Int(s.uptime / 86400))
         PageScroll {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("概览").font(.system(size: 24, weight: .bold))
-                    Text("状态自动刷新，详细指标可在实时监控中查看").font(.system(size: 12)).foregroundColor(.secondary)
-                }
-                HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 14) {
+                PageHeader(title: "概览", sub: "状态自动刷新，详细指标可在实时监控中查看")
+                CheckupCard(m: m)
+                HStack(spacing: 10) {
                     MetricCard(icon: "cpu", title: "CPU 负载", value: String(format: "%.1f", v.load),
                                note: "\(Int(v.cores)) 核 · " + (v.load > v.cores ? "偏高" : "正常"), frac: v.load / max(1, v.cores),
-                               color: v.load > v.cores ? .orange : accent2)
+                               color: v.load > v.cores ? warn : accent)
                     MetricCard(icon: "memorychip", title: "内存压力", value: Fmt.pressure(s.memPressure).0,
                                note: String(format: "已用 %.1f / %.0f GB", s.memUsedGB, s.memTotalGB), frac: s.memFraction,
                                color: Fmt.pressure(s.memPressure).1)
                     MetricCard(icon: "clock", title: "连续运行", value: "\(v.days) 天",
                                note: v.days >= 14 ? "跑太久了，有空重启一次" : "正常", frac: Double(v.days) / 14,
-                               color: v.days >= 14 ? .orange : good)
+                               color: v.days >= 14 ? warn : good)
                 }
-                CheckupCard(m: m)
-            }.padding(28)
+            }.padding(20)
         }
         .onAppear { if m.phase == .idle { m.scan() } }   // 打开概览就体检
     }
 }
 
-// MARK: - 工具页
+// MARK: - 工具页（列表 + 详情）
 struct ToolPage: View {
     let feature: Feature
     @State private var rows: [Row] = []
     @State private var loading = true
-    @State private var actionNote = ""
+    @State private var sel = 0
+    var current: Row? { rows.indices.contains(sel) ? rows[sel] : nil }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(feature.title).font(.system(size: 24, weight: .bold))
-                    Text(feature.sub).font(.system(size: 12)).foregroundColor(.secondary)
-                }
-                Spacer()
-                Button { loading = true; reload() } label: { Label("刷新", systemImage: "arrow.clockwise") }.buttonStyle(PillButton(filled: false))
+        VStack(alignment: .leading, spacing: 12) {
+            PageHeader(title: feature.title, sub: feature.sub) {
+                Button { loading = true; reload() } label: { Label("刷新", systemImage: "arrow.clockwise") }
+                    .buttonStyle(PillButton(filled: false))
             }
-            if !actionNote.isEmpty { Text(actionNote).font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
-            if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if rows.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundColor(good)
-                    Text("一切正常，没有需要处理的项目").foregroundColor(.secondary)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            if loading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if rows.isEmpty {
+                EmptyState(symbol: "checkmark.seal.fill", title: "一切正常", sub: "没有需要处理的项目")
             } else {
-                ScrollView(showsIndicators: false) {   // 列表长度不定，只在内容超出时滚动，不显示滚动条
-                    VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { idx, r in
-                            HStack(spacing: 12) {
-                                if let ic = r.icon { Image(nsImage: ic).resizable().frame(width: 30, height: 30) }
-                                else {
-                                    ZStack { RoundedRectangle(cornerRadius: 8, style: .continuous).fill(accent.opacity(0.10)).frame(width: 30, height: 30)
-                                        Image(systemName: feature.icon).font(.system(size: 13)).foregroundColor(accent) }
+                HStack(alignment: .top, spacing: 10) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 1) {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { idx, r in
+                                ListRow(icon: r.icon, symbol: feature.icon, title: r.title, subtitle: r.subtitle,
+                                        selected: sel == idx, action: { sel = idx }) {
+                                    if let t = r.actionTitle {
+                                        Text(t).font(DS.cap()).foregroundColor(sel == idx ? Color.white.opacity(0.85) : .secondary)
+                                    }
                                 }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(r.title).font(.system(size: 13, weight: .medium))
-                                    Text(r.subtitle).font(.system(size: 11)).foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                if let t = r.actionTitle, let act = r.action {
-                                    Button(t) {
-                                        guard FixRunner.confirm(t + "？", r.title + "。操作后会重新读取列表；未确认的结果不会计入优化统计。", t) else { return }
-                                        actionNote = "正在执行：" + r.title
-                                        DispatchQueue.global().async {
-                                            act()
-                                            DispatchQueue.main.async {
-                                                actionNote = "已发起：" + r.title + "，请核对刷新后的状态"
-                                                reload()
-                                            }
-                                        }
-                                    }.buttonStyle(PillButton(filled: false))
-                                }
-                            }.padding(.horizontal, 16).padding(.vertical, 11)
-                            if idx < rows.count - 1 { Divider().padding(.leading, 58) }
-                        }
-                    }.card().padding(2)
+                            }
+                        }.padding(6)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).card()
+                    detail.frame(width: 280)
                 }
             }
         }
-        .padding(28)
-        .onAppear { reload() }
+        .padding(20)
+        .onAppear {
+            reload()
+            Shell.shared.listHandler = { e in
+                guard !rows.isEmpty else { return false }
+                switch e.keyCode {
+                case 125: sel = min(sel + 1, rows.count - 1); return true
+                case 126: sel = max(0, sel - 1); return true
+                case 36, 76: run(rows[min(sel, rows.count - 1)]); return true
+                default: return false
+                }
+            }
+        }
+        .onDisappear { Shell.shared.listHandler = nil }
+    }
+    var detail: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let r = current {
+                HStack(spacing: 8) {
+                    RowIcon(icon: r.icon, symbol: feature.icon, size: 26)
+                    Text(r.title).font(DS.body(.semibold)).lineLimit(2)
+                }
+                Text(r.subtitle).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Hairline()
+                if let t = r.actionTitle, r.action != nil {
+                    Button(t) { run(r) }.buttonStyle(PillButton()).frame(maxWidth: .infinity)
+                    HStack(spacing: 6) { Kbd(text: "↵"); Text("主操作").font(DS.cap()).foregroundColor(.secondary) }
+                } else {
+                    Text("这项不需要处理").font(DS.sub()).foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
+                Text("列表共 \(rows.count) 项 · ↑↓ 选择").font(DS.cap()).foregroundColor(.secondary)
+            } else {
+                EmptyState(symbol: feature.icon, title: "选择一项")
+            }
+        }
+        .padding(12).frame(maxHeight: .infinity, alignment: .topLeading).card()
+    }
+    func run(_ r: Row) {
+        guard let t = r.actionTitle, let act = r.action else { return }
+        guard FixRunner.confirm(t + "？", r.title + "。操作后会重新读取列表；未确认的结果不会计入优化统计。", t) else { return }
+        ToastCenter.shared.show("正在执行：" + r.title, symbol: "clock", tint: accent)
+        DispatchQueue.global().async {
+            act()
+            DispatchQueue.main.async {
+                ToastCenter.shared.show("已发起：" + r.title + "，请核对刷新后的状态", symbol: "arrow.clockwise", tint: accent)
+                reload()
+            }
+        }
     }
     func reload() {
         let id = feature.id
-        DispatchQueue.global().async { let r = Loaders.rows(id); DispatchQueue.main.async { rows = r; loading = false } }
+        DispatchQueue.global().async {
+            let r = Loaders.rows(id)
+            DispatchQueue.main.async { rows = r; loading = false; sel = min(sel, max(0, r.count - 1)) }
+        }
     }
 }
 
@@ -522,21 +526,44 @@ struct RootView: View {
     @StateObject private var m = Model()
     @ObservedObject var mon = Monitor.shared
     @ObservedObject var nav = Nav.shared
+    @ObservedObject var shell = Shell.shared
     var body: some View {
         HStack(spacing: 0) {
             Sidebar(sel: $nav.sel)
-            Group {
-                if nav.sel == -1 { Overview(m: m, mon: mon) }
-                else if nav.sel == -2 { DashboardView(m: mon) }
-                else if nav.sel == -3 { BatteryPage(m: mon) }
-                else if nav.sel == -4 { DisplayPage() }
-                else if nav.sel == -5 { NetworkPage() }
-                else if nav.sel == -6 { CleanPage() }
-                else if nav.sel == -7 { ChangesPage() }
-                else { ToolPage(feature: features[nav.sel]).id(nav.sel) }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBG)
+            VStack(spacing: 0) {
+                TopBar()
+                ZStack {
+                    page.background(Vibrancy(material: .underWindowBackground, solid: DS.window))
+                    if shell.searching {
+                        SearchResults().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .background(Vibrancy(material: .underWindowBackground, solid: DS.window))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                BottomBar()
+            }
         }
-        .frame(minWidth: Layout.minSize.width, maxWidth: .infinity, minHeight: Layout.minSize.height, maxHeight: .infinity).ignoresSafeArea()
+        .background(Vibrancy(material: .underWindowBackground, solid: DS.window))
+        .overlay(alignment: .bottom) { ToastHost() }
+        .overlay { if shell.actionsFor != nil { ActionPanel() } }
+        .background(KeyRouter())
+        .onAppear { shell.model = m }
+        .frame(minWidth: Layout.minSize.width, maxWidth: .infinity, minHeight: Layout.minSize.height, maxHeight: .infinity)
+        .ignoresSafeArea()
+    }
+    @ViewBuilder var page: some View {
+        Group {
+            if nav.sel == -1 { Overview(m: m, mon: mon) }
+            else if nav.sel == -2 { DashboardView(m: mon) }
+            else if nav.sel == -3 { BatteryPage(m: mon) }
+            else if nav.sel == -4 { DisplayPage() }
+            else if nav.sel == -5 { NetworkPage() }
+            else if nav.sel == -6 { CleanPage() }
+            else if nav.sel == -7 { ChangesPage() }
+            else if nav.sel == -8 { SettingsPage() }
+            else if features.indices.contains(nav.sel) { ToolPage(feature: features[nav.sel]).id(nav.sel) }
+            else { Overview(m: m, mon: mon) }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -554,6 +581,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         w.contentMinSize = NSSize(width: min(Layout.minSize.width, size.width), height: min(Layout.minSize.height, size.height))
         w.titlebarAppearsTransparent = true; w.titleVisibility = .hidden; w.title = "Mac 一键优化"
         w.isReleasedWhenClosed = false; w.isRestorable = false; w.center()
+        // 毛玻璃：窗口本身透明，由 SwiftUI 里的 NSVisualEffectView 提供材质
+        w.isOpaque = false; w.backgroundColor = .clear
         window = w
         let mon = Monitor.shared
         mon.mainWindowVisible = { [weak w] in guard let w else { return false }; return w.isVisible && w.occlusionState.contains(.visible) && !w.isMiniaturized }
@@ -575,6 +604,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in AppTraffic.shared.flush() }
         DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
+        CommandPalette.shared.installHotKey()
         LaunchRestore.run(keepAwake: KeepAwake.shared, dock: DockMode.shared)
         if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }
         BatteryAlerts.shared.$settings.map(\.energyTracking).removeDuplicates().dropFirst().sink { $0 ? EnergyTracker.shared.start() : EnergyTracker.shared.stop() }.store(in: &subs)

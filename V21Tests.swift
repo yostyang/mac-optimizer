@@ -14,6 +14,6 @@ extension MOTests {
         check(Array(top.prefix(4)).count == 4, "面板进程只放前 4 条")
         check(QuickActions().showStats && !QuickActions(showStats: false).showStats, "面板不放统计行，主窗口保留")
         sec("呼吸感")
-        check(CDS.radiusCard == 14 && CDS.radiusPanel == 14, "卡片/面板圆角 14，比 v2.0 更软")
+        check(CDS.radiusCard == 10 && CDS.radiusPanel == 10, "卡片/面板圆角 10（v2.5 收口）")
     }
 }

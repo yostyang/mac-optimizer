@@ -1,24 +1,22 @@
-// v2.0 界面优化：设计令牌（v20-fix 修订）
+// v2.0 界面优化：设计令牌
 // 参考 https://github.com/Caho1/open-claude-ui（MIT 协议）只借圆角/动效/渐隐等非颜色原则，
 // 不抄它的 React 代码、不搬专有字体/音频、不冒充 Claude。
-// 颜色已按用户要求改回 v1.9 原配色：陶土橙不再作主色，原紫蓝主色、渐变侧边栏/面板头全部恢复，
-// 只在原有配色基础上做圆角、动效、发丝细线、滚动渐隐、分段控件等优化，不换品牌色。
+// v2.5：颜色与圆角统一到 DS（V25Design.swift），这里只保留动效与渐隐开关，避免两套令牌打架。
 import SwiftUI
 import AppKit
 
 enum CDS {
-    // 主色已改回 v1.9 原值（见 main.swift 的 accent/accent2），这里不再另存一份陶土橙，避免两套主色打架
-    // 表面 0-3：0 页面、1 卡片，均为 v1.9 原值；2/3 保留作抬高层中性色，不再是 Claude 暖灰
-    static let surface0 = dyn(NSColor(red: 0.958, green: 0.960, blue: 0.978, alpha: 1), NSColor(red: 0.105, green: 0.108, blue: 0.135, alpha: 1))
-    static let surface1 = dyn(.white, NSColor(red: 0.165, green: 0.168, blue: 0.200, alpha: 1))
-    static let surface2 = dyn(NSColor(red: 0.937, green: 0.937, blue: 0.945, alpha: 1), NSColor(red: 0.165, green: 0.168, blue: 0.200, alpha: 1))
-    static let surface3 = dyn(NSColor(red: 0.914, green: 0.914, blue: 0.922, alpha: 1), NSColor(red: 0.208, green: 0.208, blue: 0.235, alpha: 1))
-    // 圆角矩阵（v2.1 呼吸感：卡片/面板放软到 14，按钮 10，与 Muse 界面那种大圆角、轻阴影更接近；颜色不动）
-    static let radiusOuter: CGFloat = 20
-    static let radiusBubble: CGFloat = 18
-    static let radiusPanel: CGFloat = 14
-    static let radiusCard: CGFloat = 14
-    static let radiusButton: CGFloat = 10
+    // 表面色已迁到 DS.window / DS.card / DS.raised，这里保留别名给旧代码
+    static let surface0 = DS.window
+    static let surface1 = DS.card
+    static let surface2 = DS.raised
+    static let surface3 = DS.raised
+    // 圆角只保留 3 种：卡片 10、控件 6、胶囊 999
+    static let radiusOuter: CGFloat = DS.r.card
+    static let radiusBubble: CGFloat = DS.r.card
+    static let radiusPanel: CGFloat = DS.r.card
+    static let radiusCard: CGFloat = DS.r.card
+    static let radiusButton: CGFloat = DS.r.control
     // 动效令牌（秒）：微震 70ms、几何咬合 120ms、面板滑入 300ms
     static let motionMicro: Double = 0.07
     static let motionSettle: Double = 0.12

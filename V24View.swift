@@ -53,7 +53,7 @@ struct AppTrafficList: View {
             }
             ForEach(t.live.prefix(limit)) { a in
                 HStack(spacing: 6) {
-                    Text(a.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                    Text(a.name).font(.system(size: 11)).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 4)
                     Text("↓ " + Fmt.rate(Double(a.inB))).font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 86, alignment: .trailing)
                     Text("↑ " + Fmt.rate(Double(a.outB))).font(.system(size: 11)).foregroundColor(accent).monospacedDigit().frame(width: 80, alignment: .trailing)
@@ -125,7 +125,7 @@ struct TrafficTab24: View {
             let apps = h.apps(range).prefix(5)
             if apps.isEmpty { Text("这段时间还没有按应用的记录").font(.system(size: 11)).foregroundColor(.secondary) }
             ForEach(Array(apps)) { a in
-                HStack { Text(a.name).font(.system(size: 12)).lineLimit(1); Spacer(); Text("↓ " + Fmt24.bytes(a.inB) + "  ↑ " + Fmt24.bytes(a.outB)).font(.system(size: 11)).monospacedDigit().foregroundColor(.secondary) }
+                HStack { Text(a.name).font(.system(size: 11)).lineLimit(1); Spacer(); Text("↓ " + Fmt24.bytes(a.inB) + "  ↑ " + Fmt24.bytes(a.outB)).font(.system(size: 11)).monospacedDigit().foregroundColor(.secondary) }
             }
             Text((t.enabled ? "后台每分钟记一次（关掉窗口也记），重启后记录还在，30 天外自动删除。" : "后台记录已关闭，只在这个页面打开时记录。") + "没开机或本应用没运行的时段留空，不补数。总量按物理网卡统计，TUN 时不重复。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             Toggle("后台记录流量历史", isOn: $t.enabled).toggleStyle(.switch).controlSize(.mini).font(.system(size: 11)).accessibilityIdentifier("traffic.background")
@@ -142,7 +142,7 @@ struct NetCard24: View {
             row("Wi-Fi 信号", n.wifi.map { $0.connected ? WiFiRead.signalText($0.rssi) : "未连接 Wi-Fi" } ?? "未读取")
             row("链路速率", n.wifi.map { w in w.connected ? (w.txRate.map { String(format: "%.0f Mbps", $0) } ?? "未知") + [w.band, w.channel.map { "信道 \($0)" }].compactMap { $0 }.map { " · " + $0 }.joined() : "—" } ?? "未读取")
             row("公网 IP", n.publicIP ?? (n.running ? "检测中…" : n.ipNote))
-            HStack { Text("ChatGPT").font(.system(size: 12)); Spacer(); Text(n.chatGPT.text).font(.system(size: 11, weight: .medium)).foregroundColor(n.chatGPT.isOK ? good : (n.chatGPT == .unknown || n.chatGPT == .checking ? .secondary : .orange)).lineLimit(1) }.accessibilityIdentifier("netcard.chatgpt")
+            HStack { Text("ChatGPT").font(.system(size: 11)); Spacer(); Text(n.chatGPT.text).font(.system(size: 11, weight: .medium)).foregroundColor(n.chatGPT.isOK ? good : (n.chatGPT == .unknown || n.chatGPT == .checking ? .secondary : .orange)).lineLimit(1) }.accessibilityIdentifier("netcard.chatgpt")
             HStack {
                 Button(n.running ? "检测中…" : "重新检测") { n.refresh() }.buttonStyle(PillButton(filled: false)).disabled(n.running).accessibilityIdentifier("netcard.refresh")
                 Spacer()
@@ -152,7 +152,7 @@ struct NetCard24: View {
         }.onAppear { n.refreshIfStale() }
     }
     func row(_ k: String, _ v: String) -> some View {
-        HStack { Text(k).font(.system(size: 12)); Spacer(); Text(v).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
+        HStack { Text(k).font(.system(size: 11)); Spacer(); Text(v).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
     }
 }
 
@@ -182,7 +182,7 @@ struct SpeedTab24: View {
                     lat("空闲时", s.result?.idleMs)
                     lat("下载时", s.result?.downMs)
                     lat("上传时", s.result?.upMs)
-                    HStack { Text("抖动").font(.system(size: 12)); Spacer(); Text(s.result?.jitterMs.map { String(format: "%.1f ms", $0) } ?? "未知").font(.system(size: 13, weight: .semibold)).monospacedDigit() }
+                    HStack { Text("抖动").font(.system(size: 11)); Spacer(); Text(s.result?.jitterMs.map { String(format: "%.1f ms", $0) } ?? "未知").font(.system(size: 13, weight: .semibold)).monospacedDigit() }
                     if let r = s.result, r.jitterMs != nil { Text("抖动按 \(r.jitterSamples) 次空闲延迟相邻差值平均").font(.system(size: 10)).foregroundColor(.secondary) }
                 }
                 Card(title: "带宽档位", icon: "gauge.with.dots.needle.67percent") {
@@ -197,15 +197,15 @@ struct SpeedTab24: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: title == "下载" ? "arrow.down.circle.fill" : "arrow.up.circle.fill").foregroundColor(color)
-                Text(title).font(.system(size: 12)).foregroundColor(.secondary)
-                Text(Fmt24.mbps(value)).font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit().accessibilityIdentifier(id)
-                Text("Mbps").font(.system(size: 12)).foregroundColor(.secondary)
+                Text(title).font(.system(size: 11)).foregroundColor(.secondary)
+                Text(Fmt24.mbps(value)).font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit().accessibilityIdentifier(id)
+                Text("Mbps").font(.system(size: 11)).foregroundColor(.secondary)
             }
             Spark(values: series, color: color).frame(height: 54).opacity(series.isEmpty ? 0.25 : 1)
         }
     }
     func lat(_ k: String, _ v: Double?) -> some View {
-        HStack { Text(k).font(.system(size: 12)); Spacer(); Text(Fmt24.ms(v)).font(.system(size: 13, weight: .semibold)).monospacedDigit() }
+        HStack { Text(k).font(.system(size: 11)); Spacer(); Text(Fmt24.ms(v)).font(.system(size: 13, weight: .semibold)).monospacedDigit() }
     }
 }
 
@@ -217,7 +217,7 @@ struct UninstallTab: View {
         HStack(alignment: .top, spacing: 14) {
             Card(title: "卸载应用（连同残留）", icon: "xmark.bin") {
                 HStack {
-                    Text(u.appName.isEmpty ? "先选一个应用，会列出它的残留文件，确认后才动" : u.appName + (u.bundleID.isEmpty ? "" : " · " + u.bundleID)).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Text(u.appName.isEmpty ? "先选一个应用，会列出它的残留文件，确认后才动" : u.appName + (u.bundleID.isEmpty ? "" : " · " + u.bundleID)).font(.system(size: 11, weight: .medium)).lineLimit(1)
                     Spacer()
                     Button("选择应用…") { u.choose() }.buttonStyle(PillButton(filled: false)).disabled(u.busy).accessibilityIdentifier("uninstall.choose")
                 }
@@ -247,7 +247,7 @@ struct UninstallTab: View {
                 ForEach(u.records.suffix(6).reversed()) { r in
                     HStack {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(r.app).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                            Text(r.app).font(.system(size: 11, weight: .medium)).lineLimit(1)
                             Text(r.date.formatted(date: .abbreviated, time: .shortened) + " · \(r.entries.count) 项").font(.system(size: 10)).foregroundColor(.secondary)
                         }
                         Spacer()

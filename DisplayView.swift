@@ -8,7 +8,7 @@ struct ChoiceChip: View {
         Button(action: action) {
             VStack(spacing: 1) {
                 Text(text).font(.system(size: 11, weight: on ? .semibold : .regular)).monospacedDigit().lineLimit(1)
-                if !sub.isEmpty { Text(sub).font(.system(size: 9)).opacity(0.7) }
+                if !sub.isEmpty { Text(sub).font(.system(size: 10)).opacity(0.7) }
             }
             .padding(.horizontal, 9).padding(.vertical, 5).frame(minWidth: 64)
             .foregroundColor(on ? .white : .primary)
@@ -51,8 +51,8 @@ struct DisplayPage: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("显示器").font(.system(size: 24, weight: .bold))
-                        Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 12)).foregroundColor(.secondary)
+                        Text("显示器").font(DS.title())
+                        Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     Spacer()
                     SegmentedTrack {
@@ -92,7 +92,7 @@ struct DisplayPage: View {
             if let d = cur {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(d.name).font(.system(size: 15, weight: .semibold))
+                        Text(d.name).font(.system(size: 13, weight: .semibold))
                         Text("\(d.current.label) · \(d.current.refreshLabel)" + (d.current.hidpi ? " · HiDPI" : "") + "  （实际像素 \(d.current.pixelWidth)×\(d.current.pixelHeight)）").font(.system(size: 11)).foregroundColor(.secondary).monospacedDigit()
                     }
                     Spacer()
@@ -135,7 +135,7 @@ struct DisplayPage: View {
     func slider(_ title: String, _ icon: String, value: Int?, max mx: Int, id: String, set: @escaping (Int) -> Void) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).frame(width: 16).foregroundColor(accent)
-            Text(title).font(.system(size: 12)).frame(width: 40, alignment: .leading)
+            Text(title).font(.system(size: 11)).frame(width: 40, alignment: .leading)
             Slider(value: Binding(get: { Double(value ?? 0) }, set: { set(Int($0.rounded())) }), in: 0...Double(max(1, mx))).controlSize(.small).accessibilityIdentifier(id)
             Text("\(value ?? 0)").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 30, alignment: .trailing)
         }
@@ -151,7 +151,7 @@ struct DisplayPage: View {
                 if s.caps.inputs.count > 1 {
                     HStack(spacing: 6) {
                         Image(systemName: "rectangle.connected.to.line.below").frame(width: 16).foregroundColor(accent)
-                        Text("输入源").font(.system(size: 12)).frame(width: 40, alignment: .leading)
+                        Text("输入源").font(.system(size: 11)).frame(width: 40, alignment: .leading)
                         ForEach(s.caps.inputs, id: \.self) { v in
                             ChoiceChip(text: DDCCaps.inputName(v), on: s.input == v) { if s.input != v { confirmInput(d.id, v) } }
                         }
@@ -173,7 +173,7 @@ struct DisplayPage: View {
             if let display = cur {
                 Text("仅控制 " + display.name).font(.system(size: 11)).foregroundColor(.secondary)
                 let profile = dm.profileStates[display.id]
-                Text("系统色彩描述文件（ICC）").font(.system(size: 12, weight: .medium))
+                Text("系统色彩描述文件（ICC）").font(.system(size: 11, weight: .medium))
                 if let profile, !profile.choices.isEmpty {
                     Picker("ICC", selection: Binding(get: { profile.current?.path ?? "" }, set: { path in dm.setProfile(display.id, url: URL(fileURLWithPath: path)) })) {
                         ForEach(profile.choices) { choice in Text(choice.name).tag(choice.id) }
@@ -185,7 +185,7 @@ struct DisplayPage: View {
                 if let state = dm.ddc[display.id] {
                     let colors = state.caps.values[VCP.colorPreset.rawValue] ?? []
                     if !colors.isEmpty, state.colorPreset != nil {
-                        Text("显示器硬件色彩预设").font(.system(size: 12, weight: .medium))
+                        Text("显示器硬件色彩预设").font(.system(size: 11, weight: .medium))
                         FlowRow(spacing: 6) { ForEach(colors, id: \.self) { value in
                             ChoiceChip(text: DDCCaps.colorName(value), on: state.colorPreset == Int(value)) { dm.setDDC(display.id, .colorPreset, Int(value)) }.accessibilityIdentifier("disp.color.\(value)")
                         } }
@@ -216,7 +216,7 @@ struct DisplayPage: View {
             HStack(spacing: 8) {
                 ForEach(DScene.all) { s in
                     Button { dm.apply(scene: s) } label: {
-                        VStack(spacing: 4) { Image(systemName: s.icon).font(.system(size: 15)); Text(s.name).font(.system(size: 11)) }
+                        VStack(spacing: 4) { Image(systemName: s.icon).font(.system(size: 13)); Text(s.name).font(.system(size: 11)) }
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
                             .foregroundColor(dm.settings.scene == s.id ? .white : .primary)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(dm.settings.scene == s.id ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.primary.opacity(0.06))))
@@ -232,12 +232,12 @@ struct DisplayPage: View {
             if let id = cur?.id, let note = dm.gammaNotes[id] { Text(note).font(.system(size: 10)).foregroundColor(.secondary) }
             Toggle("软件调光与色温（关闭恢复原曲线）", isOn: Binding(get: { dm.settings.gammaOn }, set: { dm.setGamma(on: $0) })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.gamma")
             HStack(spacing: 8) {
-                Image(systemName: "sun.min").frame(width: 16).foregroundColor(accent); Text("调暗").font(.system(size: 12)).frame(width: 40, alignment: .leading)
+                Image(systemName: "sun.min").frame(width: 16).foregroundColor(accent); Text("调暗").font(.system(size: 11)).frame(width: 40, alignment: .leading)
                 Slider(value: Binding(get: { dm.settings.dim }, set: { dm.setDim($0) }), in: 0.3...1).controlSize(.small).disabled(!dm.settings.gammaOn)
                 Text("\(Int(dm.settings.dim * 100))%").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 36, alignment: .trailing)
             }
             HStack(spacing: 8) {
-                Image(systemName: "thermometer.sun").frame(width: 16).foregroundColor(.orange); Text("色温").font(.system(size: 12)).frame(width: 40, alignment: .leading)
+                Image(systemName: "thermometer.sun").frame(width: 16).foregroundColor(.orange); Text("色温").font(.system(size: 11)).frame(width: 40, alignment: .leading)
                 Slider(value: Binding(get: { dm.settings.kelvin }, set: { dm.setKelvin($0) }), in: 2700...6500).controlSize(.small).disabled(!dm.settings.gammaOn)
                 Text("\(Int(dm.settings.kelvin))K").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 44, alignment: .trailing)
             }
@@ -255,7 +255,7 @@ struct DisplayPage: View {
         let w = st.week; let mx = max(3600, w.map(\.1).max() ?? 1)
         return Card(title: "亮屏时间", icon: "hourglass") {
             HStack(alignment: .firstTextBaseline) {
-                Text(fmtDuration(st.today)).font(.system(size: 22, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(fmtDuration(st.today)).font(.system(size: 17, weight: .bold, design: .rounded)).monospacedDigit()
                 Text("今天").font(.system(size: 11)).foregroundColor(.secondary)
                 Spacer()
                 Text("7 天平均 " + fmtDuration(w.map(\.1).reduce(0, +) / 7)).font(.system(size: 11)).foregroundColor(.secondary)
@@ -263,7 +263,7 @@ struct DisplayPage: View {
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(Array(w.enumerated()), id: \.offset) { i, e in
                     VStack(spacing: 4) {
-                        Text(e.1 >= 3600 ? String(format: "%.1fh", e.1 / 3600) : "\(Int(e.1 / 60))m").font(.system(size: 9)).foregroundColor(.secondary).monospacedDigit()
+                        Text(e.1 >= 3600 ? String(format: "%.1fh", e.1 / 3600) : "\(Int(e.1 / 60))m").font(.system(size: 10)).foregroundColor(.secondary).monospacedDigit()
                         RoundedRectangle(cornerRadius: 4, style: .continuous).fill(i == 6 ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(accent.opacity(0.35)))
                             .frame(height: max(3, 64 * CGFloat(e.1 / mx)))
                         Text(e.0).font(.system(size: 10)).foregroundColor(.secondary)

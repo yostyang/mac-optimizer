@@ -289,12 +289,12 @@ struct SpeedCard: View {
             HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("下载").font(.system(size: 11)).foregroundColor(.secondary)
-                    Text(String(format: "%.1f", t.result.downMbps)).font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
+                    Text(String(format: "%.1f", t.result.downMbps)).font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
                     Text("Mbps").font(.system(size: 11)).foregroundColor(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("上传").font(.system(size: 11)).foregroundColor(.secondary)
-                    Text(String(format: "%.1f", t.result.upMbps)).font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
+                    Text(String(format: "%.1f", t.result.upMbps)).font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
                     Text("Mbps").font(.system(size: 11)).foregroundColor(.secondary)
                 }
                 Spacer()
@@ -336,7 +336,7 @@ struct TrafficCard: View {
                 Text("点“刷新联网应用”查看当前连接数；此列表不表示应用流量大小。").font(.system(size: 11)).foregroundColor(.secondary)
             } else {
                 ForEach(store.apps.prefix(10)) { a in
-                    HStack { Text(a.name).font(.system(size: 12)).lineLimit(1); Spacer(); Text("\(a.connections) 个连接").font(.system(size: 11)).foregroundColor(.secondary) }
+                    HStack { Text(a.name).font(.system(size: 11)).lineLimit(1); Spacer(); Text("\(a.connections) 个连接").font(.system(size: 11)).foregroundColor(.secondary) }
                 }
             }
             if !store.appsNote.isEmpty { Text(store.appsNote).font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
@@ -350,9 +350,9 @@ struct NetInfoCard: View {
     @ObservedObject var info = NetInfo.shared
     var body: some View {
         Card(title: "网络信息", icon: "wifi") {
-            HStack { Text("Wi-Fi").font(.system(size: 12)); Spacer(); Text(info.wifi).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1) }
-            HStack { Text("公网 IP").font(.system(size: 12)); Spacer(); Text(info.publicIP).font(.system(size: 11, weight: .medium)).monospacedDigit() }
-            HStack { Text("ChatGPT").font(.system(size: 12)); Spacer(); Text(info.chatGPT).font(.system(size: 11, weight: .medium)).foregroundColor(info.chatGPT == "能连上" ? good : .secondary) }
+            HStack { Text("Wi-Fi").font(.system(size: 11)); Spacer(); Text(info.wifi).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1) }
+            HStack { Text("公网 IP").font(.system(size: 11)); Spacer(); Text(info.publicIP).font(.system(size: 11, weight: .medium)).monospacedDigit() }
+            HStack { Text("ChatGPT").font(.system(size: 11)); Spacer(); Text(info.chatGPT).font(.system(size: 11, weight: .medium)).foregroundColor(info.chatGPT == "能连上" ? good : .secondary) }
             Button(info.running ? "检测中…" : "刷新网络信息") { info.refresh() }.buttonStyle(PillButton(filled: false)).disabled(info.running).accessibilityIdentifier("netinfo.refresh")
             Text("公网 IP 与 ChatGPT 只在你点刷新时检测一次，读不到会写不可读，不会谎报").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }

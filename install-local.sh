@@ -11,7 +11,7 @@ V="$1"
 MO_NO_RELAUNCH=1 ./test.sh || { echo "❌ 测试没通过，不安装"; mo_relaunch; exit 1; }
 osascript -e 'quit app "Mac一键优化"' || true
 for i in $(seq 1 20); do pgrep -x MacOptimizer >/dev/null || break; sleep 0.5; done
-pgrep -x MacOptimizer >/dev/null && { echo "Mac一键优化没有正常退出，停止安装"; exit 1; }
+if pgrep -x MacOptimizer >/dev/null; then echo "Mac一键优化没有正常退出，停止安装"; exit 1; fi
 # 原地同步（包路径始终存在，每个文件原子替换），避免助手在空档期被 launchd 判为配置错误
 if [ -d "/Applications/Mac一键优化.app" ]; then rsync -a --delete --delay-updates "build/Mac一键优化.app/" "/Applications/Mac一键优化.app/"; else cp -R "build/Mac一键优化.app" /Applications/; fi
 open "/Applications/Mac一键优化.app"

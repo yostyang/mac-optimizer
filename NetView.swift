@@ -12,8 +12,8 @@ struct NetworkPage: View {
                 let sm = nd.summary
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("网络诊断").font(.system(size: 24, weight: .bold))
-                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(.system(size: 12)).foregroundColor(.secondary)
+                        Text("网络诊断").font(DS.title())
+                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     Spacer()
                     // 双标签放在标题行，不另占一行：v1.7 三张新卡片叠在原诊断页上会超高 277 pt，
@@ -61,11 +61,11 @@ struct NetworkPage: View {
                 HStack(spacing: 8) {
                     Circle().fill(color(t.result)).frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(t.name).font(.system(size: 12, weight: .medium))
+                        Text(t.name).font(.system(size: 11, weight: .medium))
                         Text(t.host).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
                     }
                     Spacer()
-                    Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
+                    Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
                     Text("丢包 " + String(format: "%.0f%%", t.result?.loss ?? 100)).font(.system(size: 11)).foregroundColor((t.result?.loss ?? 100) > 0 ? .orange : .secondary).monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
             }
@@ -81,18 +81,18 @@ struct NetworkPage: View {
             let svcs = dns.status?.services ?? nd.services
             if !svcs.isEmpty {
                 ForEach(svcs, id: \.service) { s in
-                    HStack { Text(s.service).font(.system(size: 12)); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
+                    HStack { Text(s.service).font(.system(size: 11)); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
                 }
             }
             if !nd.effective.isEmpty {
-                HStack { Text("系统实际使用").font(.system(size: 12)).foregroundColor(.secondary); Spacer(); Text(nd.effective.joined(separator: ", ")).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
+                HStack { Text("系统实际使用").font(.system(size: 11)).foregroundColor(.secondary); Spacer(); Text(nd.effective.joined(separator: ", ")).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
             }
             if !nd.resolves.isEmpty { Divider() }
             ForEach(nd.resolves) { r in
                 HStack(spacing: 8) {
                     Image(systemName: r.verdict == .ok ? "checkmark.circle.fill" : (r.verdict == .vpnFake ? "shield.lefthalf.filled" : "exclamationmark.circle.fill"))
-                        .foregroundColor(r.verdict == .ok ? good : (r.verdict == .vpnFake ? accent2 : (r.verdict == .slow ? .orange : .red))).font(.system(size: 12))
-                    Text(r.host).font(.system(size: 12)).lineLimit(1)
+                        .foregroundColor(r.verdict == .ok ? good : (r.verdict == .vpnFake ? accent2 : (r.verdict == .slow ? .orange : .red))).font(.system(size: 11))
+                    Text(r.host).font(.system(size: 11)).lineLimit(1)
                     Spacer()
                     Text(r.verdict == .ok ? (r.ms.map { String(format: "%.0f ms", $0) } ?? "") : r.verdict.rawValue).font(.system(size: 11, weight: .medium)).monospacedDigit()
                 }

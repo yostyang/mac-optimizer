@@ -140,7 +140,7 @@ extension MOTests {
         check(!ip.contains { $0.contains("demoapp2") } && !ip.contains { $0.contains("Group Containers") }, "相似 Bundle ID、共享 Group Containers 不误列")
         check(!ip.contains(home + "/Library/Containers/\(bid)"), "白名单路径不列入")
         check(items.allSatisfy { $0.size > 0 }, "预览显示每项大小")
-        let u = Uninstaller(); u.home = home; u.whitelist = { [] }; u.logURL = dir.appendingPathComponent("ulog.json")
+        let u = Uninstaller(); u.home = home; u.whitelist = { [] }; u.logURL = dir.appendingPathComponent("ulog.json"); u.records = []   // 用干净的临时日志，不受本机真实卸载记录影响
         u.moveToTrash = { url in let dst = URL(fileURLWithPath: trash).appendingPathComponent(UUID().uuidString + "-" + url.lastPathComponent); try fm.moveItem(at: url, to: dst); return dst }
         var running = true; u.isRunning = { _ in running }
         u.appPath = apps + "/DemoApp.app"; u.appName = "DemoApp"; u.bundleID = bid; u.items = items

@@ -365,7 +365,7 @@ struct DockModeCard: View {
     var body: some View {
         Card(title: "接显示器模式", icon: "powerplug") {
             HStack {
-                Text("息屏不断网").font(.system(size: 12, weight: .medium))
+                Text("息屏不断网").font(.system(size: 11, weight: .medium))
                 Spacer()
                 Toggle("", isOn: Binding(get: { d.enabled }, set: { d.setEnabled($0) })).toggleStyle(.switch).controlSize(.small).labelsHidden().tint(accent).accessibilityIdentifier("dock.toggle")
             }

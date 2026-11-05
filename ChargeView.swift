@@ -164,7 +164,7 @@ struct ChargeCard: View {
             Toggle("启用充电上限", isOn: Binding(get: { s.settings.enabled }, set: { c.setLimit(s.settings.limit, enabled: $0) })).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("charge.enabled")
             Spacer()
             Text(stateText).font(.system(size: 10)).foregroundColor(s.adapterCut || s.inhibited ? good : .secondary).lineLimit(2).multilineTextAlignment(.trailing)
-        }.font(.system(size: 12))
+        }.font(.system(size: 11))
         Group {
             HStack(spacing: 6) {
                 Text("上限")
@@ -182,11 +182,11 @@ struct ChargeCard: View {
             } else if s.caps.adapter {
                 Toggle("高于上限时自动放电（插着电源也用电池）", isOn: Binding(get: { s.settings.autoDischarge }, set: { c.setDischarge($0) })).toggleStyle(.switch).controlSize(.small)
             }
-        }.font(.system(size: 12)).disabled(!s.settings.enabled).opacity(s.settings.enabled ? 1 : 0.5)
+        }.font(.system(size: 11)).disabled(!s.settings.enabled).opacity(s.settings.enabled ? 1 : 0.5)
         HStack(spacing: 8) {
             Button { c.topUp(!s.topUp) } label: { Label(s.topUp ? "取消充满" : "充到 100%", systemImage: "bolt.fill").lineLimit(1).fixedSize() }.buttonStyle(PillButton(filled: false)).disabled(!s.settings.enabled).accessibilityIdentifier("charge.topup")
             if s.caps.led {
-                Toggle(isOn: Binding(get: { s.settings.led }, set: { c.setLED($0) })) { Text("MagSafe 灯").lineLimit(1).fixedSize() }.toggleStyle(.switch).controlSize(.small).font(.system(size: 12))
+                Toggle(isOn: Binding(get: { s.settings.led }, set: { c.setLED($0) })) { Text("MagSafe 灯").lineLimit(1).fixedSize() }.toggleStyle(.switch).controlSize(.small).font(.system(size: 11))
                     .help("保持在上限时绿灯，充电时橙灯").disabled(!s.settings.enabled)
             }
             Spacer()

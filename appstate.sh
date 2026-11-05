@@ -1,6 +1,8 @@
 # 测试/安装前记录用户正在运行的 Mac一键优化 的「常亮」与「接显示器模式」，结束后重新打开并核对（只正常退出，不强制）
 MO_APP="/Applications/Mac一键优化.app"
-mo_pid() { pgrep -x MacOptimizer | head -1; }
+# install-local.sh 用 set -euo pipefail：没有运行实例时 pgrep 返回 1，
+# pipefail 会让整个管道失败并静默终止脚本，因此用 || true 把「查不到」变成正常的空结果。
+mo_pid() { pgrep -x MacOptimizer 2>/dev/null | head -1 || true; }
 mo_has() { pmset -g assertions | grep -E "pid $1\(MacOptimizer\)" | grep -q "$2"; }
 mo_record() {
   MO_WAS_RUNNING=0; MO_AWAKE=0; MO_DOCK=0

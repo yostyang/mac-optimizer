@@ -239,8 +239,8 @@ struct CleanPage: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("清理预览").font(.system(size: 24, weight: .bold))
-                        Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(.secondary)
+                        Text("清理预览").font(DS.title())
+                        Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     Spacer()
                     SegmentedTrack {
@@ -254,7 +254,7 @@ struct CleanPage: View {
                     }
                 }
                 if tab == 1 { UninstallTab() } else {
-                if !store.note.isEmpty { Text(store.note).font(.system(size: 12)).foregroundColor(store.failures.isEmpty ? .secondary : .orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
+                if !store.note.isEmpty { Text(store.note).font(.system(size: 11)).foregroundColor(store.failures.isEmpty ? .secondary : .orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
                 Card(title: "清理清单", icon: "trash") {
                     if store.items.isEmpty {
                         Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 11)).foregroundColor(.secondary)
@@ -265,7 +265,7 @@ struct CleanPage: View {
                             HStack(spacing: 8) {
                                 Toggle("", isOn: $store.items[i].selected).toggleStyle(.switch).controlSize(.small).labelsHidden().disabled(store.trashing)
                                 VStack(alignment: .leading, spacing: 0) {
-                                    Text((store.items[i].path as NSString).lastPathComponent).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    Text((store.items[i].path as NSString).lastPathComponent).font(.system(size: 11, weight: .medium)).lineLimit(1)
                                     Text(store.items[i].path).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
                                     if let error = store.failures[store.items[i].path] { Text(error).font(.system(size: 10)).foregroundColor(.orange).lineLimit(2) }
                                 }

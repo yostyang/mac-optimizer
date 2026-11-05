@@ -225,8 +225,8 @@ struct ChangesPage: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("改动与提醒").font(.system(size: 24, weight: .bold))
-                        Text("本 App 做过的改动集中在这里看，能恢复的恢复，不能恢复的会写清楚办法").font(.system(size: 12)).foregroundColor(.secondary)
+                        Text("改动与提醒").font(DS.title())
+                        Text("本 App 做过的改动集中在这里看，能恢复的恢复，不能恢复的会写清楚办法").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     Spacer()
                 }
@@ -254,7 +254,7 @@ struct ChangesPage: View {
                         ForEach(Array(log.records.suffix(50).reversed())) { r in
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
-                                    Text(r.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    Text(r.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                                     Spacer()
                                     Text(r.kind.rawValue).font(.system(size: 10)).foregroundColor(.secondary)
                                 }

@@ -19,7 +19,10 @@ enum Fmt {
     static func energy(_ j: Double) -> String { j >= 3600 ? String(format: "%.1f Wh", j / 3600) : (j >= 36 ? String(format: "%.0f mWh", j / 3.6) : String(format: "%.1f mWh", j / 3.6)) }
 }
 
-func levelColor(_ frac: Double, hi: Double = 0.85, mid: Double = 0.6) -> Color { frac >= hi ? .red : (frac >= mid ? .orange : accent2) }
+/// 图表数据线：正常时用青蓝，异常时才换成状态色
+func levelColor(_ frac: Double, hi: Double = 0.85, mid: Double = 0.6) -> Color { frac >= hi ? bad : (frac >= mid ? warn : accent2) }
+/// 图标底色：正常 / 注意 / 危险，只用状态色，不和品牌紫抢眼
+func statusTint(_ frac: Double, hi: Double = 0.85, mid: Double = 0.6) -> Color { frac >= hi ? bad : (frac >= mid ? warn : good) }
 func batteryColor(_ p: Int) -> Color { p <= 10 ? .red : (p <= 20 ? .orange : good) }
 
 // MARK: - 小组件
@@ -56,16 +59,14 @@ struct Tile<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundColor(tint)
-                    .frame(width: 18, height: 18).background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(tint.opacity(0.12)))
-                Text(title).font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+            HStack(spacing: 6) {
+                IconBadge(symbol: icon, tint: tint, size: 18)
+                Text(title).font(DS.sub()).foregroundColor(.secondary)
                 Spacer(minLength: 2)
-                if !trailing.isEmpty { Text(trailing).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1) }
+                if !trailing.isEmpty { Text(trailing).font(DS.cap()).foregroundColor(.secondary).lineLimit(1) }
             }
             content
-        }.padding(11).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG)
-            .shadow(color: .black.opacity(0.06), radius: 10, y: 4))
+        }.padding(10).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).card()
     }
 }
 
@@ -73,8 +74,8 @@ struct BigValue: View {
     let value: String; var unit: String = ""
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(value).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
-            if !unit.isEmpty { Text(unit).font(.system(size: 11, weight: .medium)).foregroundColor(.secondary) }
+            Text(value).font(DS.num(17, .semibold))
+            if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(.secondary) }
         }
     }
 }
@@ -82,18 +83,24 @@ struct BigValue: View {
 struct Chip: View {
     let icon: String; let text: String
     var body: some View {
-        HStack(spacing: 4) { Image(systemName: icon).font(.system(size: 9)); Text(text).font(.system(size: 10, weight: .medium)).lineLimit(1) }
-            .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.white.opacity(0.18))).foregroundColor(.white)
+        HStack(spacing: 4) { Image(systemName: icon).font(DS.cap()); Text(text).font(DS.cap()).lineLimit(1) }
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill(Color.primary.opacity(0.05)))
+            .foregroundColor(.secondary)
     }
 }
 
+/// 健康分圆环：全 App 唯一保留渐变的地方，呼应图标那道紫→蓝弧线
 struct ScoreRing: View {
     let score: Int; var size: CGFloat = 54; var light = true
     var body: some View {
         ZStack {
-            Circle().stroke((light ? Color.white : accent).opacity(0.22), lineWidth: 5)
-            Circle().trim(from: 0, to: CGFloat(score) / 100).stroke(light ? Color.white : accent, style: StrokeStyle(lineWidth: 5, lineCap: .round)).rotationEffect(.degrees(-90))
-            Text("\(score)").font(.system(size: size * 0.36, weight: .bold, design: .rounded)).foregroundColor(light ? .white : accent).monospacedDigit()
+            Circle().stroke(Color.primary.opacity(0.10), lineWidth: 4)
+            Circle().trim(from: 0, to: CGFloat(score) / 100)
+                .stroke(LinearGradient(colors: [accent2, accent], startPoint: .leading, endPoint: .trailing),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text("\(score)").font(DS.num(size * 0.32, .semibold)).foregroundColor(.primary)
         }.frame(width: size, height: size)
     }
 }
@@ -144,7 +151,7 @@ struct MetricTiles: View {
         }.fixedSize(horizontal: false, vertical: true)
     }
     func cpuTile(_ s: Snapshot) -> some View {
-            Tile(icon: "cpu", title: "CPU", tint: levelColor(s.cpu / 100), trailing: Fmt.temp(s.cpuTemp)) {
+            Tile(icon: "cpu", title: "CPU", tint: statusTint(s.cpu / 100), trailing: Fmt.temp(s.cpuTemp)) {
                 BigValue(value: String(format: "%.0f", s.cpu), unit: "%")
                 Spark(values: m.cpuHist, color: levelColor(s.cpu / 100), maxValue: 100).frame(height: sparkH)
                 Text(String(format: "负载 %.2f / %.2f / %.2f", s.load[0], s.load[1], s.load[2])).font(.system(size: 10)).foregroundColor(.secondary).monospacedDigit()
@@ -154,7 +161,7 @@ struct MetricTiles: View {
     func gpuTile(_ s: Snapshot) -> some View {
             Tile(icon: "square.stack.3d.up", title: "GPU", tint: accent, trailing: Fmt.temp(s.gpuTemp)) {
                 if let g = s.gpu { BigValue(value: String(format: "%.0f", g), unit: "%") } else { BigValue(value: "—") }
-                Spark(values: m.gpuHist, color: accent, maxValue: 100).frame(height: sparkH)
+                Spark(values: m.gpuHist, color: accent2, maxValue: 100).frame(height: sparkH)
                 Text(s.gpuCores > 0 ? "\(s.gpuCores) 核图形处理器" : "核心数不可读").font(.system(size: 10)).foregroundColor(.secondary)
             }
     }
@@ -167,14 +174,14 @@ struct MetricTiles: View {
             }
     }
     func diskTile(_ s: Snapshot) -> some View {
-            Tile(icon: "internaldrive", title: "磁盘", tint: levelColor(s.diskUsedFraction, hi: 0.92, mid: 0.85), trailing: String(format: "%.0f GB", s.diskTotalGB)) {
+            Tile(icon: "internaldrive", title: "磁盘", tint: statusTint(s.diskUsedFraction, hi: 0.92, mid: 0.85), trailing: String(format: "%.0f GB", s.diskTotalGB)) {
                 BigValue(value: String(format: "%.0f", s.diskUsedFraction * 100), unit: "% 已用")
                 Bar(frac: s.diskUsedFraction, color: levelColor(s.diskUsedFraction, hi: 0.92, mid: 0.85))
                 Text(String(format: "可用 %.0f GB", s.diskFreeGB)).font(.system(size: 10)).foregroundColor(.secondary)
             }
     }
     func netTile(_ s: Snapshot) -> some View {
-            Tile(icon: "arrow.up.arrow.down", title: "网络", tint: accent2, trailing: s.netKind) {
+            Tile(icon: "arrow.up.arrow.down", title: "网络", tint: accent, trailing: s.netKind) {
                 Button { showApps = true } label: {
                     HStack(spacing: 10) {
                         Label(Fmt.rate(s.downBps), systemImage: "arrow.down").font(.system(size: 11, weight: .semibold)).monospacedDigit()
@@ -199,7 +206,7 @@ struct MetricTiles: View {
                     BigValue(value: String(format: "%.0f", avg), unit: "RPM")
                     Bar(frac: s.fanMax > 0 ? avg / s.fanMax : 0, color: good)
                     Text(avg < 1 ? "静音（低负载时风扇停转）" : String(format: "负荷 %.0f%% · 上限 %.0f", s.fanMax > 0 ? avg / s.fanMax * 100 : 0, s.fanMax)).font(.system(size: 10)).foregroundColor(.secondary)
-                    Text("自动控制（调速需管理员权限，未提供）").font(.system(size: 9)).foregroundColor(.secondary.opacity(0.8))
+                    Text("自动控制（调速需管理员权限，未提供）").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.8))
                 } else { BigValue(value: "—"); Text("这台 Mac 没有可读取的风扇").font(.system(size: 10)).foregroundColor(.secondary) }
             }
     }
@@ -254,32 +261,48 @@ struct ProcList: View {
     @ObservedObject var m: Monitor
     @ObservedObject var feedback = OperationFeedback.shared
     var limit = 5
+    var selection: Int? = nil
+    var onSelect: ((Int) -> Void)? = nil
+    var onMore: ((ProcInfo) -> Void)? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack { Text("高占用进程").font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary); Spacer(); Text("CPU · 内存").font(.system(size: 10)).foregroundColor(.secondary) }
-            if m.s.top.isEmpty { Text("正在统计…").font(.system(size: 11)).foregroundColor(.secondary) }
-            ForEach(Array(m.s.top.prefix(limit))) { p in
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("高占用进程").font(DS.cap(.semibold)).foregroundColor(.secondary)
+                Spacer()
+                Text("CPU · 内存").font(DS.cap()).foregroundColor(.secondary)
+            }.padding(.horizontal, 4).padding(.top, 2)
+            if m.s.top.isEmpty { Text("正在统计…").font(DS.sub()).foregroundColor(.secondary).padding(4) }
+            ForEach(Array(m.s.top.prefix(limit).enumerated()), id: \.element.id) { i, p in
+                let on = selection == i
                 HStack(spacing: 8) {
                     if let ic = IconCache.icon(p.id) { Image(nsImage: ic).resizable().frame(width: 16, height: 16) }
-                    else { Image(systemName: "gearshape").font(.system(size: 11)).foregroundColor(.secondary).frame(width: 16, height: 16) }
-                    Text(p.name).font(.system(size: 11)).lineLimit(1)
-                    Spacer()
-                    Text(String(format: "%.1f%%", p.cpu)).font(.system(size: 11, weight: .medium)).monospacedDigit().foregroundColor(levelColor(p.cpu / 100, hi: 0.8, mid: 0.4))
-                    Text(Fmt.mem(p.memMB)).font(.system(size: 10)).foregroundColor(.secondary).monospacedDigit().frame(width: 52, alignment: .trailing)
-                    let f = ProcActions.fix(for: p)
-                    if let t = f.short {
-                        Button(t) { DispatchQueue.main.async { FixRunner.perform(f) } }
-                            .buttonStyle(.plain).font(.system(size: 10, weight: .medium)).foregroundColor(accent)
-                            .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(accent.opacity(0.10)))
-                            .disabled(feedback.busy).frame(width: 44).help(f.title ?? "").accessibilityIdentifier("proc.fix.\(p.id)")
-                    } else { Color.clear.frame(width: 44, height: 1) }
+                    else { IconBadge(symbol: "gearshape", tint: Color(nsColor: .secondaryLabelColor), size: 16, selected: on) }
+                    Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? .white : .primary)
+                    Spacer(minLength: 4)
+                    Text(String(format: "%.0f%%", p.cpu)).font(DS.num(11, .medium))
+                        .foregroundColor(on ? .white : levelColor(p.cpu / 100, hi: 0.8, mid: 0.4))
+                    Text(Fmt.mem(p.memMB)).font(DS.num(10, .regular))
+                        .foregroundColor(on ? Color.white.opacity(0.8) : .secondary).frame(width: 50, alignment: .trailing)
+                    if let t = ProcActions.fix(for: p).short {
+                        Text(t).font(DS.cap()).foregroundColor(on ? .white : .secondary)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
+                                .fill(on ? Color.white.opacity(0.18) : Color.primary.opacity(0.05)))
+                    }
                 }
+                .padding(.horizontal, 6).frame(height: 28)
+                .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
+                    .fill(on ? AnyShapeStyle(accent) : AnyShapeStyle(Color.clear)))
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect?(i) }
+                .contextMenu { if onMore != nil { Button("更多操作…") { onMore?(p) } } }
             }
-            if !feedback.note.isEmpty { Text(feedback.note).font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
-        }.padding(11).background(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.06), radius: 10, y: 4))
+            if !feedback.note.isEmpty { Text(feedback.note).font(DS.cap()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true).padding(4) }
+        }
     }
 }
 
+/// 快捷操作：列表项 + 开关状态 + 快捷键提示
 struct QuickActions: View {
     @ObservedObject var ui = UIState.shared
     @ObservedObject var ka = KeepAwake.shared
@@ -287,46 +310,47 @@ struct QuickActions: View {
     @ObservedObject var cc = ChargeClient.shared
     @ObservedObject var dock = DockMode.shared
     var showStats = true
-    var chargeOn: Bool { cc.phase == .ready && cc.st.settings.enabled }
-    func toggleCharge() {
-        if cc.phase == .ready { cc.setLimit(cc.st.settings.limit, enabled: !cc.st.settings.enabled) }
-        else { Nav.shared.sel = -3; StatusBar.shared.popover.performClose(nil); UIState.shared.openMain() }   // 还没装助手：去电池页安装
-    }
-    func btn(_ id: String, _ icon: String, _ title: String, on: Bool = false, _ act: @escaping () -> Void) -> some View {
-        Button(action: act) {
-            VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 14, weight: .medium)).frame(height: 18)
-                Text(title).font(.system(size: 10))
-            }.frame(maxWidth: .infinity).padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(accent.opacity(0.08))))
-            .foregroundColor(on ? .white : accent).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier(id)
-    }
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                btn("act.shot", "camera.viewfinder", "截图") { Actions.screenshot() }
-                btn("act.mic", ui.micMuted ? "mic.slash.fill" : "mic.fill", ui.micMuted ? "麦克风已关" : "麦克风", on: ui.micMuted) { if Mic.setMuted(!Mic.muted) { ui.micMuted = Mic.muted } }
-                btn("act.awake", ka.on ? "sun.max.fill" : "sun.max", ka.on ? "常亮中" : "常亮", on: ka.on) { ka.toggle() }
-                btn("act.clean", "sparkles.rectangle.stack", "擦屏") { Overlay.cleanScreen() }
-                if cc.phase != .unsupported {
-                    btn("act.charge", "battery.75", chargeOn ? "上限 \(cc.st.settings.limit)%" : "充电上限", on: chargeOn) { toggleCharge() }
-                        .help(cc.phase == .ready ? (chargeOn ? "充电上限已开启，点一下关闭" : "充电上限已关闭，点一下开启") : "需要先在「电池」页安装充电助手")
+        VStack(spacing: 1) {
+            ForEach(QuickActionList.all()) { a in
+                let hasSwitch = a.id == "act.awake" || a.id == "act.dock" || a.id == "act.charge"
+                Button { a.run() } label: {
+                    HStack(spacing: 8) {
+                        IconBadge(symbol: a.symbol, tint: a.isOn() ? good : accent, size: 18)
+                        Text(a.title).font(DS.sub(.medium))
+                        Spacer(minLength: 4)
+                        if !hasSwitch && !a.stateLabel().isEmpty {
+                            Text(a.stateLabel()).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+                        }
+                        if hasSwitch {
+                            Capsule().fill(a.isOn() ? good : Color.primary.opacity(0.12))
+                                .frame(width: 22, height: 13)
+                                .overlay(alignment: a.isOn() ? .trailing : .leading) {
+                                    Circle().fill(a.isOn() ? Color.white : Color(nsColor: .tertiaryLabelColor))
+                                        .frame(width: 11, height: 11).padding(1)
+                                }
+                        }
+                        Kbd(text: a.hint)
+                    }
+                    .padding(.horizontal, 6).frame(height: 28).contentShape(Rectangle())
                 }
-                btn("act.dock", dock.active ? "powerplug.fill" : "powerplug", "接显示器", on: dock.enabled) { dock.setEnabled(!dock.enabled) }
-                    .help("接显示器模式：" + dock.status)
+                .buttonStyle(.plain).accessibilityIdentifier(a.id)
             }
             if showStats {
+                Hairline().padding(.vertical, 4)
                 HStack(spacing: 0) {
-                    stat("\(st.optimized)", "项已优化"); Divider().frame(height: 22)
-                    stat("\(st.quitApps)", "个应用已退出"); Divider().frame(height: 22)
+                    stat("\(st.optimized)", "项已优化"); Divider().frame(height: 18)
+                    stat("\(st.quitApps)", "个应用已退出"); Divider().frame(height: 18)
                     stat(Fmt.mem(st.freedMB), "内存已释放")
                 }
             }
         }.onAppear { if cc.phase != .ready { cc.refresh() } }   // 只读状态，不会安装助手
     }
     func stat(_ v: String, _ l: String) -> some View {
-        VStack(spacing: 1) { Text(v).font(.system(size: 13, weight: .semibold, design: .rounded)).monospacedDigit(); Text(l).font(.system(size: 9)).foregroundColor(.secondary) }.frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            Text(v).font(DS.num(13, .semibold))
+            Text(l).font(DS.cap(.regular)).foregroundColor(.secondary)
+        }.frame(maxWidth: .infinity)
     }
 }
 
@@ -347,7 +371,7 @@ struct PanelContentHeightKey: PreferenceKey {
 }
 struct PanelView: View {
     @ObservedObject var m: Monitor
-    @State private var contentHeight: CGFloat = 940
+    @State private var contentHeight: CGFloat = 640
     var body: some View {
         let h = PanelHeight.height(contentHeight: contentHeight, visibleHeight: NSScreen.main?.visibleFrame.height ?? 900)
         ScrollView(showsIndicators: false) {
@@ -356,10 +380,52 @@ struct PanelView: View {
                     Color.clear.preference(key: PanelContentHeightKey.self, value: geo.size.height)
                 })
         }
-        .frame(width: 380, height: h).background(pageBG)
+        .frame(width: 380, height: h)
         .onPreferenceChange(PanelContentHeightKey.self) { v in
-            if v > 600 && v != contentHeight { contentHeight = v }
+            if v > 400 && v != contentHeight { contentHeight = v }
         }
+    }
+}
+
+/// 面板内的键盘处理（↑↓ 选进程、↵ 处理、⌘K 更多操作）
+final class PanelKeys {
+    static let shared = PanelKeys()
+    var handler: ((NSEvent) -> Bool)?
+}
+struct PanelKeyRouter: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { PanelKeyView() }
+    func updateNSView(_ v: NSView, context: Context) {}
+}
+final class PanelKeyView: NSView {
+    private var monitor: Any?
+    override var acceptsFirstResponder: Bool { true }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard monitor == nil, let w = window else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+            guard e.window === w, let h = PanelKeys.shared.handler else { return e }
+            return h(e) ? nil : e
+        }
+    }
+    deinit { if let m = monitor { NSEvent.removeMonitor(m) } }
+}
+
+/// 面板里的一行指标：图标、名称、数值、迷你曲线
+struct PanelMetric: View {
+    let symbol: String; let title: String; let value: String; let tint: Color
+    var series: [Double]? = nil
+    var frac: Double? = nil
+    var maxValue: Double? = nil
+    var line: Color = accent2
+    var body: some View {
+        HStack(spacing: 8) {
+            IconBadge(symbol: symbol, tint: tint, size: 16)
+            Text(title).font(DS.sub()).foregroundColor(.secondary).frame(width: 46, alignment: .leading)
+            Text(value).font(DS.num(12, .medium)).frame(width: 68, alignment: .trailing)
+            if let s = series { Spark(values: s, color: line, maxValue: maxValue).frame(width: 52, height: 13) }
+            else if let f = frac { Bar(frac: f, color: line, height: 3).frame(width: 52) }
+            Spacer(minLength: 0)
+        }.frame(height: 26)
     }
 }
 struct PanelContent: View {
@@ -367,52 +433,171 @@ struct PanelContent: View {
     @ObservedObject var ui = UIState.shared
     @ObservedObject var alerts = BatteryAlerts.shared
     @ObservedObject var dm = DisplayManager.shared
+    @ObservedObject var traffic = TrafficHistory.shared
+    @State private var sel = 0
+    @State private var more: ProcInfo?
     @State private var showApps = false
     var body: some View {
         let s = m.s; let h = s.health
-        // 面板紧凑条加了一行后总高 1015 超过 1000 上限：面板间距收紧到 6、面板头内边距 14→12，省约 24pt，回到 1000 以内
-        VStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    ScoreRing(score: h.score)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("健康分").font(.system(size: 11)).opacity(0.8)
-                        Text(h.status).font(.system(size: 15, weight: .semibold))
-                    }
+        VStack(spacing: 8) {
+            header(h)
+            conclusion(h)
+            metrics(s)
+            VStack(spacing: 1) { QuickActions(showStats: false) }.padding(4).card()
+            VStack(spacing: 1) {
+                ProcList(m: m, limit: 4, selection: sel, onSelect: { sel = $0 }, onMore: { more = $0 })
+                HStack(spacing: 6) {
+                    Kbd(text: "↵"); Text("处理选中进程").font(DS.cap()).foregroundColor(.secondary)
+                    Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(.secondary)
                     Spacer()
-                    Button { ui.openMain() } label: { Image(systemName: "macwindow").font(.system(size: 13)) }.buttonStyle(.plain).help("打开主窗口").accessibilityIdentifier("panel.open")
-                    Menu {
-                        Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) { Text("CPU 占用").tag("cpu"); Text("健康分").tag("score"); Text("电池图标").tag("battery"); Text("网速").tag("net") }
-                        Toggle("登录时启动", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
-                        Divider()
-                        Button("隐藏菜单栏图标") { ui.menuBar = false }
-                        Button("退出 Mac一键优化") { NSApp.terminate(nil) }
-                    } label: { Image(systemName: "gearshape").font(.system(size: 13)) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 20)
-                }.foregroundColor(.white)
-                HStack(spacing: 5) {
-                    Chip(icon: "cpu", text: s.chip.isEmpty ? "—" : s.chip)
-                    Chip(icon: "memorychip", text: "\(s.ramGB) GB")
-                    Chip(icon: "apple.logo", text: s.osVersion)
+                }.padding(.horizontal, 4).padding(.bottom, 4)
+            }.padding(4).card()
+        }
+        .padding(10)
+        .frame(width: 380)
+        .background(Vibrancy(material: .popover, solid: DS.window))
+        .overlay { if let p = more { PanelMore(p: p, m: m) { more = nil } } }
+        .background(PanelKeyRouter())
+        .onAppear {
+            PanelKeys.shared.handler = { e in
+                let count = min(4, m.s.top.count)
+                if more != nil { return false }
+                switch e.keyCode {
+                case 125: sel = min(sel + 1, max(0, count - 1)); return true
+                case 126: sel = max(0, sel - 1); return true
+                case 36, 76:
+                    guard m.s.top.indices.contains(sel) else { return false }
+                    let f = ProcActions.fix(for: m.s.top[sel])
+                    DispatchQueue.main.async { FixRunner.perform(f) }
+                    return true
+                default:
+                    if e.modifierFlags.contains(.command), e.charactersIgnoringModifiers == "k" {
+                        if m.s.top.indices.contains(sel) { more = m.s.top[sel] }
+                        return true
+                    }
+                    return false
                 }
-                HStack(spacing: 5) {
-                    Chip(icon: "clock", text: "已开机 " + Fmt.uptime(s.uptime))
-                    Chip(icon: "network", text: s.proxy.isEmpty ? "—" : s.proxy)
-                    if let d = dm.displays.first(where: { !$0.builtin }) ?? dm.displays.first { Chip(icon: "display", text: "\(d.current.label) · \(d.current.refreshLabel)") }
+            }
+        }
+        .onDisappear { PanelKeys.shared.handler = nil }
+    }
+
+    func header(_ h: (score: Int, status: String)) -> some View {
+        HStack(spacing: 8) {
+            IconBadge(symbol: "speedometer", tint: accent, size: 22)
+            Text("Mac 一键优化").font(DS.body(.semibold))
+            Spacer()
+            Button { ui.openMain() } label: { Image(systemName: "macwindow").font(DS.body()) }
+                .buttonStyle(.plain).help("打开主窗口").accessibilityIdentifier("panel.open")
+            Menu {
+                Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) {
+                    Text("CPU 占用").tag("cpu"); Text("健康分").tag("score")
+                    Text("电池图标").tag("battery"); Text("网速").tag("net")
                 }
-            }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(LinearGradient(colors: [accent2, accent, Color(red: 0.36, green: 0.22, blue: 0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)))
-            MetricTiles(m: m)
+                Toggle("登录时启动", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
+                Divider()
+                Button("设置…") { Nav.shared.sel = -8; StatusBar.shared.popover.performClose(nil); ui.openMain() }
+                Button("隐藏菜单栏图标") { ui.menuBar = false }
+                Button("退出 Mac一键优化") { NSApp.terminate(nil) }
+            } label: { Image(systemName: "gearshape").font(DS.body()) }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 18)
+        }
+    }
+
+    /// 一行结论：不卡 / 有点卡，后面跟原因
+    func conclusion(_ h: (score: Int, status: String)) -> some View {
+        let word = h.score >= 85 ? "不卡" : (h.score >= 60 ? "有点卡" : "很卡")
+        let tint = h.score >= 85 ? good : (h.score >= 60 ? warn : bad)
+        return HStack(spacing: 10) {
+            ScoreRing(score: h.score, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(word) · \(h.status)").font(DS.body(.semibold)).foregroundColor(tint)
+                Text(m.s.chip + " · " + "\(m.s.ramGB) GB · " + m.s.osVersion).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 4)
             Button { showApps = true } label: {
-                HStack { Image(systemName: "arrow.up.arrow.down"); Text("哪些应用在用网络").font(.system(size: 12, weight: .medium)); Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)) }
-                    .foregroundColor(accent).padding(.horizontal, 12).padding(.vertical, 8)
-            }.buttonStyle(.plain).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(accent.opacity(0.08))).accessibilityIdentifier("panel.traffic")
-            .popover(isPresented: $showApps, arrowEdge: .trailing) { AppTrafficPopover() }
-            BatteryTile(s: s)
-            // v2.1 面板减负：进程只放前 4 条、快捷操作不放统计行，面板总高省约 55pt，
-            // 底部「上限 80%」「接显示器」不再被折叠线截掉；主窗口仍是 5 条 + 统计行，不变
-            ProcList(m: m, limit: 4)
-            QuickActions(showStats: false)
-        }.padding(12).frame(width: 380).background(pageBG)
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.arrow.down").font(DS.cap())
+                    Text(Fmt.rate(m.s.downBps)).font(DS.num(11, .medium))
+                }
+            }.buttonStyle(.plain).foregroundColor(accentText)
+                .popover(isPresented: $showApps, arrowEdge: .trailing) { AppTrafficPopover() }
+                .accessibilityIdentifier("panel.traffic")
+        }
+    }
+
+    func metrics(_ s: Snapshot) -> some View {
+        let series = Array(traffic.series(.hour1).suffix(30))
+        let hasNet = series.contains { $0.down != nil }
+        return VStack(spacing: 1) {
+            PanelMetric(symbol: "cpu", title: "CPU", value: String(format: "%.0f%%", s.cpu),
+                        tint: statusTint(s.cpu / 100), series: m.cpuHist, maxValue: 100,
+                        line: levelColor(s.cpu / 100))
+            PanelMetric(symbol: "square.stack.3d.up", title: "GPU", value: s.gpu.map { String(format: "%.0f%%", $0) } ?? "—",
+                        tint: accent, series: m.gpuHist, maxValue: 100)
+            PanelMetric(symbol: "memorychip", title: "内存", value: String(format: "%.0f%%", s.memFraction * 100),
+                        tint: Fmt.pressure(s.memPressure).1, frac: s.memFraction)
+            PanelMetric(symbol: "internaldrive", title: "磁盘", value: String(format: "%.0f%%", s.diskUsedFraction * 100),
+                        tint: statusTint(s.diskUsedFraction, hi: 0.92, mid: 0.85), frac: s.diskUsedFraction)
+            PanelMetric(symbol: "arrow.up.arrow.down", title: "网络", value: Fmt.rate(s.downBps), tint: accent2,
+                        series: hasNet ? series.map { ($0.down ?? 0) + ($0.up ?? 0) } : m.downHist)
+            if let f = s.fans, !f.isEmpty {
+                let avg = f.reduce(0, +) / Double(f.count)
+                PanelMetric(symbol: "fan", title: "风扇", value: String(format: "%.0f", avg), tint: good,
+                            frac: s.fanMax > 0 ? avg / s.fanMax : 0)
+            }
+            if let b = s.battery {
+                PanelMetric(symbol: s.charging ? "battery.100.bolt" : "battery.75", title: "电池", value: "\(b)%",
+                            tint: batteryColor(b), frac: Double(b) / 100)
+            }
+        }.padding(4).card()
+    }
+}
+
+/// 面板里的 ⌘K 更多操作
+struct PanelMore: View {
+    let p: ProcInfo
+    @ObservedObject var m: Monitor
+    var close: () -> Void
+    var body: some View {
+        let f = ProcActions.fix(for: p)
+        ZStack {
+            Color.black.opacity(0.14).onTapGesture { close() }
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    IconBadge(symbol: "bolt", size: 16)
+                    Text(p.name).font(DS.sub(.medium)).lineLimit(1)
+                    Spacer()
+                    Kbd(text: "esc")
+                }.padding(8)
+                Hairline()
+                VStack(spacing: 1) {
+                    if let t = f.title {
+                        actionRow(t, "↵", destructive: true) { close(); DispatchQueue.main.async { FixRunner.perform(f) } }
+                    }
+                    actionRow("复制进程名", nil) {
+                        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(p.name, forType: .string); close()
+                    }
+                    actionRow("复制 PID \(p.id)", nil) {
+                        NSPasteboard.general.clearContents(); NSPasteboard.general.setString("\(p.id)", forType: .string); close()
+                    }
+                    actionRow("刷新列表", nil) { close(); m.sampleNow() }
+                }.padding(4)
+            }
+            .frame(width: 280)
+            .background(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous).fill(.regularMaterial))
+            .overlay(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous).strokeBorder(DS.borderStrong, lineWidth: 1))
+            .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+        }
+    }
+    func actionRow(_ t: String, _ k: String?, destructive: Bool = false, _ run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            HStack {
+                Text(t).font(DS.body()).foregroundColor(destructive ? bad : .primary)
+                Spacer()
+                if let k { Kbd(text: k) }
+            }.padding(.horizontal, 8).frame(height: 30).contentShape(Rectangle())
+        }.buttonStyle(.plain)
     }
 }
 
@@ -423,33 +608,25 @@ struct DashboardView: View {
     var body: some View {
         let s = m.s; let h = s.health
         PageScroll {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 16) {
-                    ScoreRing(score: h.score, size: 64, light: false)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("实时监控").font(.system(size: 24, weight: .bold))
-                        Text("\(h.status) · 窗口可见时每 2 秒刷新，关闭后自动降频").font(.system(size: 12)).foregroundColor(.secondary)
-                        HStack(spacing: 6) {
-                            ForEach([s.chip, "\(s.ramGB) GB 内存", s.osVersion, "已开机 " + Fmt.uptime(s.uptime), "网络 " + (s.proxy.isEmpty ? "—" : s.proxy)], id: \.self) {
-                                Text($0).font(.system(size: 10, weight: .medium)).foregroundColor(accent).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(accent.opacity(0.09)))
-                            }
-                        }
-                    }
-                    Spacer()
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
+                    PageHeader(title: "实时监控", sub: "\(h.status) · \(s.chip) · \(s.ramGB) GB · 已开机 \(Fmt.uptime(s.uptime))")
+                    Spacer(minLength: 8)
+                    ScoreRing(score: h.score, size: 46)
                 }
-                MetricTiles(m: m, columns: 3, sparkH: 40)
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 12) { BatteryTile(s: s); ProcList(m: m) }
-                    VStack(spacing: 12) {
-                        QuickActions().padding(11).background(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.06), radius: 10, y: 4))
+                MetricTiles(m: m, columns: 3, sparkH: 26)
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(spacing: 8) { BatteryTile(s: s); ProcList(m: m, limit: 4).padding(8).card() }
+                    VStack(spacing: 8) {
+                        QuickActions().padding(6).card()
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle("在菜单栏显示实时指标", isOn: $ui.menuBar).accessibilityIdentifier("dash.menubar")
                             Toggle("登录时自动启动（默认关闭）", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled })).accessibilityIdentifier("dash.login")
-                        }.toggleStyle(.switch).controlSize(.small).font(.system(size: 12)).padding(11).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: CDS.radiusCard, style: .continuous).fill(cardBG).shadow(color: .black.opacity(0.06), radius: 10, y: 4))
+                        }.toggleStyle(.switch).controlSize(.small).font(DS.sub()).padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                        .card()
                     }
                 }
-            }.padding(32)
+            }.padding(16)
         }
         .onAppear { m.dashboardShown = true } .onDisappear { m.dashboardShown = false }
     }
@@ -516,7 +693,7 @@ struct CleanHint: View {
     var body: some View {
         ZStack {
             Color.black
-            Text("擦屏模式 · 按 Esc 退出 · \(seconds) 秒后自动结束").font(.system(size: 15, weight: .medium)).foregroundColor(.white.opacity(0.55)).opacity(shown ? 1 : 0)
+            Text("擦屏模式 · 按 Esc 退出 · \(seconds) 秒后自动结束").font(.system(size: 13, weight: .medium)).foregroundColor(.white.opacity(0.55)).opacity(shown ? 1 : 0)
         }.onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { withAnimation(.easeOut(duration: 0.8)) { shown = false } } }
     }
 }
@@ -528,8 +705,8 @@ struct GlowAlert: View {
             RoundedRectangle(cornerRadius: 0).strokeBorder(LinearGradient(colors: [.red, .orange, .red], startPoint: .top, endPoint: .bottom), lineWidth: pulse ? 34 : 16)
                 .blur(radius: 22).opacity(pulse ? 0.95 : 0.55)
             VStack(spacing: 10) {
-                Image(systemName: "battery.0").font(.system(size: 40)).foregroundColor(.red)
-                Text("电量仅剩 \(level)%").font(.system(size: 26, weight: .bold))
+                Image(systemName: "battery.0").font(.system(size: 17)).foregroundColor(.red)
+                Text("电量仅剩 \(level)%").font(.system(size: 17, weight: .bold))
                 Text("请尽快接上电源 · 按 Esc 关闭").font(.system(size: 13)).foregroundColor(.secondary)
                 Button("知道了") { Overlay.close() }.buttonStyle(PillButton())
             }.padding(28).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.regularMaterial))

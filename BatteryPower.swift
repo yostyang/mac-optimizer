@@ -115,8 +115,8 @@ struct BatteryCompactBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text("电池").font(.system(size: 12, weight: .medium))
-                if let p = s.battery { Text("\(p)%").font(.system(size: 14, weight: .semibold)).monospacedDigit() } else { Text("不可读").font(.system(size: 12)).foregroundColor(.secondary) }
+                Text("电池").font(.system(size: 11, weight: .medium))
+                if let p = s.battery { Text("\(p)%").font(.system(size: 13, weight: .semibold)).monospacedDigit() } else { Text("不可读").font(.system(size: 11)).foregroundColor(.secondary) }
                 Spacer()
                 if flow.charging, let m = minutes { Text("预计 \(fmtMinutes(m)) 充满（估算，会变）").font(.system(size: 11)).foregroundColor(.secondary) }
                 else if flow.charging { Text("正在充电，充满时间不可读").font(.system(size: 11)).foregroundColor(.secondary) }
