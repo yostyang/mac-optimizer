@@ -275,16 +275,10 @@ enum MOTests {
             }
             return out
         }
-        var texts = collect()
-        if texts.isEmpty {           // 离屏窗口不是 key 时 SwiftUI 不生成辅助功能树，置前后重取
-            for _ in 0..<2 where texts.isEmpty {
-                NSApp.activate(ignoringOtherApps: true)
-                v.window?.makeKeyAndOrderFront(nil)
-                v.window?.makeFirstResponder(v)
-                settle(1.0)
-                texts = collect()
-            }
-        }
+        let texts = collect()
+        // 注意：这里不要试图 makeKeyAndOrderFront 抢救。抢 key 会让后续所有离屏窗口的
+        // 辅助功能树一起失效（表现为整轮 40+ 次「检查 0 段文字」）。取不到就跳过并计数，
+        // 由 snapshots() 末尾的「辅助功能树可用性」统一判断是否是整体故障。
         if texts.isEmpty {
             contrastSkips += 1
             info("跳过对比度 \(name)：离屏窗口没有生成辅助功能树")
@@ -393,7 +387,6 @@ enum MOTests {
         mon.panelOpen = true
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
         NSApp.activate(ignoringOtherApps: true)   // 让 SwiftUI 生成辅助功能树（用于对比度检查）
-        w.makeKeyAndOrderFront(nil); w.makeFirstResponder(w.contentView); w.displayIfNeeded()
         settle(10)
         check(mon.cpuHist.count >= 3, "已采样", "\(mon.cpuHist.count) 次")
         let modes: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
