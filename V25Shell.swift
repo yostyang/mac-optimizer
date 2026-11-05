@@ -24,6 +24,7 @@ let navPages: [NavPage] = [
     NavPage(id: 4, icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机", group: "工具"),
     NavPage(id: 5, icon: "shield.lefthalf.filled", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突", group: "工具"),
     NavPage(id: 6, icon: "rectangle.on.rectangle", title: "显示性能", sub: "减轻大屏幕的渲染负担", group: "工具"),
+    NavPage(id: -9, icon: "rectangle.split.3x1", title: "桌面分区", sub: "每块屏幕的窗口分区模板", group: "状态"),
     NavPage(id: -8, icon: "gearshape", title: "设置", sub: "全局快捷键、菜单栏与启动", group: "设置"),
 ]
 
@@ -143,6 +144,7 @@ enum CmdIndex {
                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { Shell.shared.model?.scan() }
                                })]))
         }
+        out += SplitController.commands(q)
         if matches(q, "设置 快捷键 全局 热键") {
             out.append(CmdItem(id: "action.settings", kind: .action, title: "设置", subtitle: "全局快捷键、菜单栏与启动",
                                symbol: "gearshape", actions: [CmdAction(title: "打开设置", hint: "↵", run: { open(-8) })]))
