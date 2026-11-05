@@ -236,7 +236,7 @@ enum MOTests {
                 let gi = args.firstIndex(of: "--goldens"); let gd = gi.flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil }
                 if let gd { try? FileManager.default.createDirectory(atPath: gd, withIntermediateDirectories: true) }
                 snapshots(out, w, goldens: gd, approve: args.contains("--approve"))
-            } else if ProcessInfo.processInfo.environment["MO_UI_ONLY"] == "v26" { UIState.shared.openMain(); V25.ui(w); V26.ui(w) } else { uiChecks(w) }
+            } else { uiChecks(w) }
             EnergyTracker.shared.stop()
             for (k, v) in zip(keys, backup) { if let v { UserDefaults.standard.set(v, forKey: k) } else { UserDefaults.standard.removeObject(forKey: k) } }
             suite.removePersistentDomain(forName: "mo-uitest")

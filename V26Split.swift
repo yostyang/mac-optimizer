@@ -197,9 +197,9 @@ struct SplitPage: View {
                     ForEach(ds, id: \.uuid) { d in
                         ListRow(icon: nil, symbol: "display", title: d.name,
                                 subtitle: c.prefs.template(d.uuid)?.title ?? "未启用",
-                                selected: (sel ?? ds.first?.uuid) == d.uuid, action: { sel = d.uuid }) { EmptyView() }
+                                selected: (sel ?? ds.first?.uuid) == d.uuid, action: { sel = d.uuid }) { EmptyView() }.accessibilityIdentifier("split.row.\(d.uuid)")
                     }
-                }.frame(width: 220).accessibilityIdentifier("split.list")
+                }.frame(width: 220).accessibilityElement(children: .contain).accessibilityIdentifier("split.list")
                 if let d = ds.first(where: { $0.uuid == (sel ?? ds.first?.uuid) }) {
                     detail(d).id(tick)
                 } else { Text("没有检测到显示器").foregroundColor(.secondary) }

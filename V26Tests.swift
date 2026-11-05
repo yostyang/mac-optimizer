@@ -94,7 +94,7 @@ enum V26 {
         MOTests.check(MOTests.waitUntil(2) { MOTests.find(pv, id: "disp.split") != nil }, "显示器页有「桌面分区」入口")
         MOTests.find(pv, id: "disp.split")?.press()
         MOTests.check(MOTests.waitUntil(2) { Nav.shared.sel == -9 }, "打开桌面分区页")
-        MOTests.check(MOTests.waitUntil(2) { MOTests.find(pv, id: "split.list") != nil && MOTests.find1(pv, label: "测试屏") != nil }, "列表显示屏幕")
+        MOTests.check(MOTests.waitUntil(2) { MOTests.find(pv, id: "split.list") != nil && MOTests.find1(pv, id: "split.row.T1") != nil }, "列表显示屏幕")
         MOTests.find(pv, id: "split.tpl.21")?.press()
         MOTests.check(MOTests.waitUntil(2) { c.prefs.template("T1") == .twoThirds }, "点选模板后保存")
         MOTests.find(pv, id: "split.off")?.press()
