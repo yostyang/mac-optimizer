@@ -168,3 +168,6 @@
 - 代码：V26Split.swift（布局/坐标/AX 驱动/偏好/页面/命令），V26Tests.swift。导航 id -9。
 - 测试用 FakeDriver/FakeScreens，不碰真实 AX。注意：容器上的 accessibilityIdentifier 会覆盖子项，需 .accessibilityElement(children: .contain)。
 - 待办：真实窗口（Chrome/微信/Electron）人工验证。
+
+## 2.6.1
+- 分区目标：SystemAppTracker 记最近激活的外部应用；CommandPalette.open 先 capture()。结果走 SplitHUD（Toast + 无焦点浮层）。
