@@ -52,6 +52,7 @@ struct DisplayPage: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("显示器").font(DS.title())
+                        Button("桌面分区") { Nav.shared.sel = -9 }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.split")
                         Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     Spacer()

@@ -163,3 +163,8 @@
 - 只借鉴交互模式，不用 Raycast 的标志、图标和配色，保留自己的品牌紫。
 - 数据准确、操作闭环：退出进程等待可观察结果，清理先进废纸篓，不把发出请求当成成功。
 - 最低 macOS 13：新 API 都要有退路（毛玻璃用 `NSVisualEffectView`，全局热键用 Carbon，键盘用本地事件监听而非 `onKeyPress`）。
+
+## 2.6（桌面分区）
+- 代码：V26Split.swift（布局/坐标/AX 驱动/偏好/页面/命令），V26Tests.swift。导航 id -9。
+- 测试用 FakeDriver/FakeScreens，不碰真实 AX。注意：容器上的 accessibilityIdentifier 会覆盖子项，需 .accessibilityElement(children: .contain)。
+- 待办：真实窗口（Chrome/微信/Electron）人工验证。

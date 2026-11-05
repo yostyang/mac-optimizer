@@ -561,6 +561,7 @@ struct RootView: View {
             else if nav.sel == -6 { CleanPage() }
             else if nav.sel == -7 { ChangesPage() }
             else if nav.sel == -8 { SettingsPage() }
+            else if nav.sel == -9 { SplitPage() }
             else if features.indices.contains(nav.sel) { ToolPage(feature: features[nav.sel]).id(nav.sel) }
             else { Overview(m: m, mon: mon) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
