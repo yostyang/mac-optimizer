@@ -66,20 +66,46 @@ struct SystemScreens: SplitScreens {
 }
 
 // MARK: - 窗口（可注入，测试用假实现）
+struct SplitTarget: Equatable { let pid: pid_t; let name: String }
+/// 记录最近一次激活的“非本 App”应用（只观察通知，不轮询）
+protocol SplitAppTracker { var lastExternal: SplitTarget? { get }; func reactivate(_ t: SplitTarget) }
+final class SystemAppTracker: SplitAppTracker {
+    private(set) var lastExternal: SplitTarget?
+    private var obs: NSObjectProtocol?
+    init() {
+        if let a = NSWorkspace.shared.frontmostApplication { note(a) }
+        obs = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
+            if let a = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.note(a) }
+        }
+    }
+    private func note(_ a: NSRunningApplication) {
+        guard a.processIdentifier != getpid(), a.activationPolicy == .regular else { return }
+        lastExternal = SplitTarget(pid: a.processIdentifier, name: a.localizedName ?? "前台应用")
+    }
+    func reactivate(_ t: SplitTarget) { NSRunningApplication(processIdentifier: t.pid)?.activate(options: []) }
+}
+
 protocol SplitWindowDriver {
     func trusted() -> Bool
-    func focusedFrame() -> CGRect?          // AX 坐标
+    func focusedFrame(pid: pid_t) -> CGRect?  // AX 坐标
     func setFocused(_ r: CGRect) -> CGRect? // 返回读回
 }
 final class AXWindowDriver: SplitWindowDriver {
     private var lastWin: AXUIElement?
     func trusted() -> Bool { AXIsProcessTrusted() }
-    private func focused() -> AXUIElement? {
-        guard trusted(), let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid() else { return nil }
-        let a = AXUIElementCreateApplication(app.processIdentifier)
-        var v: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(a, kAXFocusedWindowAttribute as CFString, &v) == .success, let w = v else { return nil }
-        return (w as! AXUIElement)
+    private func window(_ pid: pid_t) -> AXUIElement? {
+        guard trusted(), pid != getpid() else { return nil }
+        let a = AXUIElementCreateApplication(pid)
+        for attr in [kAXFocusedWindowAttribute, kAXMainWindowAttribute] {
+            var v: CFTypeRef?
+            if AXUIElementCopyAttributeValue(a, attr as CFString, &v) == .success, let w = v, CFGetTypeID(w) == AXUIElementGetTypeID() { return (w as! AXUIElement) }
+        }
+        var ws: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(a, kAXWindowsAttribute as CFString, &ws) == .success, let arr = ws as? [AXUIElement] else { return nil }
+        return arr.first { w in
+            var s: CFTypeRef?
+            return AXUIElementCopyAttributeValue(w, kAXSubroleAttribute as CFString, &s) == .success && (s as? String) == (kAXStandardWindowSubrole as String)
+        }
     }
     private func frame(_ w: AXUIElement) -> CGRect? {
         var p: CFTypeRef?, s: CFTypeRef?; var pt = CGPoint.zero, sz = CGSize.zero
@@ -88,9 +114,9 @@ final class AXWindowDriver: SplitWindowDriver {
               AXValueGetValue(p as! AXValue, .cgPoint, &pt), AXValueGetValue(s as! AXValue, .cgSize, &sz) else { return nil }
         return CGRect(origin: pt, size: sz)
     }
-    func focusedFrame() -> CGRect? { guard let w = focused() else { return nil }; lastWin = w; return frame(w) }
+    func focusedFrame(pid: pid_t) -> CGRect? { lastWin = nil; guard let w = window(pid) else { return nil }; lastWin = w; return frame(w) }
     func setFocused(_ r: CGRect) -> CGRect? {
-        guard let w = lastWin ?? focused() else { return nil }
+        guard let w = lastWin else { return nil }
         var pt = r.origin, sz = r.size
         if let pv = AXValueCreate(.cgPoint, &pt) { AXUIElementSetAttributeValue(w, kAXPositionAttribute as CFString, pv) }
         if let sv = AXValueCreate(.cgSize, &sz) { AXUIElementSetAttributeValue(w, kAXSizeAttribute as CFString, sv) }
@@ -119,8 +145,12 @@ final class SplitController: ObservableObject {
     var screens: SplitScreens = SystemScreens()
     var driver: SplitWindowDriver = AXWindowDriver()
     var prefs = SplitPrefs()
+    lazy var tracker: SplitAppTracker = SystemAppTracker()
+    var captured: SplitTarget?          // 打开命令面板时记下的目标应用
+    func capture() { captured = tracker.lastExternal }
     @Published var last: String = ""
     private(set) var undo: CGRect?   // 一步撤销（AX 坐标）
+    private var undoTarget: SplitTarget?
 
     /// 窗口中心所在显示器（AX 坐标比较）
     func display(for axFrame: CGRect) -> SplitDisplay? {
@@ -132,23 +162,32 @@ final class SplitController: ObservableObject {
     @discardableResult
     func place(_ z: SplitZone) -> String {
         guard driver.trusted() else { return report("需要先授予“辅助功能”权限") }
-        guard let cur = driver.focusedFrame() else { return report("没有可移动的前台窗口") }
+        guard let tg = captured ?? tracker.lastExternal else { return report("没有找到要移动的应用窗口") }
+        captured = nil
+        guard let cur = driver.focusedFrame(pid: tg.pid) else { return report("「\(tg.name)」没有可移动的窗口") }
         guard let disp = display(for: cur) else { return report("没有检测到显示器") }
         guard let t = prefs.template(disp.uuid) else { return report("这块屏幕还没选分区模板") }
         guard let r = SplitLayout.rect(t, z, in: disp.visible) else { return report("当前模板没有\(z.title)") }
         let target = SplitLayout.toAX(r, primaryHeight: screens.primaryHeight)
         let got = driver.setFocused(target)
         let o = SplitLayout.classify(target: target, actual: got)
-        if o != .notMovable { undo = cur }
-        return report(o.rawValue)
+        if o != .notMovable { undo = cur; undoTarget = tg }
+        tracker.reactivate(tg)
+        switch o {
+        case .ok: return report("已把 \(tg.name) 放到\(z.title)")
+        case .sizeLimited: return report("已把 \(tg.name) 放到\(z.title)（尺寸受应用限制）")
+        case .notMovable: return report("「\(tg.name)」的窗口不可移动")
+        }
     }
     @discardableResult
     func undoLast() -> String {
         guard driver.trusted() else { return report("需要先授予“辅助功能”权限") }
-        guard let u = undo else { return report("没有可撤销的归位") }
-        guard driver.focusedFrame() != nil else { return report("没有可移动的前台窗口") }
-        _ = driver.setFocused(u); undo = nil
-        return report("已撤销归位")
+        guard let u = undo, let tg = undoTarget else { return report("没有可撤销的归位") }
+        captured = nil
+        guard driver.focusedFrame(pid: tg.pid) != nil else { return report("「\(tg.name)」的窗口已不可用") }
+        _ = driver.setFocused(u); undo = nil; undoTarget = nil
+        tracker.reactivate(tg)
+        return report("已把 \(tg.name) 撤销归位")
     }
     private func report(_ s: String) -> String { DispatchQueue.main.async { self.last = s }; return s }
 
@@ -161,16 +200,38 @@ final class SplitController: ObservableObject {
         for z in [SplitZone.left, .center, .right] where CmdIndex.matches(q, "放到\(z.title) 分区 分屏 窗口 split") {
             out.append(CmdItem(id: "split.\(z.rawValue)", kind: .action, title: "放到\(z.title)", subtitle: "把前台窗口放进当前屏幕的分区",
                                symbol: "rectangle.split.3x1", actions: [CmdAction(title: "放到\(z.title)", hint: "↵", run: {
-                                   StatusBar.shared.popover.performClose(nil); ToastCenter.shared.show(SplitController.shared.place(z))
+                                   StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(z))
                                })]))
         }
         if CmdIndex.matches(q, "撤销归位 撤销 分区 分屏 undo") {
             out.append(CmdItem(id: "split.undo", kind: .action, title: "撤销归位", subtitle: "把上次移动的窗口放回原处",
                                symbol: "arrow.uturn.backward", actions: [CmdAction(title: "撤销归位", hint: "↵", run: {
-                                   ToastCenter.shared.show(SplitController.shared.undoLast())
+                                   SplitHUD.show(SplitController.shared.undoLast())
                                })]))
         }
         return out
+    }
+}
+
+// MARK: - 结果提示：主窗口可见用 Toast，否则用不抢焦点的浮层
+enum SplitHUD {
+    static var panel: NSPanel?
+    static var sink: ((String) -> Void)?   // 测试用
+    static func show(_ text: String) {
+        if let sink { sink(text); return }
+        let ok = text.hasPrefix("已")
+        ToastCenter.shared.show(text, symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill", tint: ok ? good : .orange)
+        if NSApp.windows.contains(where: { $0.isVisible && $0.isMainWindow && !($0 is NSPanel) }) { return }
+        let p = panel ?? NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 44), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = p
+        p.level = .floating; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true; p.ignoresMouseEvents = true
+        p.collectionBehavior = [.canJoinAllSpaces, .transient]
+        let v = NSHostingView(rootView: Text(text).font(.system(size: 13, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .windowBackgroundColor).opacity(0.96))).fixedSize())
+        p.contentView = v; p.setContentSize(v.fittingSize)
+        if let f = NSScreen.main?.visibleFrame { p.setFrameOrigin(NSPoint(x: f.midX - v.fittingSize.width / 2, y: f.minY + 80)) }
+        p.orderFrontRegardless()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { p.orderOut(nil) }
     }
 }
 

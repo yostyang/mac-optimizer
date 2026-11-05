@@ -9,11 +9,18 @@ final class FakeDriver: SplitWindowDriver {
     var ok = true; var frame: CGRect? = CGRect(x: 100, y: 100, width: 800, height: 600)
     var minW: CGFloat = 0; var fixed = false; var moves = 0
     func trusted() -> Bool { ok }
-    func focusedFrame() -> CGRect? { frame }
+    var pids: [pid_t] = []
+    func focusedFrame(pid: pid_t) -> CGRect? { pids.append(pid); return frame }
     func setFocused(_ r: CGRect) -> CGRect? {
         guard !fixed, frame != nil else { return frame }
         moves += 1; frame = CGRect(x: r.minX, y: r.minY, width: max(r.width, minW), height: r.height); return frame
     }
+}
+
+final class FakeTracker: SplitAppTracker {
+    var lastExternal: SplitTarget?; var reactivated: [pid_t] = []
+    init(_ t: SplitTarget?) { lastExternal = t }
+    func reactivate(_ t: SplitTarget) { reactivated.append(t.pid) }
 }
 
 enum V26 {
@@ -61,20 +68,40 @@ enum V26 {
         let drv = FakeDriver()
         c.screens = FakeScreens([SplitDisplay(uuid: "M", name: "主屏", visible: CGRect(x: 0, y: 0, width: 1440, height: 875), scale: 2),
                                  SplitDisplay(uuid: "L", name: "左屏", visible: CGRect(x: -1920, y: -180, width: 1920, height: 1080), scale: 1)], 900)
-        c.driver = drv; c.prefs = p
+        let trk = FakeTracker(SplitTarget(pid: 4242, name: "Chrome"))
+        c.driver = drv; c.prefs = p; c.tracker = trk
         T.check(c.place(.left) == "这块屏幕还没选分区模板" && drv.moves == 0, "未选模板不移动")
         p.set(.threeCol, for: "M")
-        T.check(c.place(.center) == SplitLayout.Outcome.ok.rawValue, "放到中区成功")
+        T.check(c.place(.center) == "已把 Chrome 放到中区", "放到中区成功并点名应用")
+        T.check(drv.pids.last == 4242 && trk.reactivated == [4242], "目标是最近的外部应用并交还焦点")
         T.check(drv.frame!.minY == 33 && abs(drv.frame!.midX - 720) <= 1, "中区位置正确（AX）")
-        T.check(c.undoLast() == "已撤销归位" && drv.frame == CGRect(x: 100, y: 100, width: 800, height: 600), "一步撤销")
+        T.check(c.undoLast() == "已把 Chrome 撤销归位" && drv.frame == CGRect(x: 100, y: 100, width: 800, height: 600), "一步撤销")
         T.check(c.undoLast() == "没有可撤销的归位", "撤销只有一步")
         drv.frame = CGRect(x: -1500, y: 200, width: 600, height: 400); p.set(.halves, for: "L")
         _ = c.place(.right)
         T.check(drv.frame!.maxX == -8 && drv.frame!.minY == 8, "副屏（负坐标）右区")
         drv.minW = 2000; _ = c.place(.left)
-        T.check(c.place(.left) == SplitLayout.Outcome.sizeLimited.rawValue, "最小宽度→尺寸受限")
+        T.check(c.place(.left).hasSuffix("（尺寸受应用限制）"), "最小宽度→尺寸受限")
         drv.minW = 0; drv.fixed = true; drv.frame = CGRect(x: 300, y: 300, width: 500, height: 500)
-        T.check(c.place(.left) == SplitLayout.Outcome.notMovable.rawValue, "固定窗口→不可移动")
+        T.check(c.place(.left) == "「Chrome」的窗口不可移动", "固定窗口→不可移动")
+        T.sec("目标应用跟踪（v2.6.1）")
+        drv.fixed = false
+        let wx = SplitTarget(pid: 777, name: "微信"); trk.lastExternal = wx; c.captured = nil
+        c.captured = SplitTarget(pid: 555, name: "Code"); trk.lastExternal = wx
+        _ = c.place(.left)
+        T.check(drv.pids.last == 555 && trk.reactivated.last == 555, "面板打开时捕获的应用优先")
+        T.check(c.captured == nil, "捕获只用一次")
+        _ = c.place(.left); T.check(drv.pids.last == 777, "无捕获时用最近外部应用")
+        trk.lastExternal = nil
+        T.check(c.place(.left) == "没有找到要移动的应用窗口", "没有外部应用→明确提示")
+        trk.lastExternal = wx; let f0 = drv.frame; drv.frame = nil
+        T.check(c.place(.left) == "「微信」没有可移动的窗口", "应用无窗口→点名提示"); drv.frame = f0
+        let sh = SplitController.shared; let fd = FakeDriver(); fd.ok = false
+        sh.driver = fd; sh.tracker = FakeTracker(nil)   // 绝不碰真实 AX
+        var shown: [String] = []; SplitHUD.sink = { shown.append($0) }
+        SplitController.commands("放到左区").first?.primary?.run()
+        T.check(shown.count == 1 && shown[0].contains("辅助功能") && fd.moves == 0, "命令结果总会弹出提示"); SplitHUD.sink = nil
+        SplitController.shared.captured = nil
         drv.ok = false; let n = drv.moves
         T.check(c.place(.left).contains("辅助功能") && drv.moves == n, "未授权：不调用、不崩溃")
         T.check(SplitController.commands("放到").count == 3 && SplitController.commands("撤销归位").count == 1, "命令面板有分区命令")
@@ -87,7 +114,7 @@ enum V26 {
         let suite = "mo.uitest.split.\(getpid())"
         let ud = UserDefaults(suiteName: suite)!
         c.prefs = SplitPrefs(ud)
-        c.driver = FakeDriver()   // 测试不碰真实 AX
+        c.driver = FakeDriver(); c.tracker = FakeTracker(nil)   // 测试不碰真实 AX
         c.screens = FakeScreens([SplitDisplay(uuid: "T1", name: "测试屏", visible: CGRect(x: 0, y: 0, width: 1440, height: 875), scale: 2)], 900)
         let pv = w.contentView!
         Nav.shared.sel = -4

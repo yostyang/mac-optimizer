@@ -574,6 +574,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let args = CommandLine.arguments
         if args.contains("--read-capabilities") { HardwareCapabilities.printSnapshot(); exit(0) }
         if args.contains("--read-classic-batteries") { RealBTSource.printClassicSnapshot(); exit(0) }
+        if !args.contains("--selftest") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
         if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
         if !args.contains("--snapshot") && !args.contains("--uitest") { ChargeClient.shared.repairAfterUpdate() }

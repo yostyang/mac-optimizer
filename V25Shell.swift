@@ -542,6 +542,7 @@ final class CommandPalette: NSObject {
             let f = s.visibleFrame
             w.setFrameOrigin(NSPoint(x: f.midX - 310, y: f.midY - 120))
         }
+        SplitController.shared.capture()   // 激活本 App 之前记下目标应用
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
         w.makeFirstResponder(w.contentView)
