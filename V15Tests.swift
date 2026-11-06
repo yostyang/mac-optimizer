@@ -238,8 +238,14 @@ extension MOTests {
         if let b = find(w.contentView!, label: "网络诊断") { b.press() }
         check(waitUntil(2) { Nav.shared.sel == .network }, "侧边栏打开网络诊断")
         if let b = find(w.contentView!, id: "net.run") { b.press(); check(waitUntil(5) { nd.lastRun != nil && !nd.targets.isEmpty }, "点「开始诊断」") } else { check(false, "找到开始诊断") }
-        if let b = find(w.contentView!, id: "dns.ali") { b.press(); check(waitUntil(3) { dc.isAli && dc.status?.backup != nil }, "点「一键设为阿里 DNS」（模拟助手）") } else { check(false, "找到 DNS 按钮") }
-        if let b = find(w.contentView!, id: "dns.restore") { b.press(); check(waitUntil(3) { !dc.isAli && dc.status?.backup == nil }, "点「恢复原 DNS」") } else { check(false, "找到恢复按钮") }
+        if let b = find(w.contentView!, id: "net.details") { b.press() }
+        check(waitUntil(2) { w.attachedSheet?.contentView != nil }, "网络总览打开诊断详情")
+        let detailRoot = w.attachedSheet?.contentView ?? w.contentView!
+        fits(detailRoot, "网络诊断详情")
+        if let b = find(detailRoot, id: "dns.ali") { b.press(); check(waitUntil(3) { dc.isAli && dc.status?.backup != nil }, "点「一键设为阿里 DNS」（模拟助手）") } else { check(false, "找到 DNS 按钮") }
+        if let b = find(detailRoot, id: "dns.restore") { b.press(); check(waitUntil(3) { !dc.isAli && dc.status?.backup == nil }, "点「恢复原 DNS」") } else { check(false, "找到恢复按钮") }
+        find(detailRoot, id: "net.details.close")?.press()
+        check(waitUntil(2) { w.attachedSheet == nil }, "关闭诊断详情返回网络总览")
         if let b = find(w.contentView!, label: "电池") { b.press() }
         if let b = find(w.contentView!, id: "bt.refresh") { b.press() }
         check(waitUntil(4) { bt.withBattery.count == 4 }, "电池页点刷新加载蓝牙电量")
@@ -252,6 +258,7 @@ extension MOTests {
         DisplayManager.shared = dm; NetDiag.shared = nd; DNSClient.shared = dc; BTBattery.shared = bt
         defer { DisplayManager.shared = real.0; NetDiag.shared = real.1; DNSClient.shared = real.2 }   // 蓝牙保留模拟数据：后面的电池页截图用它检查最满时的布局
         screenTimeFixture()
+        v24Fixtures() // 网络总览也检查有实时和历史数据的完整状态
         var ok = false; nd.run { ok = true }; _ = waitUntil(5) { ok }
         dc.refresh(); _ = waitUntil(2) { dc.status != nil }
         ok = false; bt.refresh { ok = true }; _ = waitUntil(3) { ok }
@@ -270,6 +277,7 @@ extension MOTests {
                 shot(DisplayPage(), "display" + tag, width: tag.isEmpty ? sz.width - 212 : sz.width, height: sz.height)
                 shot(NetworkPage(), "network" + tag, width: tag.isEmpty ? sz.width - 212 : sz.width, height: sz.height)
             }
+            shot(NetworkPage().diagnosticDetails, "network-details", width: 840, height: 600)
             shot(BTCard(macLevel: 84).padding(20), "bt", width: 480)
         }
         NSApp.appearance = NSAppearance(named: .aqua)

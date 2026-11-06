@@ -39,8 +39,39 @@ enum MOTests {
         let n = axNodes(w); if n <= 1 { r.append("辅助功能树为空（\(n) 个节点）") }
         return r.isEmpty ? nil : r.joined(separator: "；")
     }
-    // 直接在主线程读取 NSHostingView 的辅助功能树。后台 AX 自查询在 macOS 26/27
-    // 会与 SwiftUI 的 view-graph 锁互相等待；不再预查询，窗口和控件断言保持不变。
+    // SwiftUI 有时要被真正的外部 AX 客户端查询后才生成树。自身后台线程查询会锁住
+    // view graph，因此让同一签名测试包的独立子进程只读查询父进程，不申请新权限。
+    static func primeParentAX() -> Int32 {
+        guard AXIsProcessTrusted() else { return 2 }
+        let parent = AXUIElementCreateApplication(getppid())
+        AXUIElementSetMessagingTimeout(parent, 1)
+        var count = 0
+        func walk(_ node: AXUIElement, _ depth: Int) {
+            guard depth < 5, count < 200 else { return }
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(node, kAXChildrenAttribute as CFString, &value) == .success,
+                  let children = value as? [AXUIElement] else { return }
+            for child in children { count += 1; walk(child, depth + 1) }
+        }
+        var value: CFTypeRef?
+        if AXUIElementCopyAttributeValue(parent, kAXWindowsAttribute as CFString, &value) == .success,
+           let windows = value as? [AXUIElement] { windows.forEach { walk($0, 0) } }
+        return count > 0 ? 0 : 1
+    }
+    static func primeAX() {
+        let probe = Process()
+        probe.executableURL = Bundle.main.executableURL
+        probe.arguments = ["--test-prime-parent-ax"]
+        probe.standardInput = FileHandle.nullDevice
+        probe.standardOutput = FileHandle.nullDevice
+        probe.standardError = FileHandle.nullDevice
+        do { try probe.run() } catch { info("AX 外部预查询无法启动：\(error.localizedDescription)"); return }
+        if !waitUntil(8, { !probe.isRunning }) {
+            probe.terminate()
+            if !waitUntil(1, { !probe.isRunning }) { kill(probe.processIdentifier, SIGKILL) }
+        }
+        info("AX 外部只读预查询结束=\(!probe.isRunning) 状态=\(probe.isRunning ? -1 : probe.terminationStatus)")
+    }
     /// 可靠窗口准备：激活后等待真正成为前台，没成功就再请求一次（不改断言，只记录）
     static func ensureActive(_ w: NSWindow, _ tag: String) {
         func ready() -> Bool { NSApp.isActive && w.isKeyWindow && w.occlusionState.contains(.visible) }
@@ -126,6 +157,7 @@ enum MOTests {
         V26.tests()
         PhaseZero.tests()
         PhaseOne.tests()
+        PhaseTwo.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -445,7 +477,9 @@ enum MOTests {
         let mon = Monitor.shared
         mon.panelOpen = true
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
-        NSApp.activate(ignoringOtherApps: true)   // 让 SwiftUI 生成辅助功能树（用于对比度检查）
+        w.makeKeyAndOrderFront(nil)
+        ensureActive(w, "截图窗口")
+        primeAX() // 外部只读客户端使本轮离屏视图也生成真实 AX 文字节点
         settle(10)
         check(mon.cpuHist.count >= 3, "已采样", "\(mon.cpuHist.count) 次")
         let modes: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
@@ -600,6 +634,7 @@ enum MOTests {
         ensureActive(w, "主窗口"); w.makeFirstResponder(w.contentView)
         w.displayIfNeeded()
         settle(2.0)
+        primeAX()
         var why = notReady(w)
         if why != nil {
             ensureActive(w, "主窗口-复核")

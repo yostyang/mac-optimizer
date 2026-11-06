@@ -287,10 +287,26 @@ struct BatteryTile: View {
 
 enum IconCache {
     private static var c: [Int32: NSImage?] = [:]
+    /// 进程行只显示 16 pt，缓存固定 2x 小图，避免保留每个应用的整套大尺寸表示。
+    static func thumbnail(_ source: NSImage) -> NSImage? {
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 32,
+                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                             isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        context.imageInterpolation = .high
+        source.draw(in: NSRect(x: 0, y: 0, width: 32, height: 32), from: .zero, operation: .sourceOver, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+        bitmap.size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: bitmap.size); image.addRepresentation(bitmap); image.isTemplate = source.isTemplate
+        return image
+    }
     static func icon(_ pid: Int32) -> NSImage? {
         if let v = c[pid] { return v }
         if c.count > 100 { c.removeAll() }
-        let i = NSRunningApplication(processIdentifier: pid)?.icon; c[pid] = i; return i
+        let image = autoreleasepool { NSRunningApplication(processIdentifier: pid)?.icon.flatMap(thumbnail) }
+        c[pid] = image; return image
     }
 }
 struct ProcList: View {
@@ -447,29 +463,37 @@ final class PanelKeyView: NSView {
 }
 
 /// 面板里的一行指标：图标、名称、数值、迷你曲线
-struct PanelMetric: View {
+@MainActor struct PanelMetric: View {
     let symbol: String; let title: String; let value: String; let tint: Color
+    var detail = ""
     var series: [Double]? = nil
     var frac: Double? = nil
     var maxValue: Double? = nil
-    var line: Color = accent2
+    var valueColor: Color = .primary
     var body: some View {
         HStack(spacing: 8) {
             IconBadge(symbol: symbol, tint: tint, size: 16)
-            Text(title).font(DS.sub()).foregroundColor(.secondary).frame(width: 46, alignment: .leading)
-            Text(value).font(DS.num(12, .medium)).frame(width: 68, alignment: .trailing)
-            if let s = series { Spark(values: s, color: line, maxValue: maxValue).frame(width: 52, height: 13) }
-            else if let f = frac { Bar(frac: f, color: line, height: 3).frame(width: 52) }
-            Spacer(minLength: 0)
-        }.frame(height: 26)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(title).font(DS.sub()).foregroundColor(.secondary)
+                    Spacer(minLength: 4)
+                    Text(value).font(DS.num(12)).foregroundColor(valueColor)
+                }
+                Text(detail).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+            }.frame(width: 182)
+            Group {
+                if let series, !series.isEmpty { Spark(values: series, color: tint, maxValue: maxValue) }
+                else if let frac { Bar(frac: frac, color: tint, height: 3).frame(maxHeight: .infinity) }
+                else { Color.clear }
+            }.frame(maxWidth: .infinity).frame(height: 25).accessibilityHidden(true)
+        }.frame(height: 40).padding(.horizontal, 4)
+            .accessibilityElement(children: .ignore).accessibilityLabel(title + "，" + value + "，" + detail)
     }
 }
 struct PanelContent: View {
     @ObservedObject var m: Monitor
     @ObservedObject var ui = UIState.shared
     @ObservedObject var alerts = BatteryAlerts.shared
-    @ObservedObject var dm = DisplayManager.shared
-    @ObservedObject var traffic = TrafficHistory.shared
     @State private var sel = 0
     @State private var more: ProcInfo?
     @State private var showApps = false
@@ -563,28 +587,29 @@ struct PanelContent: View {
     }
 
     func metrics(_ s: Snapshot) -> some View {
-        let series = Array(traffic.series(.hour1).suffix(30))
-        let hasNet = series.contains { $0.down != nil }
-        return VStack(spacing: 1) {
-            PanelMetric(symbol: "cpu", title: "CPU", value: String(format: "%.0f%%", s.cpu),
-                        tint: statusTint(s.cpu / 100), series: m.cpuHist, maxValue: 100,
-                        line: levelColor(s.cpu / 100))
+        VStack(spacing: 1) {
+            PanelMetric(symbol: "cpu", title: "CPU", value: m.cpuHist.isEmpty ? "—" : String(format: "%.0f%%", s.cpu),
+                        tint: DS.metric.cpu, detail: Fmt.temp(s.cpuTemp) + String(format: " · 负载 %.2f", s.load.first ?? 0),
+                        series: m.cpuHist, maxValue: 100, valueColor: s.cpu >= 85 ? bad : (s.cpu >= 60 ? warn : .primary))
             PanelMetric(symbol: "square.stack.3d.up", title: "GPU", value: s.gpu.map { String(format: "%.0f%%", $0) } ?? "—",
-                        tint: accent, series: m.gpuHist, maxValue: 100)
-            PanelMetric(symbol: "memorychip", title: "内存", value: String(format: "%.0f%%", s.memFraction * 100),
-                        tint: Fmt.pressure(s.memPressure).1, frac: s.memFraction)
-            PanelMetric(symbol: "internaldrive", title: "磁盘", value: String(format: "%.0f%%", s.diskUsedFraction * 100),
-                        tint: statusTint(s.diskUsedFraction, hi: 0.92, mid: 0.85), frac: s.diskUsedFraction)
-            PanelMetric(symbol: "arrow.up.arrow.down", title: "网络", value: Fmt.rate(s.downBps), tint: accent2,
-                        series: hasNet ? series.map { ($0.down ?? 0) + ($0.up ?? 0) } : m.downHist)
-            if let f = s.fans, !f.isEmpty {
-                let avg = f.reduce(0, +) / Double(f.count)
-                PanelMetric(symbol: "fan", title: "风扇", value: String(format: "%.0f", avg), tint: good,
-                            frac: s.fanMax > 0 ? avg / s.fanMax : 0)
+                        tint: DS.metric.gpu, detail: Fmt.temp(s.gpuTemp) + (s.gpuCores > 0 ? " · \(s.gpuCores) 核" : ""),
+                        series: s.gpu == nil ? nil : m.gpuHist, maxValue: 100)
+            PanelMetric(symbol: "memorychip", title: "内存", value: s.memTotalGB > 0 ? String(format: "%.0f%%", s.memFraction * 100) : "—",
+                        tint: DS.metric.memory, detail: "压力" + Fmt.pressure(s.memPressure).0 + String(format: " · 交换 %.1f GiB", s.swapUsedGB),
+                        frac: s.memTotalGB > 0 ? s.memFraction : nil, valueColor: s.memPressure >= 4 ? bad : (s.memPressure >= 2 ? warn : .primary))
+            PanelMetric(symbol: "internaldrive", title: "磁盘", value: s.diskTotalGB > 0 ? String(format: "%.0f%%", s.diskUsedFraction * 100) : "—",
+                        tint: DS.metric.disk, detail: s.diskTotalGB > 0 ? String(format: "可用 %.0f / %.0f GB", s.diskFreeGB, s.diskTotalGB) : "等待采样",
+                        frac: s.diskTotalGB > 0 ? s.diskUsedFraction : nil)
+            PanelMetric(symbol: "arrow.up.arrow.down", title: "网络", value: s.netIface.isEmpty ? "—" : Fmt.rate(s.downBps), tint: DS.metric.network,
+                        detail: s.netIface.isEmpty ? "等待采样" : "↑ " + Fmt.rate(s.upBps) + " · " + s.netIface, series: m.downHist)
+            if let fans = s.fans, let fastest = fans.max() {
+                PanelMetric(symbol: "fan", title: "风扇", value: String(format: "%.0f RPM", fastest), tint: DS.metric.fan,
+                            detail: "最快风扇 · \(fans.count) 个 · 系统自动控制", frac: s.fanMax > 0 ? fastest / s.fanMax : nil)
             }
-            if let b = s.battery {
-                PanelMetric(symbol: s.charging ? "battery.100.bolt" : "battery.75", title: "电池", value: "\(b)%",
-                            tint: batteryColor(b), frac: Double(b) / 100)
+            if let battery = s.battery {
+                PanelMetric(symbol: s.charging ? "battery.100.bolt" : "battery.75", title: "电池", value: "\(battery)%",
+                            tint: DS.metric.battery, detail: PowerFlowCalc.fromSnapshot(s).supplyText + " · 循环 " + (s.cycles.map(String.init) ?? "—"),
+                            frac: Double(battery) / 100, valueColor: battery <= 20 ? batteryColor(battery) : .primary)
             }
         }.padding(4).card()
     }

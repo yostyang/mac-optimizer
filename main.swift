@@ -414,22 +414,15 @@ struct Overview: View {
     @ObservedObject var mon: Monitor
     var body: some View {
         let s = mon.s
-        let v = (load: s.load[0], cores: Double(ProcessInfo.processInfo.activeProcessorCount), days: Int(s.uptime / 86400))
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 PageHeader(title: "概览", sub: "状态自动刷新，详细指标可在实时监控中查看")
+                KPIStrip(items: [
+                    MetricStat("CPU · 1 分钟负载", s.uptime > 0 ? String(format: "%.2f · %d 核", s.load.first ?? 0, ProcessInfo.processInfo.activeProcessorCount) : "等待采样"),
+                    MetricStat("内存压力", s.memTotalGB > 0 ? Fmt.pressure(s.memPressure).0 + String(format: " · %.1f / %.0f GiB", s.memUsedGB, s.memTotalGB) : "等待采样"),
+                    MetricStat("连续运行", s.uptime > 0 ? Fmt.uptime(s.uptime) : "等待采样")
+                ])
                 CheckupCard(m: m)
-                HStack(spacing: 10) {
-                    MetricCard(icon: "cpu", title: "CPU 负载", value: String(format: "%.1f", v.load),
-                               note: "\(Int(v.cores)) 核 · " + (v.load > v.cores ? "偏高" : "正常"), frac: v.load / max(1, v.cores),
-                               color: v.load > v.cores ? warn : accent)
-                    MetricCard(icon: "memorychip", title: "内存压力", value: Fmt.pressure(s.memPressure).0,
-                               note: String(format: "已用 %.1f / %.0f GB", s.memUsedGB, s.memTotalGB), frac: s.memFraction,
-                               color: Fmt.pressure(s.memPressure).1)
-                    MetricCard(icon: "clock", title: "连续运行", value: "\(v.days) 天",
-                               note: v.days >= 14 ? "跑太久了，有空重启一次" : "正常", frac: Double(v.days) / 14,
-                               color: v.days >= 14 ? warn : good)
-                }
             }.padding(20)
         }
         .onAppear { if m.phase == .idle { m.scan() } }   // 打开概览就体检
@@ -629,12 +622,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var window: NSWindow!
     func applicationDidFinishLaunching(_ n: Notification) {
         let args = CommandLine.arguments
+        if args.contains("--test-prime-parent-ax") { exit(MOTests.primeParentAX()) }
         if args.contains("--read-capabilities") { HardwareCapabilities.printSnapshot(); exit(0) }
         if args.contains("--read-classic-batteries") { RealBTSource.printClassicSnapshot(); exit(0) }
         if !args.contains("--selftest") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
         if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
-        if !args.contains("--snapshot") && !args.contains("--uitest") { ChargeClient.shared.repairAfterUpdate() }
+        if !args.contains("--snapshot") && !args.contains("--uitest") && !args.contains("--measure-hold-panel") { ChargeClient.shared.repairAfterUpdate() }
         let size = Layout.defaultSize(for: NSScreen.main)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         w.contentMinSize = NSSize(width: min(Layout.minSize.width, size.width), height: min(Layout.minSize.height, size.height))
@@ -663,6 +657,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in AppTraffic.shared.flush() }
         DisplayManager.shared.startIfNeeded(); ScreenTime.shared.start(); BTBattery.shared.start()
         StatusBar.shared.setup()
+        // 真机性能测量可保持面板打开；采样与日常启动完全相同，测量脚本负责退出。
+        if args.contains("--measure-hold-panel") { StatusBar.shared.popover.behavior = .applicationDefined }
         CommandPalette.shared.installHotKey()
         LaunchRestore.run(keepAwake: KeepAwake.shared, dock: DockMode.shared)
         if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }

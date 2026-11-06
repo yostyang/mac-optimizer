@@ -6,10 +6,10 @@ struct NetworkPage: View {
     @ObservedObject var dns = DNSClient.shared
     @ObservedObject var charge = ChargeClient.shared
     @ObservedObject var nav = Nav.shared
+    @State private var showDetails = false
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
-                let sm = nd.summary
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("网络诊断").font(DS.title())
@@ -24,27 +24,35 @@ struct NetworkPage: View {
                         Button("流量") { nav.netTab = 2 }.buttonStyle(PillButton(filled: nav.netTab == 2)).accessibilityIdentifier("net.tab.2")
                     }
                     if nav.netTab == 0 {
-                        Button { nd.run(); dns.refresh() } label: { Label(nd.running ? "诊断中…" : "开始诊断", systemImage: "stethoscope") }.buttonStyle(PillButton()).disabled(nd.running).accessibilityIdentifier("net.run")
+                        Button { nd.run(); dns.refresh(); NetCard.shared.refresh() } label: { Label(nd.running ? "诊断中…" : "开始诊断", systemImage: "stethoscope") }.buttonStyle(PillButton()).disabled(nd.running).accessibilityIdentifier("net.run")
                     }
                 }
                 if nav.netTab == 0 {
-                    HStack(spacing: 8) {
-                        Image(systemName: sm.1 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").foregroundColor(sm.1 ? good : .orange)
-                        Text(sm.0).font(.system(size: 13, weight: .medium))
-                        Spacer()
-                        if let t = nd.lastRun { Text("上次检测 " + t.formatted(date: .omitted, time: .shortened)).font(.system(size: 11)).foregroundColor(.secondary) }
-                    }.padding(12).frame(maxWidth: .infinity).card()
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(spacing: 10) { pingCard; fixCard }.frame(maxWidth: .infinity)
-                        VStack(spacing: 10) { dnsCard }.frame(maxWidth: .infinity)
-                    }
+                    NetworkOverview(showDetails: $showDetails)
                 } else if nav.netTab == 1 {
                     SpeedTab24()
                 } else {
                     TrafficTab24()
                 }
-            }.padding(28)
+            }.padding(20)
         }.onAppear { dns.refresh() }
+        .sheet(isPresented: $showDetails) { diagnosticDetails }
+    }
+    var diagnosticDetails: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("诊断详情与 DNS 修复").font(DS.title())
+                Spacer()
+                Button("完成") { showDetails = false }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("net.details.close")
+            }
+            Footnote(text: nd.summary.0)
+            ScrollView {
+                HStack(alignment: .top, spacing: DS.cardGap) {
+                    VStack(spacing: DS.cardGap) { pingCard; fixCard }.frame(maxWidth: .infinity)
+                    dnsCard.frame(maxWidth: .infinity)
+                }.padding(1)
+            }
+        }.padding(20).frame(width: 840, height: 600).background(pageBG)
     }
     func color(_ r: PingResult?) -> Color {
         guard let r else { return .secondary }
