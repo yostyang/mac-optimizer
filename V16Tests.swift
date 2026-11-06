@@ -110,7 +110,7 @@ extension MOTests {
         }
 
         sec("概览：打开就体检（v1.6）")
-        Nav.shared.sel = -2; settle(0.3); Nav.shared.sel = -1
+        Nav.shared.sel = .monitor; settle(0.3); Nav.shared.sel = .overview
         var title = ""
         let ok = waitUntil(20) { if let r = find1(w.contentView!, id: "verdict.title") { title = axString(r.o, "accessibilityLabel"); if title.isEmpty, let v = r.value as? String { title = v } }; return ["不卡：", "有点卡：", "很卡："].contains { title.hasPrefix($0) } }
         check(ok, "自动给出结论", title)
@@ -127,16 +127,21 @@ extension MOTests {
         let (dm, a) = dockFixture(enabled: false); DockMode.shared = dm
         let fx = chargeFixture(); ChargeClient.shared = fx
         defer { DockMode.shared = realDock; ChargeClient.shared = realCharge }
-        Nav.shared.sel = -3; settle(0.3); Nav.shared.sel = -2
-        if let b = find(w.contentView!, id: "act.dock") {
+        Nav.shared.sel = .battery; settle(0.3); Nav.shared.sel = .monitor
+        find(w.contentView!, id: "monitor.actions")?.press()
+        check(waitUntil(2) { w.attachedSheet?.contentView != nil }, "从顶栏打开常驻模式快捷操作")
+        let controls = w.attachedSheet?.contentView ?? w.contentView!
+        if let b = find(controls, id: "act.dock") {
             b.press(); check(waitUntil(1) { dm.enabled && dm.active && a.live }, "点「接显示器模式」开启并生效")
             b.press(); check(waitUntil(1) { !dm.enabled && !a.live }, "再点关闭并撤销")
         } else { check(false, "找到「接显示器模式」按钮") }
-        if let b = find(w.contentView!, id: "act.charge") {
+        if let b = find(controls, id: "act.charge") {
             b.press(); check(waitUntil(1) { !fx.st.settings.enabled }, "点「充电上限」关闭")
             b.press(); check(waitUntil(1) { fx.st.settings.enabled && fx.st.settings.limit == 80 }, "再点开启，上限保持 80%")
         } else { check(false, "找到「充电上限」按钮") }
-        Nav.shared.sel = -4
+        find(controls, id: "monitor.actions.close")?.press()
+        check(waitUntil(2) { w.attachedSheet == nil }, "关闭常驻模式快捷操作")
+        Nav.shared.sel = .display
         if let t = find(w.contentView!, id: "dock.toggle") {
             t.press(); check(waitUntil(1) { dm.enabled && dm.active }, "显示器页开关可开启")
             t.press(); check(waitUntil(1) { !dm.enabled && !dm.active }, "显示器页开关可关闭")

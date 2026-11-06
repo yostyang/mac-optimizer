@@ -175,3 +175,21 @@
 ## 2.6.2
 - 空 ⌘K：Shell.contextItem(page:)；撤销按具体窗口（driver.armedWindow / arm）。
 - UI 测试稳定性：SwiftUI 树需外部 AX 查询触发（primeAX），等待需分发 AppKit 事件（pump）。
+
+## 第零期：安全与稳定（2026-11-06，基于 2.6.2）
+
+- `DNSCore.swift` 的 `ProcessRunner` 是通用命令入口，替代原 `sh()`；双路非阻塞排空、输出限额、10 秒默认期限和超时子进程回收。
+- `main.swift` 的 `LoginItems` 固定脚本 + argv 传名称，读取 JSON；VPN 建议默认全部不选；工具页使用 `ToolOperation` 回读后统计。
+- 新增 `PhaseZeroTests.swift`。验证结果、首次 UI 前台失败与重跑证据、共享助手的构建影响见 [第零期说明](docs/phase-zero-safety.md)。
+
+## 2026-11-06 HTML 改版第一期
+
+已完成规范、7 个组件、监控 3×3/最小窗口紧凑布局、设置迁移、语义页面路由和进程阈值色。详见 `docs/phase-one-monitor.md`。标准流程批准黄金图后复测全绿：587 selftest / 134 uitest / 104 snapshot，0 失败。下一步为用户已授权的第二期网络总览、面板二级信息、概览 KPI 和真机性能比较。
+
+## 2026-11-06 · 2.7.0（26）第零至第二期
+
+第零、一期提交分别为 `5ae4fef`、`a85822f`。第二期加入网络总览、诊断详情入口、菜单指标二级信息与行尾曲线、概览 KPI 条。进程图标缓存为 16 pt / 2x；监控仍为 2/5 秒。约 4 MiB 面板 RSS 增量按用户明确确认接受，不再做无必要微调。
+
+最终 2.7.0：自检 598、交互 137、截图 72 全部执行项通过；48 次离屏 AX 对比度跳过已注明并人工查看相关截图。批准黄金图后正常复测差异 0.00%；实际 DMG 包内自检 598 通过。详见 `docs/phase-two-summary.md` 和 `docs/release-validation-2.7.0.md`。
+
+后续顺序：发布到 GitHub 并回下载核对哈希，再评估待办。用户新发双列下拉面板参考图暂不实现；电池数据、Keychron、电源/显示器能力与窗口工作流也先评估。首版分屏不考虑 iPad。不要把未验证的硬件读数或数据覆盖缺口当作 0。

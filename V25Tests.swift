@@ -15,16 +15,16 @@ enum V25 {
 
     static func tests() {
         MOTests.sec("设计基础（v2.5）")
-        MOTests.check(DS.r.card == 10 && DS.r.control == 6 && DS.r.pill == 999, "圆角只有 3 种：卡片 10 / 控件 6 / 胶囊")
-        MOTests.check(DS.fontSizes == [17, 13, 11, 10], "字号只有 4 档：标题 17 / 正文 13 / 次要 11 / 角标 10")
+        MOTests.check(DS.r.card == 12 && DS.r.control == 6 && DS.r.pill == 999, "圆角只有 3 种：卡片 12 / 控件 6 / 胶囊")
+        MOTests.check(DS.fontSizes == [30, 22, 17, 13, 12.5, 11, 10.5, 10], "字号统一：主值 30/22、标题 17、正文 13、标签 12.5、次要 11/10.5/10")
         MOTests.check(pageBG != cardBG, "页面与卡片是两层中性灰阶")
         MOTests.check(accent != accent2, "品牌紫与图表青蓝分开")
         MOTests.check(good != accent && warn != accent && bad != accent, "状态色独立于品牌色")
         MOTests.check(CDS.radiusCard == DS.r.card && CDS.radiusButton == DS.r.control, "旧令牌指向同一套圆角")
 
         MOTests.sec("搜索：页面 / 操作 / 进程")
-        MOTests.check(!CmdIndex.pages("概览").isEmpty && CmdIndex.pages("概览").first?.id == "page.-1", "搜到页面")
-        MOTests.check(CmdIndex.pages("电池").contains { $0.id == "page.-3" }, "搜到电池页")
+        MOTests.check(!CmdIndex.pages("概览").isEmpty && CmdIndex.pages("概览").first?.id == "page.overview", "搜到页面")
+        MOTests.check(CmdIndex.pages("电池").contains { $0.id == "page.battery" }, "搜到电池页")
         MOTests.check(!CmdIndex.actions("常亮").isEmpty, "搜到「常亮」操作")
         MOTests.check(!CmdIndex.actions("体检").isEmpty, "搜到「一键体检」")
         MOTests.check(!CmdIndex.actions("接显示器").isEmpty, "搜到「接显示器」")
@@ -52,7 +52,7 @@ enum V25 {
         shell.query = "电池"; shell.sel = 0
         MOTests.check(shell.handle(key(48, "\t", cmd: true)) == false, "⌘Tab 不拦截")
         let before = Nav.shared.sel
-        MOTests.check(shell.handle(key(19, "2", cmd: true)), "⌘2 切页"); MOTests.check(Nav.shared.sel == -2, "⌘2 打开实时监控")
+        MOTests.check(shell.handle(key(19, "2", cmd: true)), "⌘2 切页"); MOTests.check(Nav.shared.sel == .monitor, "⌘2 打开实时监控")
         Nav.shared.sel = before
         shell.query = ""
 
@@ -84,9 +84,20 @@ enum V25 {
 
         MOTests.sec("设置页（v2.5）")
         if let b = MOTests.find(pv, label: "设置") { b.press() }
-        MOTests.check(MOTests.waitUntil(2) { Nav.shared.sel == -8 }, "侧边栏打开设置")
+        MOTests.check(MOTests.waitUntil(2) { Nav.shared.sel == .settings }, "侧边栏打开设置")
         MOTests.check(MOTests.find(pv, id: "set.hotkey") != nil && MOTests.find(pv, id: "set.menubar") != nil, "设置页有快捷键录制与菜单栏开关")
-        Nav.shared.sel = -2
+        let ka = KeepAwake.shared, before = KeepAwake.shared.on
+        let saved = ka.defaults.object(forKey: KeepAwake.key)
+        if let toggle = MOTests.find(pv, id: "set.awake") {
+            toggle.press()
+            MOTests.check(MOTests.waitUntil(1) { ka.on != before && ka.savedOn == ka.on }, "设置页常亮开关生效并保存启动状态")
+            toggle.press()
+            MOTests.check(MOTests.waitUntil(1) { ka.on == before }, "设置页常亮可关闭并恢复原断言状态")
+        } else { MOTests.check(false, "设置页常亮开关") }
+        if ka.on != before { before ? ka.startAssertion() : ka.stop() }
+        if let saved { ka.defaults.set(saved, forKey: KeepAwake.key) } else { ka.defaults.removeObject(forKey: KeepAwake.key) }
+        MOTests.check(MOTests.find(pv, id: "set.dock") != nil, "设置页有接显示器模式入口")
+        Nav.shared.sel = .monitor
     }
 
     // MARK: 截图

@@ -39,42 +39,48 @@ enum MOTests {
         let n = axNodes(w); if n <= 1 { r.append("辅助功能树为空（\(n) 个节点）") }
         return r.isEmpty ? nil : r.joined(separator: "；")
     }
-    /// SwiftUI 的 NSHostingView 通常只在有"辅助功能客户端"来查询之后才生成子元素；
-    /// 测试在进程内用 NSAccessibility 遍历，自己并不算客户端。这里在后台线程用公开 AX API
-    /// 像外部客户端一样查询一次本进程（主线程同时在泵送事件，负责应答），以触发树生成。
-    /// 只读查询，不改任何属性；设 MO_TEST_NO_AX_PRIME=1 可关闭。
-    static let noAXPrime = ProcessInfo.processInfo.environment["MO_TEST_NO_AX_PRIME"] == "1"
-    static func primeAX(_ tag: String) {
-        guard !noAXPrime, AXIsProcessTrusted() else { info("诊断[\(tag)] 跳过 AX 预查询（关闭或未授权）"); return }
-        let pid = getpid()
-        var done = false, seen = 0
-        DispatchQueue.global(qos: .userInitiated).async {
-            let app = AXUIElementCreateApplication(pid)
-            AXUIElementSetMessagingTimeout(app, 2)
-            var n = 0
-            func walk(_ e: AXUIElement, _ depth: Int) {
-                guard depth < 6, n < 400 else { return }
-                var v: CFTypeRef?
-                guard AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &v) == .success, let kids = v as? [AXUIElement] else { return }
-                for k in kids { n += 1; walk(k, depth + 1) }
-            }
-            var ws: CFTypeRef?
-            if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &ws) == .success, let wins = ws as? [AXUIElement] {
-                for w in wins { walk(w, 0) }
-            }
-            DispatchQueue.main.async { seen = n; done = true }
+    // SwiftUI 有时要被真正的外部 AX 客户端查询后才生成树。自身后台线程查询会锁住
+    // view graph，因此让同一签名测试包的独立子进程只读查询父进程，不申请新权限。
+    static func primeParentAX() -> Int32 {
+        guard AXIsProcessTrusted() else { return 2 }
+        let parent = AXUIElementCreateApplication(getppid())
+        AXUIElementSetMessagingTimeout(parent, 1)
+        var count = 0
+        func walk(_ node: AXUIElement, _ depth: Int) {
+            guard depth < 5, count < 200 else { return }
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(node, kAXChildrenAttribute as CFString, &value) == .success,
+                  let children = value as? [AXUIElement] else { return }
+            for child in children { count += 1; walk(child, depth + 1) }
         }
-        _ = waitUntil(5) { done }
-        info("诊断[\(tag)] AX 预查询完成=\(done) 外部视角元素数=\(seen)")
+        var value: CFTypeRef?
+        if AXUIElementCopyAttributeValue(parent, kAXWindowsAttribute as CFString, &value) == .success,
+           let windows = value as? [AXUIElement] { windows.forEach { walk($0, 0) } }
+        return count > 0 ? 0 : 1
+    }
+    static func primeAX() {
+        let probe = Process()
+        probe.executableURL = Bundle.main.executableURL
+        probe.arguments = ["--test-prime-parent-ax"]
+        probe.standardInput = FileHandle.nullDevice
+        probe.standardOutput = FileHandle.nullDevice
+        probe.standardError = FileHandle.nullDevice
+        do { try probe.run() } catch { info("AX 外部预查询无法启动：\(error.localizedDescription)"); return }
+        if !waitUntil(8, { !probe.isRunning }) {
+            probe.terminate()
+            if !waitUntil(1, { !probe.isRunning }) { kill(probe.processIdentifier, SIGKILL) }
+        }
+        info("AX 外部只读预查询结束=\(!probe.isRunning) 状态=\(probe.isRunning ? -1 : probe.terminationStatus)")
     }
     /// 可靠窗口准备：激活后等待真正成为前台，没成功就再请求一次（不改断言，只记录）
     static func ensureActive(_ w: NSWindow, _ tag: String) {
-        NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)
-        if !waitUntil(3, { NSApp.isActive }) {
-            info("诊断[\(tag)] 首次激活未生效，再请求一次")
-            NSRunningApplication.current.activate(options: [.activateAllWindows])
+        func ready() -> Bool { NSApp.isActive && w.isKeyWindow && w.occlusionState.contains(.visible) }
+        w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        if !waitUntil(3, ready) {
+            info("诊断[\(tag)] 前台或活动窗口尚未就绪，再请求一次")
+            NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             w.makeKeyAndOrderFront(nil)
-            _ = waitUntil(3, { NSApp.isActive })
+            _ = waitUntil(3, ready)
         }
     }
     static func sec(_ s: String) { print("== \(s)  [login=\(SMAppService.mainApp.status.rawValue)]") }
@@ -149,6 +155,9 @@ enum MOTests {
         v241Tests()
         V25.tests()
         V26.tests()
+        PhaseZero.tests()
+        PhaseOne.tests()
+        PhaseTwo.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -292,6 +301,7 @@ enum MOTests {
 
     static func runUI(args: [String], window w: NSWindow) {
         active = true
+        setbuf(stdout, nil) // 即使界面测试等待，也保留已完成断言供诊断
         // 测试进程必须是常规前台 App：accessory 模式下 NSApp.activate 可能不生效，
         // SwiftUI 就不会生成辅助功能树，界面测试与对比度检查会大面积误报。
         NSApp.setActivationPolicy(.regular)
@@ -467,7 +477,9 @@ enum MOTests {
         let mon = Monitor.shared
         mon.panelOpen = true
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
-        NSApp.activate(ignoringOtherApps: true)   // 让 SwiftUI 生成辅助功能树（用于对比度检查）
+        w.makeKeyAndOrderFront(nil)
+        ensureActive(w, "截图窗口")
+        primeAX() // 外部只读客户端使本轮离屏视图也生成真实 AX 文字节点
         settle(10)
         check(mon.cpuHist.count >= 3, "已采样", "\(mon.cpuHist.count) 次")
         let modes: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
@@ -522,7 +534,7 @@ enum MOTests {
             w.appearance = NSAppearance(named: ap)
             for (sz, szName) in [(defaultSize, "default"), (Layout.minSize, "min")] {
                 w.setContentSize(sz); w.setFrameOrigin(NSPoint(x: -4000, y: 0)); w.orderFrontRegardless()
-                for (sel, name) in [(-2, "dashboard"), (-3, "battery"), (-1, "overview")] {
+                for (sel, name) in [(Page.monitor, "dashboard"), (.battery, "battery"), (.overview, "overview")] {
                     Nav.shared.sel = sel; settle(1.2)
                     let tag = "\(name)-\(szName)-\(mode)"
                     let rep = pngRep(w.contentView!, out + "/\(tag).png")
@@ -547,7 +559,7 @@ enum MOTests {
             golden(pngRep(host, out + "/golden-panel-\(mode).png"), "panel-\(mode)", goldens, approve: approve)
             pw.orderOut(nil)
             w.appearance = NSAppearance(named: ap); w.setContentSize(Layout.idealSize); w.orderFrontRegardless()
-            Nav.shared.sel = -2; settle(1.2)
+            Nav.shared.sel = .monitor; settle(1.2)
             golden(pngRep(w.contentView!, out + "/golden-dashboard-\(mode).png"), "dashboard-\(mode)", goldens, approve: approve)
         }
         NSApp.appearance = NSAppearance(named: .aqua)
@@ -622,17 +634,22 @@ enum MOTests {
         ensureActive(w, "主窗口"); w.makeFirstResponder(w.contentView)
         w.displayIfNeeded()
         settle(2.0)
-        primeAX("主窗口")
+        primeAX()
         var why = notReady(w)
-        if why != nil { _ = waitUntil(6) { Nav.shared.objectWillChange.send(); why = notReady(w); return why == nil } }
+        if why != nil {
+            ensureActive(w, "主窗口-复核")
+            _ = waitUntil(6) { Nav.shared.objectWillChange.send(); why = notReady(w); return why == nil }
+        }
         diag("主窗口-准备后", w)
         check(why == nil, "测试窗口就绪（活动应用、活动窗口、未遮挡、辅助功能树非空）", why ?? "")
         check(waitUntil(8) { find(w.contentView!, label: "实时监控") != nil }, "侧边栏「实时监控」")
         if let b = find(w.contentView!, label: "实时监控") { b.press() }
-        check(waitUntil(2) { Nav.shared.sel == -2 && mon.dashboardShown }, "侧边栏打开实时监控")
+        check(waitUntil(2) { Nav.shared.sel == .monitor && mon.dashboardShown }, "侧边栏打开实时监控")
         if find1(w.contentView!, label: "实时监控") == nil { diag("主窗口-失败时", w) }
-        sec("快捷操作")
-        let pv = w.contentView!
+        sec("快捷操作（已迁至实时监控顶栏）")
+        find(w.contentView!, id: "monitor.actions")?.press()
+        check(waitUntil(2) { w.attachedSheet?.contentView != nil }, "顶栏快捷操作打开")
+        let pv = w.attachedSheet?.contentView ?? w.contentView!
         check(waitUntil(5) { find(pv, id: "act.awake") != nil }, "找到快捷按钮（与菜单栏面板同一组件）")
         if let b = find(pv, id: "act.awake") {
             b.press(); check(waitUntil(1) { KeepAwake.shared.on } && KeepAwake.systemSeesAssertion(), "点「常亮」开启断言")
@@ -656,13 +673,18 @@ enum MOTests {
         check(waitUntil(1) { !Overlay.isShowing }, "Esc 关闭发光提醒")
         check(find(pv, id: "act.mic") != nil && find(pv, id: "act.shot") != nil, "截图/麦克风按钮存在")
 
+        find(pv, id: "monitor.actions.close")?.press()
+        check(waitUntil(2) { w.attachedSheet == nil }, "关闭快捷操作")
         mon.mainWindowVisible = { true }; mon.reschedule()
         check(mon.interval == Monitor.detailInterval, "仪表盘可见时 2 秒采样")
-        if let t = find(w.contentView!, id: "dash.login") { check((t.value as? NSNumber)?.intValue == (loginBefore ? 1 : 0), "仪表盘登录项开关与系统一致") } else { check(false, "找到登录项开关") }
+        check(find(w.contentView!, id: "dash.login") == nil && find(w.contentView!, id: "dash.menubar") == nil, "监控页不再混入启动或菜单栏设置")
+        Nav.shared.sel = .settings; settle(0.3)
+        if let t = find(w.contentView!, id: "set.login") { check((t.value as? NSNumber)?.intValue == (loginBefore ? 1 : 0), "设置页登录项开关与系统一致") } else { check(false, "找到设置页登录项开关") }
+        Nav.shared.sel = .monitor; settle(0.3)
         mon.mainWindowVisible = { false }; mon.reschedule()
         check(mon.interval == Monitor.lightInterval, "窗口隐藏后降频")
         if let b = find(w.contentView!, label: "电池") { b.press() }
-        check(waitUntil(2) { Nav.shared.sel == -3 }, "侧边栏打开电池页")
+        check(waitUntil(2) { Nav.shared.sel == .battery }, "侧边栏打开电池页")
         if let t = find(w.contentView!, id: "bat.alertsOn") { check((t.value as? NSNumber)?.intValue == 0, "电量提醒默认关闭") } else { check(false, "找到提醒开关") }
         sec("充电控制卡片")
         let daemonBefore = ChargeClient.shared.daemon.status
@@ -670,24 +692,24 @@ enum MOTests {
         else { info("充电助手状态：\(ChargeClient.shared.phase)") }
         let realClient = ChargeClient.shared
         let fx = chargeFixture(); ChargeClient.shared = fx
-        Nav.shared.sel = -2; settle(0.5); Nav.shared.sel = -3
+        Nav.shared.sel = .monitor; settle(0.5); Nav.shared.sel = .battery
         check(waitUntil(3) { find(w.contentView!, id: "charge.enabled") != nil && find(w.contentView!, id: "charge.limit") != nil && find(w.contentView!, id: "charge.uninstall") != nil }, "已安装时显示开关、上限滑块、卸载按钮")
         if let t = find(w.contentView!, id: "charge.enabled") { t.press(); check(waitUntil(1) { !fx.st.settings.enabled }, "点开关关闭上限") }
         settle(0.3); if let t = find(w.contentView!, id: "charge.enabled") { t.press(); check(waitUntil(1) { fx.st.settings.enabled }, "再点开启") }
         settle(0.3)
         if let b = find(w.contentView!, id: "charge.topup") { b.press(); check(waitUntil(1) { fx.st.topUp }, "点「充到 100%」进入临时充满") } else { check(false, "找到「充到 100%」") }
-        ChargeClient.shared = realClient; Nav.shared.sel = -2; settle(0.3); Nav.shared.sel = -3
+        ChargeClient.shared = realClient; Nav.shared.sel = .monitor; settle(0.3); Nav.shared.sel = .battery
         check(ChargeClient.shared.daemon.status == daemonBefore, "测试没有注册/卸载充电助手", "\(daemonBefore.rawValue)")
         check(waitUntil(4) { !EnergyTracker.shared.live.isEmpty }, "耗电实时数据", EnergyTracker.shared.live.prefix(3).map { "\($0.app) \(String(format: "%.2f", $0.watts))W" }.joined(separator: ", "))
         v15UI(w)
         v16UI(w)
         sec("清理与改动页入口（v1.8 / v1.9）")
-        if let b = find(w.contentView!, label: "清理预览") { b.press(); check(waitUntil(2) { Nav.shared.sel == -6 }, "侧边栏打开清理预览") } else { check(false, "找到清理预览") }
+        if let b = find(w.contentView!, label: "清理预览") { b.press(); check(waitUntil(2) { Nav.shared.sel == .clean }, "侧边栏打开清理预览") } else { check(false, "找到清理预览") }
         check(find(w.contentView!, id: "clean.scan") != nil, "清理页有开始扫描按钮")
-        if let b = find(w.contentView!, label: "改动与提醒") { b.press(); check(waitUntil(2) { Nav.shared.sel == -7 }, "侧边栏打开改动与提醒") } else { check(false, "找到改动与提醒") }
+        if let b = find(w.contentView!, label: "改动与提醒") { b.press(); check(waitUntil(2) { Nav.shared.sel == .changes }, "侧边栏打开改动与提醒") } else { check(false, "找到改动与提醒") }
         check(find(w.contentView!, id: "v19.alertsOn") != nil, "改动页有提醒开关（默认关闭）")
         sec("网络页双标签（v1.7）")
-        if let b = find(w.contentView!, label: "网络诊断") { b.press(); check(waitUntil(2) { Nav.shared.sel == -5 }, "侧边栏打开网络诊断") } else { check(false, "找到网络诊断") }
+        if let b = find(w.contentView!, label: "网络诊断") { b.press(); check(waitUntil(2) { Nav.shared.sel == .network }, "侧边栏打开网络诊断") } else { check(false, "找到网络诊断") }
         if let b = find(w.contentView!, id: "net.tab.1") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 1 }, "点「测速」切到第二标签") } else { check(false, "找到测速标签") }
         check(find(w.contentView!, id: "speed.run") != nil, "第二标签有测速")
         if let b = find(w.contentView!, id: "net.tab.2") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 2 }, "点「流量」切到第三标签") } else { check(false, "找到流量标签") }
@@ -695,7 +717,7 @@ enum MOTests {
         if let b = find(w.contentView!, id: "net.tab.0") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 0 }, "点「诊断」切回第一标签") } else { check(false, "找到诊断标签") }
         check(find(w.contentView!, id: "net.run") != nil, "第一标签有开始诊断")
         sec("电池页双标签（v2.0）")
-        if let b = find(w.contentView!, label: "电池") { b.press(); check(waitUntil(2) { Nav.shared.sel == -3 }, "侧边栏打开电池页") } else { check(false, "找到电池") }
+        if let b = find(w.contentView!, label: "电池") { b.press(); check(waitUntil(2) { Nav.shared.sel == .battery }, "侧边栏打开电池页") } else { check(false, "找到电池") }
         if let b = find(w.contentView!, id: "bat.tab.1") { b.press(); check(find(w.contentView!, id: "bat.lowpower.settings") != nil, "功率标签有打开系统电源设置") } else { check(false, "找到功率与能耗标签") }
         if let b = find(w.contentView!, id: "bat.tab.0") { b.press(); check(find(w.contentView!, id: "bat.alertsOn") != nil, "切回电池概览有电量提醒开关") } else { check(false, "找到电池概览标签") }
         v22UI(w)

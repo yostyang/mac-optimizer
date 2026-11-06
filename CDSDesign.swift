@@ -11,7 +11,7 @@ enum CDS {
     static let surface1 = DS.card
     static let surface2 = DS.raised
     static let surface3 = DS.raised
-    // 圆角只保留 3 种：卡片 10、控件 6、胶囊 999
+    // 圆角只保留 3 种：卡片 12、控件 6、胶囊 999
     static let radiusOuter: CGFloat = DS.r.card
     static let radiusBubble: CGFloat = DS.r.card
     static let radiusPanel: CGFloat = DS.r.card

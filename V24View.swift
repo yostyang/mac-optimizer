@@ -89,7 +89,7 @@ struct AppTrafficPopover: View {
     }
 }
 enum NetPageLink {
-    static func openTraffic() { Nav.shared.sel = -5; Nav.shared.netTab = 2; UIState.shared.openMain() }
+    static func openTraffic() { Nav.shared.sel = .network; Nav.shared.netTab = 2; UIState.shared.openMain() }
 }
 
 // MARK: 流量页（第三个标签）

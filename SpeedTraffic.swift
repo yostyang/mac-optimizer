@@ -224,7 +224,7 @@ final class TrafficStore: ObservableObject {
     func stopMinuteTimer() { timer?.invalidate(); timer = nil }
     func refreshApps() {
         DispatchQueue.global().async {
-            let out = sh("lsof -i -P -n 2>/dev/null")
+            let out = ProcessRunner.run("/usr/sbin/lsof", ["-i", "-P", "-n"]).out
             let apps = TrafficParse.parseLsof(out)
             DispatchQueue.main.async {
                 self.apps = apps
@@ -258,7 +258,7 @@ final class NetInfo: ObservableObject {
         guard !running else { return }
         running = true
         DispatchQueue.global().async {
-            let a = NetInfoParse.airport(sh("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I 2>/dev/null"))
+            let a = NetInfoParse.airport(ProcessRunner.run("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", ["-I"]).out)
             let wifi = a.ssid.isEmpty ? "未连接 Wi-Fi 或读不到" : "\(a.ssid) · 信号 \(a.rssi) dBm · 信道 \(a.channel) · 速率 \(a.tx) Mbps"
             var ip = "不可读"
             var chat = "连不上"
