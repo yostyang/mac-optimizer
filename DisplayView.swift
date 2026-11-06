@@ -41,6 +41,7 @@ func fmtDuration(_ s: Double) -> String { let m = Int(s / 60); return m >= 60 ? 
 
 struct DisplayPage: View {
     @ObservedObject var dm = DisplayManager.shared
+    @ObservedObject var ddcNames = DDCNames.shared
     @ObservedObject var st = ScreenTime.shared
     @State private var sel: CGDirectDisplayID = 0
     @State private var hidpi = true
@@ -172,38 +173,100 @@ struct DisplayPage: View {
     var colorCard: some View {
         Card(title: "色彩模式", icon: "paintpalette") {
             if let display = cur {
-                Text("仅控制 " + display.name).font(.system(size: 11)).foregroundColor(.secondary)
+                Text("仅控制 " + display.name + "，其他显示器不受影响").font(DS.sub()).foregroundColor(.secondary)
+                // ① 系统 ICC
+                group("1", "系统色彩描述文件（ICC）", "只改这台 Mac 输出时的颜色换算，显示器本身的设置不变。")
                 let profile = dm.profileStates[display.id]
-                Text("系统色彩描述文件（ICC）").font(.system(size: 11, weight: .medium))
                 if let profile, !profile.choices.isEmpty {
                     Picker("ICC", selection: Binding(get: { profile.current?.path ?? "" }, set: { path in dm.setProfile(display.id, url: URL(fileURLWithPath: path)) })) {
                         ForEach(profile.choices) { choice in Text(choice.name).tag(choice.id) }
                     }.labelsHidden().disabled(dm.profileBusy.contains(display.id)).accessibilityIdentifier("disp.icc")
                     if dm.originalProfiles[display.key] != nil { Button("恢复原描述文件") { dm.restoreProfile(display.id) }.buttonStyle(PillButton(filled: false)).disabled(dm.profileBusy.contains(display.id)).accessibilityIdentifier("disp.icc.restore") }
-                } else if dm.profilesLoading { ProgressView("正在读取描述文件…").controlSize(.small) }
-                else { Text("未取得可切换的显示器描述文件，可在系统显示器设置查看。").font(.system(size: 11)).foregroundColor(.secondary) }
-                if let note = dm.profileNotes[display.id] { Text(note).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("disp.icc.note") }
-                if let state = dm.ddc[display.id] {
+                } else if dm.profilesLoading {
+                    StateLine(kind: .loading, text: "正在读取描述文件", id: "disp.icc.state")
+                } else {
+                    StateLine(kind: .unknown, text: "未取得可切换的描述文件", detail: "可在系统设置的显示器页查看。",
+                              actions: [.openSettings(url: "x-apple.systempreferences:com.apple.Displays-Settings.extension")], id: "disp.icc.state")
+                }
+                if let note = dm.profileNotes[display.id] {
+                    StateLine(kind: DDCFeedback.kind(note), text: note, id: "disp.icc.note")
+                }
+                Hairline().padding(.vertical, 2)
+                // ② 显示器硬件
+                group("2", "显示器硬件模式（DDC）", "写入显示器本身，切到别的电脑也会保持；名称按 MCCS 标准，未定义的值保留编号，可按显示器菜单命名。")
+                if display.builtin {
+                    StateLine(kind: .unknown, text: "内置屏没有硬件色彩模式", id: "disp.hw.state")
+                } else if let state = dm.ddc[display.id] {
                     let colors = state.caps.values[VCP.colorPreset.rawValue] ?? []
-                    if !colors.isEmpty, state.colorPreset != nil {
-                        Text("显示器硬件色彩预设").font(.system(size: 11, weight: .medium))
-                        FlowRow(spacing: 6) { ForEach(colors, id: \.self) { value in
-                            ChoiceChip(text: DDCCaps.colorName(value), on: state.colorPreset == Int(value)) { dm.setDDC(display.id, .colorPreset, Int(value)) }.accessibilityIdentifier("disp.color.\(value)")
-                        } }
-                    }
                     let modes = state.caps.values[VCP.displayMode.rawValue] ?? []
-                    if !modes.isEmpty, state.displayMode != nil {
-                        Picker("硬件显示模式", selection: Binding(get: { state.displayMode ?? -1 }, set: { dm.setDDC(display.id, .displayMode, $0) })) {
-                            ForEach(modes, id: \.self) { value in Text(String(format: "模式 0x%02X", value)).tag(Int(value)) }
-                        }.font(.system(size: 11)).accessibilityIdentifier("disp.hardwareMode")
+                    if colors.isEmpty && modes.isEmpty {
+                        StateLine(kind: .unknown, text: "这台显示器没有声明可切换的色彩预设或显示模式", id: "disp.hw.state")
                     }
-                    if dm.originalDDC[display.key]?[VCP.colorPreset.rawValue] != nil || dm.originalDDC[display.key]?[VCP.displayMode.rawValue] != nil {
+                    if !colors.isEmpty {
+                        hwRow("色彩预设", code: VCP.colorPreset, values: colors, current: state.colorPreset, display: display)
+                    }
+                    if !modes.isEmpty {
+                        hwRow("显示模式", code: VCP.displayMode, values: modes, current: state.displayMode, display: display)
+                    }
+                    if let note = dm.ddcNotes[display.id] {
+                        let kind = DDCFeedback.kind(note)
+                        StateLine(kind: kind, text: note,
+                                  actions: kind == .failed ? ([dm.lastDDCAttempt[display.id].map { last in StateAction.retry { dm.setDDC(display.id, last.code, last.value) } }].compactMap { $0 } + (hasOriginal(display) ? [StateAction(title: "恢复", symbol: "arrow.uturn.backward") { dm.restoreColor(display.id) }] : [])) : [],
+                                  id: "disp.ddc.note")
+                    }
+                    if hasOriginal(display) {
                         Button("恢复原硬件色彩") { dm.restoreColor(display.id) }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.color.restore")
                     }
+                } else if dm.probing {
+                    StateLine(kind: .loading, text: "正在读取显示器", id: "disp.hw.state")
+                } else {
+                    StateLine(kind: .failed, text: "未匹配到这台显示器的 DDC/CI 通道", detail: "请在显示器菜单里开启 DDC/CI 后刷新；同型号多屏身份不明确时不猜测控制目标。",
+                              actions: [.refresh { dm.refresh(); dm.probeDDC() }], id: "disp.hw.state")
                 }
-                if let note = dm.ddcNotes[display.id] { Text(note).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("disp.ddc.note") }
-                Text("ICC、硬件预设与下方软件色温分别控制；仅列出已提供的选项，硬件模式名称请对照显示器菜单。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Hairline().padding(.vertical, 2)
+                // ③ 软件色温
+                group("3", "软件色温与调光", "在右侧「护眼」卡片：只调整这台 Mac 的输出伽马，不写入显示器；关闭即恢复系统原色。")
             }
+        }
+    }
+    func hasOriginal(_ display: DisplayInfo) -> Bool {
+        dm.originalDDC[display.key]?[VCP.colorPreset.rawValue] != nil || dm.originalDDC[display.key]?[VCP.displayMode.rawValue] != nil
+    }
+    func group(_ n: String, _ title: String, _ note: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(n).font(DS.cap(.semibold)).foregroundColor(.white).frame(width: 15, height: 15)
+                    .background(Circle().fill(accent)).accessibilityHidden(true)
+                Text(title).font(DS.sub(.semibold))
+            }
+            Text(note).font(DS.cap(.regular)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+        }.accessibilityElement(children: .combine)
+    }
+    func hwRow(_ title: String, code: VCP, values: [UInt8], current: Int?, display: DisplayInfo) -> some View {
+        let names = DDCNames.shared
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(DS.sub(.medium))
+                Text(String(format: "VCP 0x%02X", code.rawValue)).font(DS.cap(.regular)).foregroundColor(.secondary)
+                Spacer()
+                if let cur = current, values.contains(UInt8(clamping: cur)) {
+                    Button("命名当前…") {
+                        let v = UInt8(clamping: cur)
+                        if let n = DDCNames.prompt("给「\(names.label(display.key, code.rawValue, v).0)」命名", names.name(display.key, code.rawValue, v) ?? "") {
+                            names.set(display.key, code.rawValue, v, n)
+                        }
+                    }.buttonStyle(.plain).font(DS.cap(.medium)).foregroundColor(accentText).accessibilityIdentifier("disp.name.\(code.rawValue)")
+                } else if current == nil {
+                    Text("当前值读不到").font(DS.cap(.regular)).foregroundColor(.secondary)
+                }
+            }
+            FlowRow(spacing: 6) { ForEach(values, id: \.self) { value in
+                let label = names.label(display.key, code.rawValue, value)
+                ChoiceChip(text: label.0, on: current == Int(value), sub: String(format: "0x%02X", value)) { dm.setDDC(display.id, code, Int(value)) }
+                    .help(label.1)
+                    .accessibilityLabel(title + " " + label.0 + "，" + label.1)
+                    .accessibilityIdentifier(code == .colorPreset ? "disp.color.\(value)" : "disp.mode.\(value)")
+            } }
         }
     }
     func confirmInput(_ id: CGDirectDisplayID, _ v: UInt8) {

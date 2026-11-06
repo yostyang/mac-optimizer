@@ -98,7 +98,20 @@ struct AlertEngine {
 struct EnergyStore: Codable, Equatable {
     /// 小时序号（epoch/3600） -> 应用 -> 焦耳
     var hours: [Int: [String: Double]] = [:]
+    /// 2.8：采样覆盖（旧文件没有这些字段，解码为 nil，界面按小时推断并注明）
+    var sampled: [Int: Int]? = nil      // 小时序号 -> 该小时成功采样的分钟数
+    var firstSample: Double? = nil      // 首次有效采样（epoch 秒）
+    var lastSample: Double? = nil       // 最新一次写入（epoch 秒）
     static let keepHours = 31 * 24
+    /// 记录一次成功采样（不论有没有应用耗电，都说明这一分钟有覆盖）
+    mutating func markSampled(at date: Date) {
+        let h = Int(date.timeIntervalSince1970 / 3600)
+        var m = sampled ?? [:]
+        m[h, default: 0] = min(60, (m[h] ?? 0) + 1)
+        sampled = m
+        if firstSample == nil { firstSample = date.timeIntervalSince1970 }
+        lastSample = date.timeIntervalSince1970
+    }
     mutating func add(_ app: String, joules: Double, at date: Date) {
         guard joules > 0 else { return }
         let h = Int(date.timeIntervalSince1970 / 3600)
@@ -107,6 +120,7 @@ struct EnergyStore: Codable, Equatable {
     mutating func prune(now: Date) {
         let cut = Int(now.timeIntervalSince1970 / 3600) - EnergyStore.keepHours
         hours = hours.filter { $0.key > cut }
+        if let s = sampled { sampled = s.filter { $0.key > cut } }
         // 每小时只保留前 30 个应用，控制文件大小
         for (h, m) in hours where m.count > 30 { hours[h] = Dictionary(uniqueKeysWithValues: m.sorted { $0.value > $1.value }.prefix(30).map { ($0.key, $0.value) }) }
     }
@@ -200,6 +214,7 @@ final class EnergyTracker: ObservableObject {
         let liveRows = perApp.map { (app: $0.key, watts: $0.value / dt) }.sorted { $0.watts > $1.watts }.prefix(8)
         DispatchQueue.main.async {
             for (a, j) in perApp { self.store.add(a, joules: j, at: now) }
+            self.store.markSampled(at: now)
             self.store.prune(now: now)
             self.live = Array(liveRows)
             let h = Int(now.timeIntervalSince1970 / 3600)

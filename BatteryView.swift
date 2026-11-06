@@ -49,47 +49,58 @@ struct BatteryPage: View {
     func powerTab(_ s: Snapshot) -> some View {
         let flow = PowerFlowCalc.fromSnapshot(s)
         let top = PowerFlowCalc.topMW(store: en.store, now: now)
-        return VStack(alignment: .leading, spacing: 14) {
-            Card(title: "功率流向", icon: "bolt.fill") {
-                HStack(spacing: 6) { ClayDot(); Text(flow.supplyText).font(.system(size: 11)).foregroundColor(.secondary) }
-                HStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 2) { Text("充电器输入").font(.system(size: 11)).foregroundColor(.secondary); Text(flow.onAC ? fmtW(flow.inputWatts) : "—").font(.system(size: 17, weight: .semibold)).monospacedDigit() }
-                    VStack(alignment: .leading, spacing: 2) { Text(flow.dischargeWatts != nil ? "电池放电" : "充入电池").font(.system(size: 11)).foregroundColor(.secondary); Text(flow.dischargeWatts.map { fmtW($0) } ?? (flow.charging ? fmtW(flow.chargeWatts) : "未充电")).font(.system(size: 17, weight: .semibold)).monospacedDigit() }
-                    VStack(alignment: .leading, spacing: 2) { Text("系统功耗").font(.system(size: 11)).foregroundColor(.secondary); Text(fmtW(flow.systemWatts)).font(.system(size: 17, weight: .semibold)).monospacedDigit() }
-                    Spacer()
+        let stale = s.batteryPowerUpdated.map { now.timeIntervalSince($0) >= 30 } ?? false
+        return HStack(alignment: .top, spacing: 14) {
+            VStack(spacing: 14) {
+                Card(title: "整机功率", icon: "bolt.fill") {
+                    HStack(spacing: 6) { ClayDot(); Text(flow.supplyText).font(DS.sub()).foregroundColor(.secondary) }
+                    HStack(spacing: 18) {
+                        reading("充电器输入", flow.onAC ? Fmt.watts(flow.inputWatts) : Fmt.dash)
+                        reading(flow.dischargeWatts != nil ? "电池放电" : "充入电池", flow.dischargeWatts.map { Fmt.watts($0) } ?? (flow.charging ? Fmt.watts(flow.chargeWatts) : "未充电"))
+                        reading("系统功耗（估算）", Fmt.watts(flow.systemWatts))
+                        Spacer(minLength: 0)
+                    }
+                    if stale {
+                        StateLine(kind: .stale, text: "电池读数已超过 30 秒没有更新", detail: "暂不显示估算值，等下一次读数。", actions: [.refresh { Monitor.shared.sampleNow() }], id: "power.stale")
+                    }
+                    Footnote(text: flow.inputNote + "；" + flow.systemNote + "。输入为进入 Mac 的功率，适配器上报功率单列；不代表插座侧实测，屏幕与外设不单独估算。")
+                    if let updated = s.batteryPowerUpdated { UpdatedText(date: updated) }
                 }
-                Text(flow.inputNote + "；" + flow.systemNote + "。输入为进入 Mac 的功率，适配器上报功率单列；不表示插座侧实测，屏幕与外设不单独估算。跳变或数据未同步时暂不显示估算值。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                if let updated = s.batteryPowerUpdated { Text("更新于 " + updated.formatted(date: .omitted, time: .standard)).font(.system(size: 10)).foregroundColor(.secondary) }
-            }
-            Card(title: "电池详情", icon: "info.circle") {
-                HStack(alignment: .top, spacing: 20) {
-                    VStack(spacing: 6) {
-                        kv("整机运行时间", fmtUptime(s.uptime))
-                        kv("电池电压", flow.voltageV.map { String(format: "%.2f V", $0) } ?? "不可读")
-                        kv("电池电流", flow.currentA.map { String(format: "%.2f A", $0) } ?? "不可读")
-                    }.frame(maxWidth: .infinity)
-                    VStack(spacing: 6) {
-                        kv("适配器上报功率", flow.adapterRatedWatts.map { String(format: "%.0f W", $0) } ?? "不可读")
-                        kv("循环次数", s.cycles.map { "\($0) 次" } ?? "—")
-                        kv("低电量模式", flow.lowPowerMode.map { $0 ? "开启" : "关闭" } ?? "不可读")
-                    }.frame(maxWidth: .infinity)
+                PowerTrendCard()
+            }.frame(maxWidth: .infinity)
+            VStack(spacing: 14) {
+                Card(title: "电池详情", icon: "info.circle") {
+                    kv("整机运行时间", fmtUptime(s.uptime))
+                    kv("电池电压", flow.voltageV.map { String(format: "%.2f V", $0) } ?? Fmt.dash)
+                    kv("电池电流", flow.currentA.map { String(format: "%.2f A", $0) } ?? Fmt.dash)
+                    kv("适配器上报功率", flow.adapterRatedWatts.map { String(format: "%.0f W", $0) } ?? Fmt.dash)
+                    kv("循环次数", s.cycles.map { "\($0) 次" } ?? Fmt.dash)
+                    kv("低电量模式", flow.lowPowerMode.map { $0 ? "开启" : "关闭" } ?? Fmt.dash)
+                    HStack(spacing: 10) {
+                        Button("打开系统电源设置") { SystemPanes.battery() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("bat.lowpower.settings")
+                        Footnote(text: "低电量模式只展示状态，不在应用内直接改系统设置。")
+                    }
                 }
-                HStack(spacing: 10) {
-                    Button("打开系统电源设置") { SystemPanes.battery() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("bat.lowpower.settings")
-                    Text("低电量模式只展示状态，不在应用内直接改系统设置；要改请去系统电源设置。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Card(title: "应用能耗（按进程估算）", icon: "cpu") {
+                    if top.isEmpty {
+                        StateLine(kind: en.store.lastSample == nil ? .loading : .empty,
+                                  text: en.store.lastSample == nil ? "还没有应用能耗采样" : "最近一小时没有应用能耗记录",
+                                  detail: al.settings.energyTracking ? "每分钟采样一次，几分钟后再看。" : "后台记录已关闭，只在打开电池页时采样。",
+                                  id: "energy.top.state")
+                    }
+                    ForEach(Array(top.enumerated()), id: \.offset) { _, r in
+                        HStack { Text(r.app).font(DS.sub()).lineLimit(1); Spacer(); Text(String(format: "%.1f mW", r.mw)).font(DS.num(11)) }
+                    }
+                    Footnote(text: "口径：最近一完整小时平均（焦耳 ÷ 秒 × 1000），没有上一小时数据时用本小时累计平均。来自 macOS 进程能耗计数，是处理器能耗估算，不含屏幕、外设与充电损耗，不能和左侧整机功率直接相加对比。")
                 }
-            }
-            Card(title: "CPU 能耗影响", icon: "cpu") {
-                if top.isEmpty { Text("最近一小时还没有耗电采样，几分钟后再看。").font(.system(size: 11)).foregroundColor(.secondary) }
-                ForEach(Array(top.enumerated()), id: \.offset) { _, r in
-                    HStack { Text(r.app).font(.system(size: 11)).lineLimit(1); Spacer(); Text(String(format: "%.1f mW", r.mw)).font(.system(size: 11, weight: .medium)).monospacedDigit() }
-                }
-                Text("口径：最近一完整小时平均（焦耳 ÷ 秒 × 1000），不是瞬时功率；没有上一小时数据时用本小时累计平均。不要把 24 小时 Wh 榜直接当 mW 榜。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Card(title: "紧凑条（菜单栏面板同款）", icon: "rectangle") {
-                BatteryCompactBar(s: s)
-            }
+            }.frame(maxWidth: .infinity)
         }
+    }
+    func reading(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(DS.sub()).foregroundColor(.secondary)
+            Text(value).font(DS.num(17, .semibold)).foregroundColor(value == Fmt.dash ? .secondary : .primary)
+        }.accessibilityElement(children: .combine)
     }
 
     func kv(_ k: String, _ v: String, _ c: Color = .primary) -> some View {
@@ -138,22 +149,32 @@ struct BatteryPage: View {
     var energy: some View {
         let rows = Array(en.store.summary(range, now: now).prefix(6))
         let mx = rows.first?.joules ?? 1
-        return Card(title: "应用耗电", icon: "bolt.fill") {
-            HStack {
-                Picker("", selection: $range) { ForEach(EnergyStore.Range.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 230)
-                Spacer()
+        let cov = EnergyCoverage.compute(en.store, range: range, now: now)
+        return Card(title: "应用耗电（按进程估算）", icon: "bolt.fill") {
+            HStack(spacing: 10) {
+                Picker("", selection: $range) { ForEach(EnergyStore.Range.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
+                CoverageStrip(buckets: cov.buckets).frame(maxWidth: .infinity).accessibilityIdentifier("energy.coverage.strip")
+                    .help("每格一个时间段，空格表示没有采样")
             }
-            if !en.live.isEmpty { HStack { Text("当前最耗电：" + en.live.prefix(2).map { "\($0.app) " + String(format: "%.1f W", $0.watts) }.joined(separator: "、")).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1) } }
-            if rows.isEmpty { Text("正在收集数据（每分钟记录一次，几分钟后就有结果）").font(.system(size: 11)).foregroundColor(.secondary).padding(.vertical, 6) }
+            Text(cov.summary(now: now)).font(DS.cap(.regular)).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("energy.coverage")
+            if !en.live.isEmpty { Text("当前应用能耗最高：" + en.live.prefix(2).map { "\($0.app) " + Fmt.watts($0.watts) }.joined(separator: "、")).font(DS.sub()).foregroundColor(.secondary).lineLimit(1) }
+            if rows.isEmpty {
+                StateLine(kind: cov.firstSample == nil ? .loading : .empty,
+                          text: cov.firstSample == nil ? "正在收集数据" : "这个时间范围没有应用耗电记录",
+                          detail: cov.firstSample == nil ? "每分钟记录一次，几分钟后就有结果。" : "App 没运行或关闭后台记录的时段不会有数据，不按 0 计。",
+                          id: "energy.state")
+            }
             ForEach(rows) { r in
                 HStack(spacing: 10) {
-                    Text(r.app).font(.system(size: 11)).lineLimit(1).frame(width: 120, alignment: .leading)
+                    Text(r.app).font(DS.sub()).lineLimit(1).frame(width: 120, alignment: .leading)
                     Bar(frac: r.joules / mx, color: accent2, height: 6)
                     Spark(values: r.series, color: accent).frame(width: 64, height: 18)
-                    Text(Fmt.energy(r.joules)).font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 70, alignment: .trailing)
+                    Text(Fmt.energy(r.joules)).font(DS.num(11)).frame(width: 70, alignment: .trailing)
                 }
             }
-            Toggle("在后台记录耗电（每分钟采样一次，开销极低）", isOn: $al.settings.energyTracking).toggleStyle(.switch).controlSize(.small).font(.system(size: 11))
+            Toggle("在后台记录耗电（每分钟采样一次，开销极低）", isOn: $al.settings.energyTracking).toggleStyle(.switch).controlSize(.small).font(DS.sub())
+                .help("这里是按进程估算的处理器能耗，不是整机功率；整机功率与趋势在「功率与能耗」标签。")
         }
     }
     var alerts: some View {

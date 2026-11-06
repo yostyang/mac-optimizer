@@ -289,7 +289,7 @@ struct CleanPage: View {
                         Button("添加白名单") { if store.addWhitelist(newWhite) { newWhite = "" } }.buttonStyle(PillButton(filled: false)).disabled(store.trashing).accessibilityIdentifier("clean.whitelist.add")
                     }
                     Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                    if store.whitelist.isEmpty { Text("暂无自定义白名单").font(.system(size: 11)).foregroundColor(.secondary) }
+                    if store.whitelist.isEmpty { StateLine(kind: .empty, text: "暂无自定义白名单", id: "clean.whitelist.state") }
                     ForEach(store.whitelist, id: \.self) { w in Text(w).font(.system(size: 11)).lineLimit(1) }
                     if !store.records.isEmpty {
                         Divider()

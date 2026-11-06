@@ -310,6 +310,7 @@ enum IconCache {
     }
 }
 struct ProcList: View {
+    static let actionWidth: CGFloat = 44
     @ObservedObject var m: Monitor
     @ObservedObject var feedback = OperationFeedback.shared
     var limit = 5
@@ -318,12 +319,14 @@ struct ProcList: View {
     var onMore: ((ProcInfo) -> Void)? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("高占用进程").font(DS.cap(.semibold)).foregroundColor(.secondary)
                 Spacer()
-                Text("CPU · 内存").font(DS.cap()).foregroundColor(.secondary)
-            }.padding(.horizontal, 4).padding(.top, 2)
-            if m.s.top.isEmpty { Text("正在统计…").font(DS.sub()).foregroundColor(.secondary).padding(4) }
+                Text("CPU").font(DS.cap()).foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
+                Text("内存").font(DS.cap()).foregroundColor(.secondary).frame(width: 54, alignment: .trailing)
+                Color.clear.frame(width: ProcList.actionWidth, height: 1)
+            }.padding(.horizontal, 6).padding(.top, 2).accessibilityHidden(true)
+            if m.s.top.isEmpty { StateLine(kind: .loading, text: "正在统计进程占用", id: "proc.state").padding(4) }
             ForEach(Array(m.s.top.prefix(limit).enumerated()), id: \.element.id) { i, p in
                 let on = selection == i
                 HStack(spacing: 8) {
@@ -331,16 +334,18 @@ struct ProcList: View {
                     else { IconBadge(symbol: "gearshape", tint: Color(nsColor: .secondaryLabelColor), size: 16, selected: on) }
                     Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? .white : .primary)
                     Spacer(minLength: 4)
-                    Text(String(format: "%.0f%%", p.cpu)).font(DS.num(11, .medium))
-                        .foregroundColor(on ? .white : ProcessCPU.color(p.cpu))
-                    Text(Fmt.mem(p.memMB)).font(DS.num(10, .regular))
-                        .foregroundColor(on ? Color.white.opacity(0.8) : .secondary).frame(width: 50, alignment: .trailing)
-                    if let t = ProcActions.fix(for: p).short {
-                        Text(t).font(DS.cap()).foregroundColor(on ? .white : .secondary)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-                                .fill(on ? Color.white.opacity(0.18) : Color.primary.opacity(0.05)))
-                    }
+                    Text(String(format: "%.1f%%", p.cpu)).font(DS.num(11, .medium))
+                        .foregroundColor(on ? .white : ProcessCPU.color(p.cpu)).frame(width: 40, alignment: .trailing)
+                    Text(Fmt.mem(p.memMB)).font(DS.num(11, .regular))
+                        .foregroundColor(on ? Color.white.opacity(0.85) : .secondary).frame(width: 54, alignment: .trailing)
+                    Group {
+                        if let t = ProcActions.fix(for: p).short {
+                            Text(t).font(DS.cap()).foregroundColor(on ? .white : .secondary)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
+                                    .fill(on ? Color.white.opacity(0.18) : Color.primary.opacity(0.05)))
+                        } else { Color.clear.frame(height: 1) }
+                    }.frame(width: ProcList.actionWidth, alignment: .trailing)
                 }
                 .padding(.horizontal, 6).frame(height: 28)
                 .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
@@ -432,7 +437,7 @@ struct PanelView: View {
                     Color.clear.preference(key: PanelContentHeightKey.self, value: geo.size.height)
                 })
         }
-        .frame(width: 380, height: h)
+        .frame(width: PanelLayout.width, height: h)
         .onPreferenceChange(PanelContentHeightKey.self) { v in
             if v > 400 && v != contentHeight { contentHeight = v }
         }
@@ -490,130 +495,7 @@ final class PanelKeyView: NSView {
             .accessibilityElement(children: .ignore).accessibilityLabel(title + "，" + value + "，" + detail)
     }
 }
-struct PanelContent: View {
-    @ObservedObject var m: Monitor
-    @ObservedObject var ui = UIState.shared
-    @ObservedObject var alerts = BatteryAlerts.shared
-    @State private var sel = 0
-    @State private var more: ProcInfo?
-    @State private var showApps = false
-    var body: some View {
-        let s = m.s; let h = s.health
-        VStack(spacing: 8) {
-            header(h)
-            conclusion(h)
-            metrics(s)
-            VStack(spacing: 1) { QuickActions(showStats: false) }.padding(4).card()
-            VStack(spacing: 1) {
-                ProcList(m: m, limit: 4, selection: sel, onSelect: { sel = $0 }, onMore: { more = $0 })
-                HStack(spacing: 6) {
-                    Kbd(text: "↵"); Text("处理选中进程").font(DS.cap()).foregroundColor(.secondary)
-                    Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(.secondary)
-                    Spacer()
-                }.padding(.horizontal, 4).padding(.bottom, 4)
-            }.padding(4).card()
-        }
-        .padding(10)
-        .frame(width: 380)
-        .background(Vibrancy(material: .popover, solid: DS.window))
-        .overlay { if let p = more { PanelMore(p: p, m: m) { more = nil } } }
-        .background(PanelKeyRouter())
-        .onAppear {
-            PanelKeys.shared.handler = { e in
-                let count = min(4, m.s.top.count)
-                if more != nil { return false }
-                switch e.keyCode {
-                case Key.down: sel = min(sel + 1, max(0, count - 1)); return true
-                case Key.up: sel = max(0, sel - 1); return true
-                case Key.enter, Key.keypadEnter:
-                    guard m.s.top.indices.contains(sel) else { return false }
-                    let f = ProcActions.fix(for: m.s.top[sel])
-                    DispatchQueue.main.async { FixRunner.perform(f) }
-                    return true
-                default:
-                    if e.modifierFlags.contains(.command), e.charactersIgnoringModifiers == "k" {
-                        if m.s.top.indices.contains(sel) { more = m.s.top[sel] }
-                        return true
-                    }
-                    return false
-                }
-            }
-        }
-        .onDisappear { PanelKeys.shared.handler = nil }
-    }
-
-    func header(_ h: (score: Int, status: String)) -> some View {
-        HStack(spacing: 8) {
-            IconBadge(symbol: "speedometer", tint: accent, size: 22)
-            Text("Mac 一键优化").font(DS.body(.semibold))
-            Spacer()
-            Button { ui.openMain() } label: { Image(systemName: "macwindow").font(DS.body()) }
-                .buttonStyle(.plain).help("打开主窗口").accessibilityIdentifier("panel.open")
-            Menu {
-                Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) {
-                    Text("CPU 占用").tag("cpu"); Text("健康分").tag("score")
-                    Text("电池图标").tag("battery"); Text("网速").tag("net")
-                }
-                Toggle("登录时启动", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
-                Divider()
-                Button("设置…") { Nav.shared.sel = .settings; StatusBar.shared.popover.performClose(nil); ui.openMain() }
-                Button("隐藏菜单栏图标") { ui.menuBar = false }
-                Button("退出 Mac一键优化") { NSApp.terminate(nil) }
-            } label: { Image(systemName: "gearshape").font(DS.body()) }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 18)
-        }
-    }
-
-    /// 一行结论：不卡 / 有点卡，后面跟原因
-    func conclusion(_ h: (score: Int, status: String)) -> some View {
-        let word = h.score >= 85 ? "不卡" : (h.score >= 60 ? "有点卡" : "很卡")
-        let tint = h.score >= 85 ? good : (h.score >= 60 ? warn : bad)
-        return HStack(spacing: 10) {
-            ScoreRing(score: h.score, size: 34)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(word) · \(h.status)").font(DS.body(.semibold)).foregroundColor(tint)
-                Text(m.s.chip + " · " + "\(m.s.ramGB) GB · " + m.s.osVersion).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            Button { showApps = true } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.arrow.down").font(DS.cap())
-                    Text(Fmt.rate(m.s.downBps)).font(DS.num(11, .medium))
-                }
-            }.buttonStyle(.plain).foregroundColor(accentText)
-                .popover(isPresented: $showApps, arrowEdge: .trailing) { AppTrafficPopover() }
-                .accessibilityIdentifier("panel.traffic")
-        }
-    }
-
-    func metrics(_ s: Snapshot) -> some View {
-        VStack(spacing: 1) {
-            PanelMetric(symbol: "cpu", title: "CPU", value: m.cpuHist.isEmpty ? "—" : String(format: "%.0f%%", s.cpu),
-                        tint: DS.metric.cpu, detail: Fmt.temp(s.cpuTemp) + String(format: " · 负载 %.2f", s.load.first ?? 0),
-                        series: m.cpuHist, maxValue: 100, valueColor: s.cpu >= 85 ? bad : (s.cpu >= 60 ? warn : .primary))
-            PanelMetric(symbol: "square.stack.3d.up", title: "GPU", value: s.gpu.map { String(format: "%.0f%%", $0) } ?? "—",
-                        tint: DS.metric.gpu, detail: Fmt.temp(s.gpuTemp) + (s.gpuCores > 0 ? " · \(s.gpuCores) 核" : ""),
-                        series: s.gpu == nil ? nil : m.gpuHist, maxValue: 100)
-            PanelMetric(symbol: "memorychip", title: "内存", value: s.memTotalGB > 0 ? String(format: "%.0f%%", s.memFraction * 100) : "—",
-                        tint: DS.metric.memory, detail: "压力" + Fmt.pressure(s.memPressure).0 + String(format: " · 交换 %.1f GiB", s.swapUsedGB),
-                        frac: s.memTotalGB > 0 ? s.memFraction : nil, valueColor: s.memPressure >= 4 ? bad : (s.memPressure >= 2 ? warn : .primary))
-            PanelMetric(symbol: "internaldrive", title: "磁盘", value: s.diskTotalGB > 0 ? String(format: "%.0f%%", s.diskUsedFraction * 100) : "—",
-                        tint: DS.metric.disk, detail: s.diskTotalGB > 0 ? String(format: "可用 %.0f / %.0f GB", s.diskFreeGB, s.diskTotalGB) : "等待采样",
-                        frac: s.diskTotalGB > 0 ? s.diskUsedFraction : nil)
-            PanelMetric(symbol: "arrow.up.arrow.down", title: "网络", value: s.netIface.isEmpty ? "—" : Fmt.rate(s.downBps), tint: DS.metric.network,
-                        detail: s.netIface.isEmpty ? "等待采样" : "↑ " + Fmt.rate(s.upBps) + " · " + s.netIface, series: m.downHist)
-            if let fans = s.fans, let fastest = fans.max() {
-                PanelMetric(symbol: "fan", title: "风扇", value: String(format: "%.0f RPM", fastest), tint: DS.metric.fan,
-                            detail: "最快风扇 · \(fans.count) 个 · 系统自动控制", frac: s.fanMax > 0 ? fastest / s.fanMax : nil)
-            }
-            if let battery = s.battery {
-                PanelMetric(symbol: s.charging ? "battery.100.bolt" : "battery.75", title: "电池", value: "\(battery)%",
-                            tint: DS.metric.battery, detail: PowerFlowCalc.fromSnapshot(s).supplyText + " · 循环 " + (s.cycles.map(String.init) ?? "—"),
-                            frac: Double(battery) / 100, valueColor: battery <= 20 ? batteryColor(battery) : .primary)
-            }
-        }.padding(4).card()
-    }
-}
+// 2.8：菜单栏面板 PanelContent 已移到 V28Panel.swift（双列）
 
 /// 面板里的 ⌘K 更多操作
 struct PanelMore: View {

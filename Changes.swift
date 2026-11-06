@@ -249,7 +249,7 @@ struct ChangesPage: View {
                 }
                 Card(title: "改动记录", icon: "list.clipboard") {
                     if log.records.isEmpty {
-                        Text("还没有本 App 做过的改动记录。清理到废纸篓、DNS 改动会在这里出现。").font(.system(size: 11)).foregroundColor(.secondary)
+                        StateLine(kind: .empty, text: "还没有本 App 做过的改动记录", detail: "清理到废纸篓、DNS 改动会在这里出现。", id: "changes.state")
                     } else {
                         ForEach(Array(log.records.suffix(50).reversed())) { r in
                             VStack(alignment: .leading, spacing: 2) {

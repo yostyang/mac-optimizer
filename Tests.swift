@@ -158,6 +158,7 @@ enum MOTests {
         PhaseZero.tests()
         PhaseOne.tests()
         PhaseTwo.tests()
+        V28.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -501,6 +502,7 @@ enum MOTests {
         v23Snapshots(out)
         v24Snapshots(out)
         V25.snapshots(out)
+        V28.snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
@@ -528,7 +530,7 @@ enum MOTests {
             pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
             if let rep = pngRep(host, out + "/panel-\(mode).png") { contrast(host, rep, "面板 \(mode)") }
             if mode == "light" { pngRep(host, out + "/panel.png") }
-            check(size.width == 380 && size.height > 600 && size.height < 1000, "面板尺寸 \(mode)", "\(Int(size.width))×\(Int(size.height))")
+            check(size.width == PanelLayout.width && size.height > 600 && size.height < 1000, "面板尺寸 \(mode)", "\(Int(size.width))×\(Int(size.height))")
             pw.orderOut(nil)
             // 主窗口：默认尺寸和最小尺寸
             w.appearance = NSAppearance(named: ap)
@@ -545,7 +547,9 @@ enum MOTests {
             }
         }
         check(defaultSize.width >= Layout.minSize.width && defaultSize.height >= Layout.minSize.height, "默认窗口不小于最小尺寸", "\(Int(defaultSize.width))×\(Int(defaultSize.height))")
-        // 固定数据的基准图（浅色/深色）
+        // 固定数据的基准图（浅色/深色）：蓝牙外设用固定数据，避免本机连接的设备让基准图不稳定
+        let realBT = BTBattery.shared; BTBattery.shared = V28.btFixture()
+        defer { BTBattery.shared = realBT }
         mon.panelOpen = false; mon.menuBarEnabled = false; mon.mainWindowVisible = { false }; mon.reschedule()
         settle(2.5)
         let fx = fixture()
@@ -723,7 +727,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")
