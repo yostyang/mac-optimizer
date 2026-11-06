@@ -95,7 +95,7 @@ enum SystemAlertEvent: String {
         case .battery: return "电池健康度下降"
         }
     }
-    var page: Int { self == .cpu ? -2 : (self == .disk ? -6 : -3) }
+    var page: Page { self == .cpu ? .monitor : (self == .disk ? .clean : .battery) }
 }
 
 struct SystemAlertEngine {
@@ -200,7 +200,7 @@ final class V19Store: ObservableObject {
             if let sink { sink(event); continue }
             let content = UNMutableNotificationContent()
             content.title = event.title; content.body = "点此查看当前状态和处理建议。"
-            content.userInfo = ["page": event.page]
+            content.userInfo = ["page": event.page.storageKey]
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "system-" + event.rawValue, content: content, trigger: nil)) { error in
                 if let error { DispatchQueue.main.async { self.lastAlertText = event.title + "（系统通知未送达：" + error.localizedDescription + "）" } }
             }
@@ -233,7 +233,7 @@ struct ChangesPage: View {
                 if charge.phase == .ready {
                     Text("充电助手已安装：不会重复索要授权，也不会重复弹安装提示").font(.system(size: 11)).foregroundColor(good).fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Button("去电池页安装充电助手") { Nav.shared.sel = -3 }.buttonStyle(PillButton(filled: false))
+                    Button("去电池页安装充电助手") { Nav.shared.sel = .battery }.buttonStyle(PillButton(filled: false))
                 }
                 Card(title: "主动提醒（只在异常时）", icon: "bell") {
                     Toggle("开启异常提醒（默认关闭）", isOn: Binding(get: { v19.settings.alertsOn }, set: { v19.setAlertsEnabled($0) })).accessibilityIdentifier("v19.alertsOn")

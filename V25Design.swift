@@ -9,7 +9,7 @@ enum DS {
     static let window = dyn(NSColor(srgbRed: 0.949, green: 0.949, blue: 0.961, alpha: 1),
                             NSColor(srgbRed: 0.086, green: 0.086, blue: 0.165, alpha: 1))   // #F2F2F5 / #16162A
     static let card = dyn(NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
-                          NSColor(srgbRed: 0.118, green: 0.118, blue: 0.200, alpha: 1))      // #FFFFFF / #1E1E33
+                          NSColor(srgbRed: 0.067, green: 0.071, blue: 0.118, alpha: 1))      // #FFFFFF / #11121E
     static let raised = dyn(NSColor(srgbRed: 0.980, green: 0.980, blue: 0.988, alpha: 1),
                             NSColor(srgbRed: 0.149, green: 0.149, blue: 0.243, alpha: 1))    // #FAFAFC / #26263E
     static let sidebar = dyn(NSColor(srgbRed: 0.965, green: 0.965, blue: 0.976, alpha: 1),
@@ -22,19 +22,217 @@ enum DS {
     static let press = dyn(NSColor.black.withAlphaComponent(0.07), NSColor.white.withAlphaComponent(0.08))
 
     // 圆角只保留 3 种
-    enum r { static let card: CGFloat = 10; static let control: CGFloat = 6; static let pill: CGFloat = 999 }
+    enum r { static let card: CGFloat = 12; static let control: CGFloat = 6; static let pill: CGFloat = 999 }
+    static let cardPadding: CGFloat = 16
+    static let cardGap: CGFloat = 12
 
     // 字号只保留 4 档：标题 / 正文 13 / 次要 11 / 角标 10
-    static let fontSizes: [CGFloat] = [17, 13, 11, 10]
+    static let fontSizes: [CGFloat] = [30, 22, 17, 13, 12.5, 11, 10.5, 10]
     static func title(_ w: Font.Weight = .semibold) -> Font { .system(size: 17, weight: w) }
     static func body(_ w: Font.Weight = .regular) -> Font { .system(size: 13, weight: w) }
     static func sub(_ w: Font.Weight = .regular) -> Font { .system(size: 11, weight: w) }
     static func cap(_ w: Font.Weight = .medium) -> Font { .system(size: 10, weight: w) }
     /// 数字：等宽，避免刷新时跳动
     static func num(_ size: CGFloat = 13, _ w: Font.Weight = .medium) -> Font { .system(size: size, weight: w, design: .rounded).monospacedDigit() }
+    static func hero(compact: Bool = false) -> Font { num(compact ? 22 : 30, .semibold) }
+    static func unit() -> Font { .system(size: 13, weight: .medium) }
+    static func label() -> Font { .system(size: 12.5, weight: .semibold) }
+    static func eyebrow() -> Font { .system(size: 10.5, weight: .semibold) }
+
+    enum metric {
+        static let cpu = dyn(NSColor(srgbRed: 0.067, green: 0.475, blue: 0.412, alpha: 1), NSColor(srgbRed: 0.420, green: 0.792, blue: 0.714, alpha: 1))
+        static let gpu = dyn(NSColor(srgbRed: 0.322, green: 0.345, blue: 0.722, alpha: 1), NSColor(srgbRed: 0.635, green: 0.647, blue: 0.949, alpha: 1))
+        static let memory = dyn(NSColor(srgbRed: 0.659, green: 0.259, blue: 0.471, alpha: 1), NSColor(srgbRed: 0.878, green: 0.584, blue: 0.745, alpha: 1))
+        static let disk = dyn(NSColor(srgbRed: 0.129, green: 0.435, blue: 0.643, alpha: 1), NSColor(srgbRed: 0.478, green: 0.729, blue: 0.941, alpha: 1))
+        static let network = dyn(NSColor(srgbRed: 0.067, green: 0.439, blue: 0.529, alpha: 1), NSColor(srgbRed: 0.396, green: 0.784, blue: 0.871, alpha: 1))
+        static let battery = dyn(NSColor(srgbRed: 0.325, green: 0.455, blue: 0.149, alpha: 1), NSColor(srgbRed: 0.702, green: 0.839, blue: 0.490, alpha: 1))
+        static let fan = dyn(NSColor(srgbRed: 0.345, green: 0.396, blue: 0.475, alpha: 1), NSColor(srgbRed: 0.655, green: 0.694, blue: 0.765, alpha: 1))
+    }
 
     static let motionFast: Double = 0.12
     static let motionPanel: Double = 0.22
+}
+
+struct MetricStat: Equatable {
+    let label: String
+    let value: String
+    init(_ label: String, _ value: String) { self.label = label; self.value = value }
+}
+
+@MainActor struct Unavailable: View {
+    var reason: String
+    var body: some View {
+        Text("—").foregroundColor(.secondary)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(.clear).frame(height: 1)
+                    .overlay(Path { path in path.move(to: .zero); path.addLine(to: CGPoint(x: 14, y: 0)) }
+                        .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
+            }
+            .help(reason).accessibilityLabel("暂不可用，" + reason)
+    }
+}
+
+/// 三层指标：标签、主值与可视化、二级读数。数据来自调用方，不自建采样器。
+@MainActor struct MetricTile: View {
+    let title: String
+    let symbol: String
+    let tint: Color
+    var value: String?
+    var unit = ""
+    var note = ""
+    var series: [Double] = []
+    var maxValue: Double? = nil
+    var fraction: Double? = nil
+    var stats: [MetricStat] = []
+    var unavailableReason = "当前系统没有提供此读数"
+    var valueColor: Color = .primary
+    var textValue = false
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(DS.label()).accessibilityHidden(true)
+                Text(title).font(DS.label())
+                Spacer(minLength: 2)
+                if !note.isEmpty { Text(note).font(DS.cap()).foregroundColor(.secondary).lineLimit(1).help(note) }
+            }.foregroundColor(tint)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if let value {
+                    Text(value).font(textValue ? DS.title() : DS.hero(compact: compact))
+                        .foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7)
+                } else {
+                    Unavailable(reason: unavailableReason).font(DS.hero(compact: compact))
+                }
+                if !unit.isEmpty { Text(unit).font(DS.unit()).foregroundColor(.secondary) }
+                Spacer(minLength: 0)
+            }
+            if !compact {
+                Group {
+                    if !series.isEmpty {
+                        Spark(values: series, color: tint, maxValue: maxValue)
+                    } else if let fraction {
+                        Bar(frac: fraction, color: tint, height: 4).frame(maxHeight: .infinity)
+                    } else {
+                        Color.clear
+                    }
+                }.frame(height: 22)
+                    .padding(.horizontal, series.isEmpty ? 0 : -DS.cardPadding)
+                    .accessibilityHidden(true)
+            }
+            VStack(spacing: 3) {
+                ForEach(Array(stats.prefix(compact ? 1 : 2).enumerated()), id: \.offset) { _, stat in
+                    HStack(spacing: 6) {
+                        Text(stat.label).foregroundColor(.secondary)
+                        Spacer(minLength: 2)
+                        Text(stat.value).monospacedDigit().foregroundColor(.primary)
+                    }.font(DS.cap()).lineLimit(1).minimumScaleFactor(0.8).help(stat.label + "：" + stat.value)
+                }
+            }
+        }
+        .padding(DS.cardPadding)
+        .frame(maxWidth: .infinity, minHeight: compact ? 98 : 154, maxHeight: compact ? 98 : 154, alignment: .topLeading)
+        .card()
+        .clipShape(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(([title, value.map { $0 + unit } ?? "暂不可用：" + unavailableReason, note]
+            + stats.map { $0.label + "：" + $0.value }).filter { !$0.isEmpty }.joined(separator: "，"))
+    }
+}
+
+@MainActor struct SubStats: View {
+    let items: [MetricStat]
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ForEach(Array(items.prefix(4).enumerated()), id: \.offset) { index, item in
+                if index > 0 { Rectangle().fill(DS.separator).frame(width: 1, height: 28) }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(.secondary)
+                    Text(item.value).font(DS.num()).lineLimit(1).minimumScaleFactor(0.8)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+            }
+        }
+    }
+}
+
+@MainActor struct KPIStrip: View {
+    let items: [MetricStat]
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                if index > 0 { Rectangle().fill(DS.separator).frame(width: 1, height: 29) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(.secondary)
+                    Text(item.value).font(DS.body(.medium)).lineLimit(1).minimumScaleFactor(0.75).help(item.value)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+            }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("metric.kpis")
+    }
+}
+
+@MainActor struct StatusPill: View {
+    let title: String
+    var tint: Color = accent
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle().fill(tint).frame(width: 5, height: 5).accessibilityHidden(true)
+            Text(title).font(DS.cap(.medium)).lineLimit(1)
+        }.padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Capsule().fill(Color.primary.opacity(0.04)))
+            .overlay(Capsule().strokeBorder(DS.border, lineWidth: 1))
+            .accessibilityElement(children: .combine)
+    }
+}
+
+struct BarListItem {
+    let name: String
+    let value: String
+    let fraction: Double
+}
+
+@MainActor struct BarList: View {
+    let items: [BarListItem]
+    var tint: Color = DS.metric.network
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(spacing: 4) {
+                    HStack {
+                        Text(item.name).font(DS.sub()).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        Text(item.value).font(DS.num(11)).lineLimit(1)
+                    }
+                    Bar(frac: item.fraction, color: tint, height: 3).accessibilityHidden(true)
+                }.accessibilityElement(children: .ignore).accessibilityLabel(item.name + "，" + item.value)
+            }
+        }
+    }
+}
+
+@MainActor struct InlineSegment<Value: Hashable>: View {
+    let items: [(String, Value)]
+    @Binding var selection: Value
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                Button { selection = item.1 } label: {
+                    Text(item.0).font(DS.cap(.medium)).padding(.horizontal, 8).padding(.vertical, 4)
+                        .foregroundColor(selection == item.1 ? .primary : .secondary)
+                        .background(RoundedRectangle(cornerRadius: DS.r.control).fill(selection == item.1 ? DS.card : .clear))
+                }.buttonStyle(.plain).accessibilityAddTraits(selection == item.1 ? .isSelected : [])
+            }
+        }.padding(2).background(RoundedRectangle(cornerRadius: DS.r.control).fill(Color.primary.opacity(0.04)))
+    }
+}
+
+@MainActor struct Footnote: View {
+    let text: String
+    var body: some View {
+        Text(text).font(DS.cap(.regular)).foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 // MARK: - 毛玻璃

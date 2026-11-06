@@ -113,14 +113,14 @@ enum V26 {
         drv.focusedWin = w1; _ = c.place(.right); w1.frame = nil   // 窗口被关闭
         T.check(c.undoLast().contains("已关闭") && w2.frame == CGRect(x: 900, y: 60, width: 700, height: 500), "原窗口已关闭→明确提示且不误移")
         T.check(c.undoLast() == "没有可撤销的归位", "关闭后撤销记录被清掉")
-        T.check(Shell.contextItem(page: -9)?.actions.count == 4, "分区页空 ⌘K：左/中/右/撤销四个操作")
-        T.check(Shell.contextItem(page: -2) == nil, "其它页没有分区操作")
+        T.check(Shell.contextItem(page: .split)?.actions.count == 4, "分区页空 ⌘K：左/中/右/撤销四个操作")
+        T.check(Shell.contextItem(page: .monitor) == nil, "其它页没有分区操作")
         var hints: [String] = []; SplitHUD.sink = { hints.append($0) }
-        let oldSel = Nav.shared.sel; Nav.shared.sel = -2
+        let oldSel = Nav.shared.sel; Nav.shared.sel = .monitor
         let shl = Shell.shared; let oldQ = shl.query; shl.query = ""; shl.actionsFor = nil
         shl.openActions()
         T.check(hints.count == 1 && hints[0].contains("⌘K") && shl.actionsFor == nil, "其它页空 ⌘K：给出明确提示")
-        Nav.shared.sel = -9; shl.openActions()
+        Nav.shared.sel = .split; shl.openActions()
         T.check(shl.actionsFor?.id == "ctx.split", "分区页空 ⌘K：打开分区操作面板")
         shl.actionsFor = nil; Nav.shared.sel = oldSel; shl.query = oldQ; SplitHUD.sink = nil
 
@@ -145,19 +145,19 @@ enum V26 {
         c.driver = FakeDriver(); c.tracker = FakeTracker(nil)   // 测试不碰真实 AX
         c.screens = FakeScreens([SplitDisplay(uuid: "T1", name: "测试屏", visible: CGRect(x: 0, y: 0, width: 1440, height: 875), scale: 2)], 900)
         let pv = w.contentView!
-        Nav.shared.sel = -4
+        Nav.shared.sel = .display
         MOTests.check(MOTests.waitUntil(2) { MOTests.find(pv, id: "disp.split") != nil }, "显示器页有「桌面分区」入口")
         MOTests.find(pv, id: "disp.split")?.press()
-        MOTests.check(MOTests.waitUntil(2) { Nav.shared.sel == -9 }, "打开桌面分区页")
+        MOTests.check(MOTests.waitUntil(2) { Nav.shared.sel == .split }, "打开桌面分区页")
         MOTests.check(MOTests.waitUntil(2) { MOTests.find(pv, id: "split.list") != nil && MOTests.find1(pv, id: "split.row.T1") != nil }, "列表显示屏幕")
         MOTests.find(pv, id: "split.tpl.21")?.press()
         MOTests.check(MOTests.waitUntil(2) { c.prefs.template("T1") == .twoThirds }, "点选模板后保存")
         MOTests.find(pv, id: "split.off")?.press()
         MOTests.check(MOTests.waitUntil(2) { c.prefs.template("T1") == nil }, "关闭分区可还原")
         (c.driver as? FakeDriver)?.ok = false
-        Nav.shared.sel = -4; MOTests.settle(0.2); Nav.shared.sel = -9
+        Nav.shared.sel = .display; MOTests.settle(0.2); Nav.shared.sel = .split
         MOTests.check(MOTests.waitUntil(2) { MOTests.find(pv, id: "split.grant") != nil }, "未授权时显示权限引导")
         ud.removePersistentDomain(forName: suite)
-        Nav.shared.sel = -2
+        Nav.shared.sel = .monitor
     }
 }

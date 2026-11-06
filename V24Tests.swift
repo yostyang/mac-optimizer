@@ -216,7 +216,7 @@ extension MOTests {
     static func v24UI(_ w: NSWindow) {
         sec("2.4 网络三标签与新页面")
         v24Fixtures()
-        Nav.shared.sel = -5; settle(0.5)
+        Nav.shared.sel = .network; settle(0.5)
         if let b = find(w.contentView!, id: "net.tab.1") { b.press(); check(waitUntil(2) { Nav.shared.netTab == 1 }, "切到测速标签") } else { check(false, "找到测速标签") }
         check(find(w.contentView!, id: "speed.down") != nil && find(w.contentView!, id: "speed.up") != nil && find(w.contentView!, id: "speed.run") != nil, "测速页有下载/上传大数字与重新测速")
         check(SpeedTest24.shared.phase != .running, "测试中不自动发起真实测速")
@@ -234,7 +234,7 @@ extension MOTests {
         if let b = find(w.contentView!, id: "net.tab.0") { b.press(); _ = waitUntil(2) { Nav.shared.netTab == 0 } }
 
         sec("2.4 清理页卸载标签")
-        Nav.shared.sel = -6; settle(0.5)
+        Nav.shared.sel = .clean; settle(0.5)
         if let b = find(w.contentView!, id: "clean.tab.1") { b.press(); check(find(w.contentView!, id: "uninstall.choose") != nil && find(w.contentView!, id: "uninstall.trash") != nil, "卸载标签有选择应用与移到废纸篓") } else { check(false, "找到卸载应用标签") }
         check(find(w.contentView!, id: "uninstall.restore") != nil, "卸载记录有恢复按钮")
         fits(w.contentView!, "卸载页默认窗口")
@@ -253,7 +253,7 @@ extension MOTests {
         check(find(host, id: "apptraffic.history") != nil && find(host, id: "apptraffic.row") != nil, "按应用面板列出应用并可跳到历史")
         pw.orderOut(nil); settle(0.2)
         if let b = find(host, id: "apptraffic.history") { _ = b }
-        NetPageLink.openTraffic(); check(Nav.shared.sel == -5 && Nav.shared.netTab == 2, "从面板跳到流量历史")
+        NetPageLink.openTraffic(); check(Nav.shared.sel == .network && Nav.shared.netTab == 2, "从面板跳到流量历史")
         Nav.shared.netTab = 0
     }
 
@@ -266,7 +266,7 @@ extension MOTests {
                 (AnyView(TrafficTab24().padding(28)), "traffic24", Layout.minSize.width - 212),
                 (AnyView(UninstallTab().padding(28)), "uninstall24", Layout.minSize.width - 212),
                 (AnyView(AppTrafficPopover()), "apptraffic24", 360),
-                (AnyView(MetricTiles(m: Monitor.shared).padding(12)), "tiles24", 380)
+                (AnyView(MetricTiles(m: Monitor.shared).padding(12)), "tiles24", Layout.minSize.width - 208)
             ]
             for (view, tag, width) in views {
                 let host = NSHostingView(rootView: view.frame(width: width).background(pageBG))

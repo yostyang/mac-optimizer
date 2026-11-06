@@ -35,8 +35,9 @@ struct Spark: View {
             let pts = vs.enumerated().map { i, v in CGPoint(x: vs.count == 1 ? g.size.width : g.size.width * CGFloat(i) / CGFloat(vs.count - 1), y: g.size.height * (1 - CGFloat(min(v, mx) / mx))) }
             ZStack {
                 Path { p in p.move(to: CGPoint(x: pts[0].x, y: g.size.height)); pts.forEach { p.addLine(to: $0) }; p.addLine(to: CGPoint(x: pts.last!.x, y: g.size.height)); p.closeSubpath() }
-                    .fill(LinearGradient(colors: [color.opacity(0.28), color.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                    .fill(color.opacity(0.10))
                 Path { p in p.move(to: pts[0]); pts.dropFirst().forEach { p.addLine(to: $0) } }.stroke(color, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
+                if let last = pts.last { Circle().fill(color).frame(width: 4, height: 4).position(last) }
             }
         }
     }
@@ -74,7 +75,7 @@ struct BigValue: View {
     let value: String; var unit: String = ""
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(value).font(DS.num(17, .semibold))
+            Text(value).font(DS.hero())
             if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(.secondary) }
         }
     }
@@ -138,77 +139,112 @@ final class UIState: ObservableObject {
 // MARK: - 共享卡片
 struct MetricTiles: View {
     @ObservedObject var m: Monitor
-    @ObservedObject var traffic = TrafficHistory.shared
     @State private var showApps = false
-    var columns = 2; var sparkH: CGFloat = 26
+    var compact = false
+    private var s: Snapshot { m.s }
+    private var top: ProcInfo? { s.top.max { $0.cpu < $1.cpu } }
+
     var body: some View {
-        let s = m.s
-        let tiles: [AnyView] = [AnyView(cpuTile(s)), AnyView(gpuTile(s)), AnyView(memTile(s)), AnyView(diskTile(s)), AnyView(netTile(s)), AnyView(fanTile(s))]
-        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-            ForEach(0..<(tiles.count + columns - 1) / columns, id: \.self) { r in
-                GridRow { ForEach(0..<columns, id: \.self) { c in if r * columns + c < tiles.count { tiles[r * columns + c] } } }
-            }
-        }.fixedSize(horizontal: false, vertical: true)
-    }
-    func cpuTile(_ s: Snapshot) -> some View {
-            Tile(icon: "cpu", title: "CPU", tint: statusTint(s.cpu / 100), trailing: Fmt.temp(s.cpuTemp)) {
-                BigValue(value: String(format: "%.0f", s.cpu), unit: "%")
-                Spark(values: m.cpuHist, color: levelColor(s.cpu / 100), maxValue: 100).frame(height: sparkH)
-                Text(String(format: "负载 %.2f / %.2f / %.2f", s.load[0], s.load[1], s.load[2])).font(.system(size: 10)).foregroundColor(.secondary).monospacedDigit()
-                Text("\(s.pCores) 性能核 · \(s.eCores) 能效核").font(.system(size: 10)).foregroundColor(.secondary)
-            }
-    }
-    func gpuTile(_ s: Snapshot) -> some View {
-            Tile(icon: "square.stack.3d.up", title: "GPU", tint: accent, trailing: Fmt.temp(s.gpuTemp)) {
-                if let g = s.gpu { BigValue(value: String(format: "%.0f", g), unit: "%") } else { BigValue(value: "—") }
-                Spark(values: m.gpuHist, color: accent2, maxValue: 100).frame(height: sparkH)
-                Text(s.gpuCores > 0 ? "\(s.gpuCores) 核图形处理器" : "核心数不可读").font(.system(size: 10)).foregroundColor(.secondary)
-            }
-    }
-    func memTile(_ s: Snapshot) -> some View {
-            Tile(icon: "memorychip", title: "内存", tint: Fmt.pressure(s.memPressure).1, trailing: String(format: "%.0f GB", s.memTotalGB)) {
-                BigValue(value: String(format: "%.0f", s.memFraction * 100), unit: "%")
-                Bar(frac: s.memFraction, color: Fmt.pressure(s.memPressure).1)
-                Text("压力 \(Fmt.pressure(s.memPressure).0) · 已用 \(String(format: "%.1f", s.memUsedGB)) GB").font(.system(size: 10)).foregroundColor(.secondary)
-                Text(String(format: "交换 %.2f GB", s.swapUsedGB)).font(.system(size: 10)).foregroundColor(.secondary)
-            }
-    }
-    func diskTile(_ s: Snapshot) -> some View {
-            Tile(icon: "internaldrive", title: "磁盘", tint: statusTint(s.diskUsedFraction, hi: 0.92, mid: 0.85), trailing: String(format: "%.0f GB", s.diskTotalGB)) {
-                BigValue(value: String(format: "%.0f", s.diskUsedFraction * 100), unit: "% 已用")
-                Bar(frac: s.diskUsedFraction, color: levelColor(s.diskUsedFraction, hi: 0.92, mid: 0.85))
-                Text(String(format: "可用 %.0f GB", s.diskFreeGB)).font(.system(size: 10)).foregroundColor(.secondary)
-            }
-    }
-    func netTile(_ s: Snapshot) -> some View {
-            Tile(icon: "arrow.up.arrow.down", title: "网络", tint: accent, trailing: s.netKind) {
-                Button { showApps = true } label: {
-                    HStack(spacing: 10) {
-                        Label(Fmt.rate(s.downBps), systemImage: "arrow.down").font(.system(size: 11, weight: .semibold)).monospacedDigit()
-                        Label(Fmt.rate(s.upBps), systemImage: "arrow.up").font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundColor(accent)
-                    }.labelStyle(.titleAndIcon).contentShape(Rectangle())
-                }.buttonStyle(.plain).help("点击查看哪些应用在用网络").accessibilityIdentifier("net.rates")
-                .popover(isPresented: $showApps, arrowEdge: .bottom) { AppTrafficPopover() }
-                // 2.4：与网络页「流量历史」同一份数据、同一种图（最近 30 分钟，每点 1 分钟平均，没记录的分钟留空）
-                let series = Array(traffic.series(.hour1).suffix(30))
-                if series.contains(where: { $0.down != nil }) {
-                    GapChart(series: series).frame(height: sparkH)
+        VStack(spacing: DS.cardGap) {
+            Grid(horizontalSpacing: DS.cardGap, verticalSpacing: DS.cardGap) {
+                GridRow { systemTile; cpuTile; gpuTile }
+                if compact {
+                    GridRow { memoryTile; networkTile; topTile }
                 } else {
-                    ZStack { Spark(values: m.downHist, color: accent2); Spark(values: m.upHist, color: accent) }.frame(height: sparkH)
+                    GridRow { memoryTile; batteryTile; fanTile }
+                    GridRow { diskTile; networkTile; topTile }
                 }
-                Text(series.contains(where: { $0.down != nil }) ? "趋势：最近 30 分钟流量历史 · 代理 \(s.proxy.isEmpty ? "—" : s.proxy)" : "代理：\(s.proxy.isEmpty ? "—" : s.proxy)").font(.system(size: 10)).foregroundColor(.secondary)
             }
+            if compact {
+                HStack(spacing: DS.cardGap) {
+                    MetricTile(title: "磁盘", symbol: "internaldrive", tint: DS.metric.disk,
+                               value: s.diskTotalGB > 0 ? String(format: "%.0f", s.diskFreeGB) : nil, unit: "GB 可用",
+                               stats: [MetricStat("总量", String(format: "%.0f GB", s.diskTotalGB))], compact: true)
+                    MetricTile(title: "风扇", symbol: "fan", tint: DS.metric.fan,
+                               value: s.fans?.max().map { String(format: "%.0f", $0) }, unit: "RPM",
+                               stats: [MetricStat("状态", "仅读取 · 系统自动控制")], compact: true)
+                    MetricTile(title: "电池", symbol: "battery.75", tint: DS.metric.battery,
+                               value: s.battery.map(String.init), unit: "%",
+                               stats: [MetricStat("状态", batteryState)], compact: true)
+                }
+            }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("monitor.metrics")
     }
-    func fanTile(_ s: Snapshot) -> some View {
-            Tile(icon: "fan", title: "风扇", tint: good, trailing: s.fans.map { "\($0.count) 个" } ?? "") {
-                if let f = s.fans {
-                    let avg = f.reduce(0, +) / Double(max(1, f.count))
-                    BigValue(value: String(format: "%.0f", avg), unit: "RPM")
-                    Bar(frac: s.fanMax > 0 ? avg / s.fanMax : 0, color: good)
-                    Text(avg < 1 ? "静音（低负载时风扇停转）" : String(format: "负荷 %.0f%% · 上限 %.0f", s.fanMax > 0 ? avg / s.fanMax * 100 : 0, s.fanMax)).font(.system(size: 10)).foregroundColor(.secondary)
-                    Text("自动控制（调速需管理员权限，未提供）").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.8))
-                } else { BigValue(value: "—"); Text("这台 Mac 没有可读取的风扇").font(.system(size: 10)).foregroundColor(.secondary) }
-            }
+    var systemTile: some View {
+        MetricTile(title: "系统状态", symbol: "waveform.path.ecg", tint: accentText,
+                   value: s.uptime > 0 ? (s.health.status == "一切正常" ? "不卡" : "需关注") : "等待采样", note: s.uptime > 0 ? "健康分 \(s.health.score)" : "尚无读数",
+                   stats: [MetricStat("结论", s.health.status), MetricStat("依据", "现有健康分与压力规则")], textValue: true)
+    }
+    var cpuTile: some View {
+        MetricTile(title: "CPU", symbol: "cpu", tint: DS.metric.cpu,
+                   value: m.cpuHist.isEmpty ? nil : String(format: "%.0f", s.cpu), unit: "%", note: s.cpuTemp.map { String(format: "均温 %.0f°C", $0) } ?? "温度 —",
+                   series: m.cpuHist, maxValue: 100,
+                   stats: [MetricStat("1 分钟负载", String(format: "%.2f（非百分比）", s.load.first ?? 0)),
+                           MetricStat("核心", "\(s.pCores) 性能核 · \(s.eCores) 能效核")],
+                   valueColor: s.cpu >= 85 ? bad : (s.cpu >= 60 ? warn : .primary))
+    }
+    var gpuTile: some View {
+        MetricTile(title: "GPU", symbol: "square.stack.3d.up", tint: DS.metric.gpu,
+                   value: s.gpu.map { String(format: "%.0f", $0) }, unit: "%",
+                   note: s.gpuTemp.map { String(format: "均温 %.0f°C", $0) } ?? "温度 —",
+                   series: s.gpu == nil ? [] : m.gpuHist, maxValue: 100,
+                   stats: [MetricStat("核心", s.gpuCores > 0 ? "\(s.gpuCores) 核" : "—"),
+                           MetricStat("来源", "驱动报告的设备利用率")], unavailableReason: "显卡驱动未提供利用率")
+    }
+    var memoryTile: some View {
+        MetricTile(title: "内存", symbol: "memorychip", tint: DS.metric.memory,
+                   value: s.memTotalGB > 0 ? String(format: "%.1f", s.memFraction * 100) : nil, unit: "%",
+                   note: "压力 " + Fmt.pressure(s.memPressure).0, fraction: s.memTotalGB > 0 ? s.memFraction : nil,
+                   stats: [MetricStat("已用 / 总量", String(format: "%.1f / %.0f GiB", s.memUsedGB, s.memTotalGB)),
+                           MetricStat("交换", String(format: "%.1f GiB", s.swapUsedGB))],
+                   valueColor: s.memPressure >= 4 ? bad : (s.memPressure >= 2 ? warn : .primary))
+    }
+    var batteryState: String {
+        s.charging ? "正在充电" : (s.onAC ? (s.batteryFullyCharged ? "已充满" : "接电未充") : "电池供电")
+    }
+    var batteryTile: some View {
+        MetricTile(title: "电池", symbol: s.charging ? "battery.100.bolt" : "battery.75", tint: DS.metric.battery,
+                   value: s.battery.map(String.init), unit: "%", note: s.batteryHealth.map { "健康度 \($0)%" } ?? "健康度 —",
+                   fraction: s.battery.map { Double($0) / 100 },
+                   stats: [MetricStat("状态", s.battery == nil ? "未检测到内置电池" : batteryState),
+                           MetricStat("循环 / 温度", (s.cycles.map { "\($0) 次" } ?? "—") + " · " + (s.batteryTemp.map { String(format: "%.0f°C", $0) } ?? "—"))],
+                   unavailableReason: "没有内置电池或系统未提供电量")
+    }
+    var fanTile: some View {
+        let fans = s.fans ?? []
+        return MetricTile(title: "风扇", symbol: "fan", tint: DS.metric.fan,
+                          value: fans.max().map { String(format: "%.0f", $0) }, unit: "RPM", note: "\(fans.count) 个 · 仅读取",
+                          fraction: fans.max().flatMap { s.fanMax > 0 ? $0 / s.fanMax : nil },
+                          stats: fans.isEmpty ? [MetricStat("说明", "未检测到可读风扇"), MetricStat("控制", "由系统自动调节")]
+                            : [MetricStat("各风扇", fans.prefix(2).map { String(format: "%.0f", $0) }.joined(separator: " / ") + " RPM"),
+                               MetricStat("主值", "最快风扇 · 系统自动控制")],
+                          unavailableReason: "无风扇机型或硬件未提供转速")
+    }
+    var diskTile: some View {
+        MetricTile(title: "磁盘", symbol: "internaldrive", tint: DS.metric.disk,
+                   value: s.diskTotalGB > 0 ? String(format: "%.0f", s.diskFreeGB) : nil, unit: "GB 可用", note: "启动盘",
+                   fraction: s.diskTotalGB > 0 ? s.diskUsedFraction : nil,
+                   stats: [MetricStat("已用 / 总量", String(format: "%.1f / %.1f GB", s.diskTotalGB - s.diskFreeGB, s.diskTotalGB)),
+                           MetricStat("已用比例", String(format: "%.1f%%", s.diskUsedFraction * 100))])
+    }
+    var networkTile: some View {
+        let rate = Fmt.rate(s.downBps).split(separator: " ", maxSplits: 1).map(String.init)
+        return Button { showApps = true } label: {
+            MetricTile(title: "网络", symbol: "arrow.down", tint: DS.metric.network,
+                       value: s.netIface.isEmpty ? nil : rate.first, unit: rate.count > 1 ? rate[1] + " ↓" : "", note: s.netKind,
+                       series: s.netIface.isEmpty ? [] : m.downHist,
+                       stats: [MetricStat("上行", Fmt.rate(s.upBps) + " ↑"),
+                               MetricStat("接口 / 代理", s.netIface + " · " + (s.proxy.isEmpty ? "—" : s.proxy))],
+                       unavailableReason: "当前没有可用网络接口")
+        }.buttonStyle(.plain).help("查看正在联网的应用").accessibilityIdentifier("net.rates")
+            .popover(isPresented: $showApps, arrowEdge: .bottom) { AppTrafficPopover() }
+    }
+    var topTile: some View {
+        MetricTile(title: "当前高占用", symbol: "chart.bar", tint: DS.metric.cpu,
+                   value: top?.name, note: "当前采样",
+                   stats: [MetricStat("CPU 核当量", top.map { String(format: "%.2f 核", $0.cpu / 100) } ?? "—"),
+                           MetricStat("当前内存", top.map { String(format: "%.1f GiB", $0.memMB / 1024) } ?? "—")],
+                   unavailableReason: "等待首次进程采样", textValue: true)
     }
 }
 
@@ -280,7 +316,7 @@ struct ProcList: View {
                     Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? .white : .primary)
                     Spacer(minLength: 4)
                     Text(String(format: "%.0f%%", p.cpu)).font(DS.num(11, .medium))
-                        .foregroundColor(on ? .white : levelColor(p.cpu / 100, hi: 0.8, mid: 0.4))
+                        .foregroundColor(on ? .white : ProcessCPU.color(p.cpu))
                     Text(Fmt.mem(p.memMB)).font(DS.num(10, .regular))
                         .foregroundColor(on ? Color.white.opacity(0.8) : .secondary).frame(width: 50, alignment: .trailing)
                     if let t = ProcActions.fix(for: p).short {
@@ -463,9 +499,9 @@ struct PanelContent: View {
                 let count = min(4, m.s.top.count)
                 if more != nil { return false }
                 switch e.keyCode {
-                case 125: sel = min(sel + 1, max(0, count - 1)); return true
-                case 126: sel = max(0, sel - 1); return true
-                case 36, 76:
+                case Key.down: sel = min(sel + 1, max(0, count - 1)); return true
+                case Key.up: sel = max(0, sel - 1); return true
+                case Key.enter, Key.keypadEnter:
                     guard m.s.top.indices.contains(sel) else { return false }
                     let f = ProcActions.fix(for: m.s.top[sel])
                     DispatchQueue.main.async { FixRunner.perform(f) }
@@ -496,7 +532,7 @@ struct PanelContent: View {
                 }
                 Toggle("登录时启动", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
                 Divider()
-                Button("设置…") { Nav.shared.sel = -8; StatusBar.shared.popover.performClose(nil); ui.openMain() }
+                Button("设置…") { Nav.shared.sel = .settings; StatusBar.shared.popover.performClose(nil); ui.openMain() }
                 Button("隐藏菜单栏图标") { ui.menuBar = false }
                 Button("退出 Mac一键优化") { NSApp.terminate(nil) }
             } label: { Image(systemName: "gearshape").font(DS.body()) }
@@ -604,31 +640,58 @@ struct PanelMore: View {
 // MARK: - 主窗口：实时监控
 struct DashboardView: View {
     @ObservedObject var m: Monitor
-    @ObservedObject var ui = UIState.shared
     var body: some View {
-        let s = m.s; let h = s.health
-        PageScroll {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 12) {
-                    PageHeader(title: "实时监控", sub: "\(h.status) · \(s.chip) · \(s.ramGB) GB · 已开机 \(Fmt.uptime(s.uptime))")
-                    Spacer(minLength: 8)
-                    ScoreRing(score: h.score, size: 46)
-                }
-                MetricTiles(m: m, columns: 3, sparkH: 26)
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(spacing: 8) { BatteryTile(s: s); ProcList(m: m, limit: 4).padding(8).card() }
-                    VStack(spacing: 8) {
-                        QuickActions().padding(6).card()
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle("在菜单栏显示实时指标", isOn: $ui.menuBar).accessibilityIdentifier("dash.menubar")
-                            Toggle("登录时自动启动（默认关闭）", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled })).accessibilityIdentifier("dash.login")
-                        }.toggleStyle(.switch).controlSize(.small).font(DS.sub()).padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                        .card()
+        GeometryReader { geometry in
+            PageScroll {
+                VStack(alignment: .leading, spacing: DS.cardGap) {
+                    HStack(alignment: .center) {
+                        PageHeader(title: "实时监控", sub: "系统读数 · 当前状态与来源")
+                        Spacer(minLength: 8)
+                        ActiveStatusPills()
                     }
-                }
-            }.padding(16)
+                    KPIStrip(items: [MetricStat("芯片", m.s.chip + " · \(m.s.ramGB) GiB"),
+                                     MetricStat("系统", m.s.osVersion), MetricStat("开机", Fmt.uptime(m.s.uptime)),
+                                     MetricStat("网络", m.s.netKind + " · " + m.s.proxy)])
+                    MetricTiles(m: m, compact: geometry.size.height < 690)
+                    Footnote(text: "前台每 \(Int(Monitor.detailInterval)) 秒刷新，后台每 \(Int(Monitor.lightInterval)) 秒采样；磁盘为十进制 GB，内存为二进制 GiB。温度为已识别传感器均温；高占用为当前采样，不代表历史峰值。")
+                }.padding(16)
+            }
         }
-        .onAppear { m.dashboardShown = true } .onDisappear { m.dashboardShown = false }
+        .onAppear { m.dashboardShown = true }.onDisappear { m.dashboardShown = false }
+    }
+}
+
+struct ActiveStatusPills: View {
+    @ObservedObject var ka = KeepAwake.shared
+    @ObservedObject var dock = DockMode.shared
+    @ObservedObject var charge = ChargeClient.shared
+    @State private var showActions = false
+    var body: some View {
+        HStack(spacing: 6) {
+            if charge.phase == .ready && charge.st.settings.enabled {
+                Button { Nav.shared.sel = .battery } label: { StatusPill(title: "充电上限 \(charge.st.settings.limit)%", tint: DS.metric.battery) }
+                    .buttonStyle(.plain).help("打开电池设置")
+            }
+            if dock.enabled {
+                Button { Nav.shared.sel = .settings } label: { StatusPill(title: dock.active ? "接显示器 · 生效" : "接显示器 · 待机") }
+                    .buttonStyle(.plain).help("查看常驻模式设置")
+            }
+            if ka.on {
+                Button { Nav.shared.sel = .settings } label: { StatusPill(title: "常亮") }
+                    .buttonStyle(.plain).help("查看常亮设置")
+            }
+            Button { showActions = true } label: { Image(systemName: "ellipsis.circle") }
+                .buttonStyle(.plain).foregroundColor(.secondary).help("快捷操作")
+                .accessibilityLabel("快捷操作").accessibilityIdentifier("monitor.actions")
+        }
+        .sheet(isPresented: $showActions) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("快捷操作").font(DS.title())
+                QuickActions(showStats: false)
+                Button("完成") { showActions = false }.buttonStyle(PillButton(filled: false))
+                    .accessibilityIdentifier("monitor.actions.close")
+            }.padding(16).frame(width: 360)
+        }
     }
 }
 
@@ -636,10 +699,10 @@ struct DashboardView: View {
 final class OverlayWindow: NSWindow { override var canBecomeKey: Bool { true }; override var canBecomeMain: Bool { true } }
 final class SwallowView: NSView {
     override var acceptsFirstResponder: Bool { true }
-    override func keyDown(with e: NSEvent) { if e.keyCode == 53 { Overlay.close() } }
+    override func keyDown(with e: NSEvent) { if e.keyCode == Key.escape { Overlay.close() } }
     override func mouseDown(with e: NSEvent) {}; override func rightMouseDown(with e: NSEvent) {}; override func otherMouseDown(with e: NSEvent) {}
     override func scrollWheel(with e: NSEvent) {}
-    override func performKeyEquivalent(with e: NSEvent) -> Bool { if e.keyCode == 53 { Overlay.close() }; return true }
+    override func performKeyEquivalent(with e: NSEvent) -> Bool { if e.keyCode == Key.escape { Overlay.close() }; return true }
 }
 enum Overlay {
     private(set) static var windows: [NSWindow] = []

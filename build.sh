@@ -4,7 +4,7 @@ set -e
 # SWIFTFLAGS：可选的额外编译参数（例如在受限沙盒里编译时传 -disable-sandbox）
 SWIFTFLAGS="${SWIFTFLAGS:-}"
 cd "$(dirname "$0")"
-SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift V24.swift V24View.swift V24Tests.swift V241Tests.swift V25Design.swift V25Shell.swift V25Tests.swift V26Split.swift V26Tests.swift PhaseZeroTests.swift"
+SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift V24.swift V24View.swift V24Tests.swift V241Tests.swift V25Design.swift V25Shell.swift V25Tests.swift V26Split.swift V26Tests.swift PhaseZeroTests.swift AppPage.swift PhaseOneTests.swift"
 HSRC="ChargeCore.swift ChargeHelper.swift DNSCore.swift"
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86
@@ -41,6 +41,10 @@ if [ -f "$KC" ] && [ -f "$HOME/.filebutler-signing/pass" ]; then
 else
   codesign --force -s - -i com.yost.macoptimizer.chargehelper "$A/Contents/MacOS/MacOptimizerChargeHelper"; codesign --force -s - "$A"
 fi
+# 复测可复用同一签名包，但必须核对源码、构建参数与二进制；避免改过代码后误测旧包。
+shasum -a 256 $SRC ChargeHelper.swift AppIcon.icns Info.plist com.yost.macoptimizer.chargehelper.plist build.sh > build/source.sha256
+printf '%s\n' "$SWIFTFLAGS" > build/swiftflags.txt
+shasum -a 256 "$A/Contents/MacOS/MacOptimizer" "$A/Contents/MacOS/MacOptimizerChargeHelper" > build/binaries.sha256
 # NODMG=1：只编译签名、不打包 DMG（测试用，受限沙盒里 hdiutil 不可用）
 if [ -n "${NODMG:-}" ]; then echo "完成：build/Mac一键优化.app（跳过 DMG）"; exit 0; fi
 # 在非同步的临时目录里打包，避免 iCloud 文件提供程序给包加回 FinderInfo（codesign --strict 会判为不合规）

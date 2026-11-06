@@ -171,7 +171,7 @@ extension MOTests {
         var s = Snapshot(); s.cpu = 99; s.diskTotalGB = 1000; s.diskFreeGB = 500
         for _ in 0..<5 { monitor.onSample?(s) }
         check(events == [.cpu], "App 实际 onSample 回调接通异常提醒服务")
-        Nav.shared.sel = -7; settle(0.4)
+        Nav.shared.sel = .changes; settle(0.4)
         if let toggle = find(w.contentView!, id: "v19.alertsOn") {
             toggle.press(); check(waitUntil(1) { !store.settings.alertsOn && !monitor.alertsEnabled }, "提醒开关实际关闭服务与后台采样需求")
             toggle.press(); check(waitUntil(1) { store.settings.alertsOn && monitor.alertsEnabled }, "提醒开关实际接通服务与后台采样需求")
@@ -180,7 +180,7 @@ extension MOTests {
         check(waitUntil(1) { monitor.interval == Monitor.lightInterval }, "关闭窗口与菜单栏后，已开启提醒仍保留低频监测")
         monitor.alertsEnabled = false
         check(waitUntil(1) { monitor.interval == 0 }, "提醒也关闭时停止后台采样")
-        UIState.shared.menuBar = true; w.orderFrontRegardless(); Nav.shared.sel = -7; settle(0.4)
+        UIState.shared.menuBar = true; w.orderFrontRegardless(); Nav.shared.sel = .changes; settle(0.4)
         check(find(w.contentView!, id: "v22.notificationPermission") != nil && find(w.contentView!, id: "v19.autoTrash") == nil, "权限状态可见，未接通的自动整理开关已收起")
     }
 }

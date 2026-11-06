@@ -181,3 +181,7 @@
 - `DNSCore.swift` 的 `ProcessRunner` 是通用命令入口，替代原 `sh()`；双路非阻塞排空、输出限额、10 秒默认期限和超时子进程回收。
 - `main.swift` 的 `LoginItems` 固定脚本 + argv 传名称，读取 JSON；VPN 建议默认全部不选；工具页使用 `ToolOperation` 回读后统计。
 - 新增 `PhaseZeroTests.swift`。验证结果、首次 UI 前台失败与重跑证据、共享助手的构建影响见 [第零期说明](docs/phase-zero-safety.md)。
+
+## 2026-11-06 HTML 改版第一期
+
+已完成规范、7 个组件、监控 3×3/最小窗口紧凑布局、设置迁移、语义页面路由和进程阈值色。详见 `docs/phase-one-monitor.md`。标准流程批准黄金图后复测全绿：587 selftest / 134 uitest / 104 snapshot，0 失败。下一步为用户已授权的第二期网络总览、面板二级信息、概览 KPI 和真机性能比较。

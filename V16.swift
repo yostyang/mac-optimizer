@@ -92,6 +92,14 @@ struct DiagInput {
     var selfPid: Int32 = getpid()
 }
 
+enum ProcessCPU {
+    static let warning: Double = 30
+    static let danger: Double = 80
+    static func color(_ percent: Double) -> Color {
+        percent >= danger ? bad : (percent >= warning ? warn : .primary)
+    }
+}
+
 enum Diagnosis {
     static let spotlight = ["corespotlightd", "helpd", "mds_stores"]
     static func gb(_ mb: Double) -> String { mb >= 1024 ? String(format: "%.1f GB", mb / 1024) : String(format: "%.0f MB", mb) }
@@ -155,7 +163,7 @@ enum Diagnosis {
         if sp > 40 { return Verdict(level: .slight, reason: "Spotlight 索引卡住了，占 \(pct(sp))% CPU", fix: .restartSpotlight, note: "重启索引不会丢任何数据") }
         let vm = sum([Sys.vmName])
         if vm > 50 { return Verdict(level: .slight, reason: "后台虚拟机占 \(pct(vm))% CPU" + (claudeOn ? "（Claude）" : ""), fix: claudeOn ? .quitClaude : .none, note: "没有任务在跑就可以退出") }
-        if let top = ps.max(by: { $0.cpu < $1.cpu }), top.cpu >= 80, let c = cpuCulprit() {
+        if let top = ps.max(by: { $0.cpu < $1.cpu }), top.cpu >= ProcessCPU.danger, let c = cpuCulprit() {
             return Verdict(level: .slight, reason: c.0, fix: c.1, note: c.2)
         }
         if let e = groups.max(by: { $0.value.cpu < $1.value.cpu }), e.value.cpu >= 150 {
@@ -214,7 +222,7 @@ enum FixRunner {
             DispatchQueue.global().async { Sys.quitClaude() }
             return true
         case .displayTips:
-            Nav.shared.sel = 6; UIState.shared.openMain(); return true
+            Nav.shared.sel = .tool(.displayPerformance); UIState.shared.openMain(); return true
         }
     }
 }

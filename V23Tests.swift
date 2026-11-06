@@ -39,8 +39,8 @@ extension MOTests {
         let original = DisplayManager.shared
         let (manager, _, _, _) = v15Fixtures()
         DisplayManager.shared = manager
-        defer { DisplayManager.shared = original; Nav.shared.sel = -2 }
-        Nav.shared.sel = -2; settle(0.2); Nav.shared.sel = -4; settle(0.5)
+        defer { DisplayManager.shared = original; Nav.shared.sel = .monitor }
+        Nav.shared.sel = .monitor; settle(0.2); Nav.shared.sel = .display; settle(0.5)
         if let button = find(window.contentView!, id: "disp.tab.1") { button.press() }
         check(waitUntil(2) { find1(window.contentView!, id: "disp.icc") != nil && find1(window.contentView!, id: "disp.color.8") != nil }, "色彩标签显示ICC与真实硬件预设")
         check(find1(window.contentView!, id: "disp.color.1") == nil, "不显示设备未声明的sRGB选项")

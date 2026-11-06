@@ -31,7 +31,7 @@ extension MOTests {
         store.hours[Int(Date().timeIntervalSince1970 / 3600) - 1] = ["X": 3600]
         check(PowerFlowCalc.topMW(store: store, now: Date()).first?.app == "X", "EnergyStore 最近一小时取上一完整小时")
         sec("界面令牌")
-        check(CDS.radiusCard == 10 && CDS.radiusPanel == 10 && CDS.radiusButton == 6, "圆角收成 3 种（v2.5）：卡片 10、控件 6、胶囊全圆")
+        check(CDS.radiusCard == 12 && CDS.radiusPanel == 12 && CDS.radiusButton == 6, "圆角收成 3 种（v2.5）：卡片 12、控件 6、胶囊全圆")
         check(CDS.motionMicro == 0.07 && CDS.motionSettle == 0.12 && CDS.motionPanel == 0.30, "动效时长：70ms/120ms/300ms")
         check(CDS.pressScale == 0.98 && CDS.breathe == 2.4 && CDS.pulse == 1.2, "按下 0.98、呼吸 2.4s、脉冲 1.2s")
         check(CDS.titleWeight(dark: false) == .semibold && CDS.titleWeight(dark: true) == .medium, "深色标题字重减细")

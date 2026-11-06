@@ -196,37 +196,37 @@ final class Model: ObservableObject {
 }
 
 enum Loaders {
-    static func rows(_ id: Int) -> [Row] {
+    static func rows(_ id: ToolKind) -> [Row] {
         let ps = Sys.procs()
         switch id {
-        case 0:
+        case .resources:
             return Sys.appUsage(ps).prefix(15).map { u in let a = u.app
                 return Row(icon: a.icon, title: u.name, subtitle: String(format: "内存 %.1f GB · CPU %.0f%%", u.memGB, u.cpu), actionTitle: u.name.contains("Grok") ? nil : "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
-        case 1:
+        case .startup:
             switch LoginItems.names() {
             case .success(let names): return names.map { LoginItems.row($0) }
             case .failure:
                 return [Row(icon: nil, title: "无法读取登录项", subtitle: "读取失败或未获得系统权限，请检查系统提示后刷新", actionTitle: nil, action: nil)]
             }
-        case 2:
+        case .browsers:
             return Sys.appUsage(ps).filter { Sys.isBrowser($0.name) }.map { u in let a = u.app
                 return Row(icon: a.icon, title: u.name, subtitle: String(format: "占用 %.1f GB 内存", u.memGB), actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
-        case 3:
+        case .spotlight:
             let sp = Sys.cpu(["corespotlightd", "helpd", "mds_stores"], ps)
             let targets = ps.filter { ["corespotlightd", "helpd", "mds_stores"].contains($0.name) }.map(\.pid)
             return [Row(icon: nil, title: "Spotlight 索引服务", subtitle: String(format: "当前占用 %.0f%% CPU，", sp) + (sp > 40 ? "可能卡住了，建议重启" : "状态正常"), actionTitle: targets.isEmpty ? nil : "重启索引", action: Sys.restartSpotlight,
                         verify: { !targets.isEmpty && targets.allSatisfy { !OperationCheck.processExists($0) } })]
-        case 4:
+        case .virtualMachines:
             let vm = ps.filter { $0.name == Sys.vmName }
             if vm.isEmpty { return [] }
             let targets = NSWorkspace.shared.runningApplications.filter { $0.bundleIdentifier == "com.anthropic.claudefordesktop" }
             return [Row(icon: nil, title: "虚拟机（Claude 桌面版等）", subtitle: String(format: "占用 %.0f%% CPU、%.1f GB 内存", vm.reduce(0) { $0 + $1.cpu }, vm.reduce(0) { $0 + $1.rss } / 1048576), actionTitle: targets.isEmpty ? nil : "退出 Claude", action: Sys.quitClaude,
                         verify: { !targets.isEmpty && targets.allSatisfy { $0.isTerminated } })]
-        case 5:
+        case .vpn:
             let v = Sys.appUsage(ps).filter { Sys.isVPN($0.name) }
             return v.map { u in let a = u.app
                 return Row(icon: a.icon, title: u.name, subtitle: v.count > 1 ? "⚠️ 同时开着 \(v.count) 个 VPN，建议只留一个" : "运行中", actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
-        case 6:
+        case .displayPerformance:
             let ws = Sys.cpu(["WindowServer"], ps)
             let tr = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency, mo = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             let v = Sys.osMajor
@@ -242,7 +242,6 @@ enum Loaders {
             r.append(Row(icon: nil, title: "减弱动态效果" + (mo ? "（已开启 ✓）" : ""), subtitle: "减少切换桌面、打开窗口时的动画。位置：" + (v >= 26 ? "无障碍 › 动态效果 › 减弱动态效果" : "无障碍 › 显示 › 减弱动态效果"), actionTitle: mo ? nil : "去开启", action: { Sys.openA11y(v >= 26 ? "Motion" : "Display") }))
             return r + [
                     Row(icon: nil, title: "WindowServer（负责画面渲染）", subtitle: String(format: "当前占用 %.0f%% CPU，已运行 %d 天", ws, Int(ProcessInfo.processInfo.systemUptime / 86400)), actionTitle: nil, action: nil)]
-        default: return []
         }
     }
 }
@@ -481,9 +480,9 @@ struct ToolPage: View {
             Shell.shared.listHandler = { e in
                 guard !rows.isEmpty else { return false }
                 switch e.keyCode {
-                case 125: sel = min(sel + 1, rows.count - 1); return true
-                case 126: sel = max(0, sel - 1); return true
-                case 36, 76: run(rows[min(sel, rows.count - 1)]); return true
+                case Key.down: sel = min(sel + 1, rows.count - 1); return true
+                case Key.up: sel = max(0, sel - 1); return true
+                case Key.enter, Key.keypadEnter: run(rows[min(sel, rows.count - 1)]); return true
                 default: return false
                 }
             }
@@ -575,7 +574,7 @@ enum Layout {
         return NSSize(width: max(min(idealSize.width, vf.width - 40), min(minSize.width, vf.width)), height: max(min(idealSize.height, vf.height - 40), min(minSize.height, vf.height)))
     }
 }
-final class Nav: ObservableObject { static let shared = Nav(); @Published var sel = -1; @Published var netTab = 0 }
+final class Nav: ObservableObject { static let shared = Nav(); @Published var sel: Page = .overview; @Published var netTab = 0 }
 struct RootView: View {
     @StateObject private var m = Model()
     @ObservedObject var mon = Monitor.shared
@@ -607,17 +606,21 @@ struct RootView: View {
     }
     @ViewBuilder var page: some View {
         Group {
-            if nav.sel == -1 { Overview(m: m, mon: mon) }
-            else if nav.sel == -2 { DashboardView(m: mon) }
-            else if nav.sel == -3 { BatteryPage(m: mon) }
-            else if nav.sel == -4 { DisplayPage() }
-            else if nav.sel == -5 { NetworkPage() }
-            else if nav.sel == -6 { CleanPage() }
-            else if nav.sel == -7 { ChangesPage() }
-            else if nav.sel == -8 { SettingsPage() }
-            else if nav.sel == -9 { SplitPage() }
-            else if features.indices.contains(nav.sel) { ToolPage(feature: features[nav.sel]).id(nav.sel) }
-            else { Overview(m: m, mon: mon) }
+            switch nav.sel {
+            case .overview: Overview(m: m, mon: mon)
+            case .monitor: DashboardView(m: mon)
+            case .battery: BatteryPage(m: mon)
+            case .display: DisplayPage()
+            case .network: NetworkPage()
+            case .clean: CleanPage()
+            case .changes: ChangesPage()
+            case .settings: SettingsPage()
+            case .split: SplitPage()
+            case .tool(let kind):
+                if let feature = features.first(where: { $0.id == kind }) {
+                    ToolPage(feature: feature).id(kind)
+                }
+            }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -675,7 +678,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         DispatchQueue.main.async {
-            if let page = response.notification.request.content.userInfo["page"] as? Int, [-2, -6, -3].contains(page) { Nav.shared.sel = page }
+            if let page = Page.notificationPage(response.notification.request.content.userInfo["page"]), [Page.monitor, .clean, .battery].contains(page) { Nav.shared.sel = page }
             self.showMain(); completionHandler()
         }
     }

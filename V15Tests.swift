@@ -228,7 +228,7 @@ extension MOTests {
         defer { DisplayManager.shared = real.0; NetDiag.shared = real.1; DNSClient.shared = real.2; BTBattery.shared = real.3 }
         let md = dm.sys as! MockDisplays
         if let b = find(w.contentView!, label: "显示器") { b.press() }
-        check(waitUntil(2) { Nav.shared.sel == -4 }, "侧边栏打开显示器页")
+        check(waitUntil(2) { Nav.shared.sel == .display }, "侧边栏打开显示器页")
         check(find(w.contentView!, id: "ddc.brightness") != nil && find(w.contentView!, id: "ddc.contrast") != nil, "显示亮度/对比度滑块")
         check(find1(w.contentView!, id: "ddc.volume") == nil, "不支持的音量已隐藏")
         if let b = find(w.contentView!, id: "scene.night") { b.press(); check(waitUntil(1) { dm.settings.scene == "night" }, "点「夜间」场景") } else { check(false, "找到夜间场景") }
@@ -236,7 +236,7 @@ extension MOTests {
         if let b = find(w.contentView!, label: "3840×1620") { b.press(); check(waitUntil(1) { dm.pending != nil && md.applied.last?.width == 3840 }, "点分辨率切换（模拟）") } else { check(false, "找到分辨率按钮") }
         if let b = find(w.contentView!, id: "disp.revert") { b.press(); check(waitUntil(1) { dm.pending == nil && md.list[0].current.width == 5120 }, "点「还原」") } else { check(false, "找到还原按钮") }
         if let b = find(w.contentView!, label: "网络诊断") { b.press() }
-        check(waitUntil(2) { Nav.shared.sel == -5 }, "侧边栏打开网络诊断")
+        check(waitUntil(2) { Nav.shared.sel == .network }, "侧边栏打开网络诊断")
         if let b = find(w.contentView!, id: "net.run") { b.press(); check(waitUntil(5) { nd.lastRun != nil && !nd.targets.isEmpty }, "点「开始诊断」") } else { check(false, "找到开始诊断") }
         if let b = find(w.contentView!, id: "dns.ali") { b.press(); check(waitUntil(3) { dc.isAli && dc.status?.backup != nil }, "点「一键设为阿里 DNS」（模拟助手）") } else { check(false, "找到 DNS 按钮") }
         if let b = find(w.contentView!, id: "dns.restore") { b.press(); check(waitUntil(3) { !dc.isAli && dc.status?.backup == nil }, "点「恢复原 DNS」") } else { check(false, "找到恢复按钮") }
@@ -244,7 +244,7 @@ extension MOTests {
         if let b = find(w.contentView!, id: "bt.refresh") { b.press() }
         check(waitUntil(4) { bt.withBattery.count == 4 }, "电池页点刷新加载蓝牙电量")
         check(find(w.contentView!, id: "bt.lowAlert") != nil, "低电量通知开关")
-        Nav.shared.sel = -2
+        Nav.shared.sel = .monitor
     }
     static func v15Snapshots(_ out: String) {
         let real = (DisplayManager.shared, NetDiag.shared, DNSClient.shared, BTBattery.shared)

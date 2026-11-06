@@ -6,33 +6,36 @@ import Carbon.HIToolbox
 
 // MARK: - 页面清单
 struct NavPage: Identifiable, Equatable {
-    let id: Int; let icon: String; let title: String; let sub: String; let group: String
+    let id: Page; let icon: String; let title: String; let sub: String; let group: String
 }
 
 let navPages: [NavPage] = [
-    NavPage(id: -1, icon: "square.grid.2x2", title: "概览", sub: "卡不卡、为什么、怎么处理", group: "状态"),
-    NavPage(id: -2, icon: "waveform.path.ecg.rectangle", title: "实时监控", sub: "CPU、内存、磁盘、网络", group: "状态"),
-    NavPage(id: -3, icon: "battery.75", title: "电池", sub: "健康、耗电与充电上限", group: "状态"),
-    NavPage(id: -4, icon: "display", title: "显示器", sub: "亮度、场景与分辨率", group: "状态"),
-    NavPage(id: -5, icon: "network", title: "网络诊断", sub: "延迟、DNS 与测速", group: "状态"),
-    NavPage(id: -6, icon: "trash", title: "清理预览", sub: "先扫描、勾选，再进废纸篓", group: "状态"),
-    NavPage(id: -7, icon: "list.clipboard", title: "改动与提醒", sub: "DNS、清理记录与异常提醒", group: "状态"),
-    NavPage(id: 0, icon: "chart.bar.xaxis", title: "资源排行", sub: "看看谁最占内存和 CPU", group: "工具"),
-    NavPage(id: 1, icon: "power", title: "开机启动", sub: "关掉不需要的开机自启", group: "工具"),
-    NavPage(id: 2, icon: "globe", title: "浏览器", sub: "同时开太多浏览器会拖慢系统", group: "工具"),
-    NavPage(id: 3, icon: "magnifyingglass", title: "Spotlight", sub: "索引卡住时一键重启", group: "工具"),
-    NavPage(id: 4, icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机", group: "工具"),
-    NavPage(id: 5, icon: "shield.lefthalf.filled", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突", group: "工具"),
-    NavPage(id: 6, icon: "rectangle.on.rectangle", title: "显示性能", sub: "减轻大屏幕的渲染负担", group: "工具"),
-    NavPage(id: -9, icon: "rectangle.split.3x1", title: "桌面分区", sub: "每块屏幕的窗口分区模板", group: "状态"),
-    NavPage(id: -8, icon: "gearshape", title: "设置", sub: "全局快捷键、菜单栏与启动", group: "设置"),
+    NavPage(id: .overview, icon: "square.grid.2x2", title: "概览", sub: "卡不卡、为什么、怎么处理", group: "状态"),
+    NavPage(id: .monitor, icon: "waveform.path.ecg.rectangle", title: "实时监控", sub: "CPU、内存、磁盘、网络", group: "状态"),
+    NavPage(id: .battery, icon: "battery.75", title: "电池", sub: "健康、耗电与充电上限", group: "状态"),
+    NavPage(id: .display, icon: "display", title: "显示器", sub: "亮度、场景与分辨率", group: "状态"),
+    NavPage(id: .network, icon: "network", title: "网络诊断", sub: "延迟、DNS 与测速", group: "状态"),
+    NavPage(id: .clean, icon: "trash", title: "清理预览", sub: "先扫描、勾选，再进废纸篓", group: "状态"),
+    NavPage(id: .changes, icon: "list.clipboard", title: "改动与提醒", sub: "DNS、清理记录与异常提醒", group: "状态"),
+    NavPage(id: .tool(.resources), icon: "chart.bar.xaxis", title: "资源排行", sub: "看看谁最占内存和 CPU", group: "工具"),
+    NavPage(id: .tool(.startup), icon: "power", title: "开机启动", sub: "关掉不需要的开机自启", group: "工具"),
+    NavPage(id: .tool(.browsers), icon: "globe", title: "浏览器", sub: "同时开太多浏览器会拖慢系统", group: "工具"),
+    NavPage(id: .tool(.spotlight), icon: "magnifyingglass", title: "Spotlight", sub: "索引卡住时一键重启", group: "工具"),
+    NavPage(id: .tool(.virtualMachines), icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机", group: "工具"),
+    NavPage(id: .tool(.vpn), icon: "shield.lefthalf.filled", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突", group: "工具"),
+    NavPage(id: .tool(.displayPerformance), icon: "rectangle.on.rectangle", title: "显示性能", sub: "减轻大屏幕的渲染负担", group: "工具"),
+    NavPage(id: .split, icon: "rectangle.split.3x1", title: "桌面分区", sub: "每块屏幕的窗口分区模板", group: "状态"),
+    NavPage(id: .settings, icon: "gearshape", title: "设置", sub: "全局快捷键、菜单栏与启动", group: "设置"),
 ]
 
 /// 工具页沿用旧结构（Loaders 按 id 取行）
-struct Feature: Identifiable { let id: Int; let icon: String; let title: String; let sub: String }
-let features: [Feature] = navPages.filter { $0.id >= 0 }.map { Feature(id: $0.id, icon: $0.icon, title: $0.title, sub: $0.sub) }
+struct Feature: Identifiable { let id: ToolKind; let icon: String; let title: String; let sub: String }
+let features: [Feature] = navPages.compactMap { item in
+    guard case .tool(let kind) = item.id else { return nil }
+    return Feature(id: kind, icon: item.icon, title: item.title, sub: item.sub)
+}
 
-func pageTitle(_ id: Int) -> String { navPages.first { $0.id == id }?.title ?? "Mac 一键优化" }
+func pageTitle(_ id: Page) -> String { navPages.first { $0.id == id }?.title ?? "Mac 一键优化" }
 
 // MARK: - 快捷操作清单（面板与搜索共用一份）
 struct QuickAction: Identifiable {
@@ -63,7 +66,7 @@ enum QuickActionList {
                         stateLabel: { cc.phase == .ready ? (cc.st.settings.enabled ? "上限 \(cc.st.settings.limit)%" : "关闭") : "未安装" },
                         run: {
                             if cc.phase == .ready { cc.setLimit(cc.st.settings.limit, enabled: !cc.st.settings.enabled) }
-                            else { Nav.shared.sel = -3; StatusBar.shared.popover.performClose(nil); UIState.shared.openMain() }
+                            else { Nav.shared.sel = .battery; StatusBar.shared.popover.performClose(nil); UIState.shared.openMain() }
                         }),
             QuickAction(id: "act.dock", symbol: dock.active ? "powerplug.fill" : "powerplug", title: "接显示器",
                         hint: "息屏不断网", isOn: { dock.enabled },
@@ -123,7 +126,7 @@ struct CmdItem: Identifiable {
 enum CmdIndex {
     static func pages(_ q: String) -> [CmdItem] {
         navPages.filter { matches(q, $0.title + " " + $0.sub + " " + $0.group) }.map { p in
-            CmdItem(id: "page.\(p.id)", kind: .page, title: p.title, subtitle: p.sub, symbol: p.icon,
+            CmdItem(id: "page.\(p.id.storageKey)", kind: .page, title: p.title, subtitle: p.sub, symbol: p.icon,
                     actions: [CmdAction(title: "打开「\(p.title)」", short: "打开", hint: "↵", run: { open(p.id) })])
         }
     }
@@ -140,14 +143,14 @@ enum CmdIndex {
             out.append(CmdItem(id: "action.checkup", kind: .action, title: "一键体检", subtitle: "重新分析卡顿原因",
                                symbol: "waveform.path.ecg",
                                actions: [CmdAction(title: "开始体检", hint: "↵", run: {
-                                   Nav.shared.sel = -1; UIState.shared.openMain()
+                                   Nav.shared.sel = .overview; UIState.shared.openMain()
                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { Shell.shared.model?.scan() }
                                })]))
         }
         out += SplitController.commands(q)
         if matches(q, "设置 快捷键 全局 热键") {
             out.append(CmdItem(id: "action.settings", kind: .action, title: "设置", subtitle: "全局快捷键、菜单栏与启动",
-                               symbol: "gearshape", actions: [CmdAction(title: "打开设置", hint: "↵", run: { open(-8) })]))
+                               symbol: "gearshape", actions: [CmdAction(title: "打开设置", hint: "↵", run: { open(.settings) })]))
         }
         return out
     }
@@ -170,7 +173,7 @@ enum CmdIndex {
             }
     }
 
-    static func open(_ id: Int) {
+    static func open(_ id: Page) {
         Nav.shared.sel = id
         StatusBar.shared.popover.performClose(nil)
         UIState.shared.openMain()
@@ -247,8 +250,8 @@ final class Shell: ObservableObject {
         withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = items[sel] }
     }
 
-    static func contextItem(page: Int) -> CmdItem? {
-        guard page == -9 else { return nil }
+    static func contextItem(page: Page) -> CmdItem? {
+        guard page == .split else { return nil }
         let acts = SplitController.commands("分区").flatMap { $0.actions }
         return CmdItem(id: "ctx.split", kind: .action, title: "桌面分区", subtitle: "把最近使用的应用窗口放进分区",
                        symbol: "rectangle.split.3x1", actions: acts)
@@ -275,10 +278,10 @@ final class Shell: ObservableObject {
         let typing = (e.window?.firstResponder as? NSTextView) != nil
         if actionsFor != nil {
             switch e.keyCode {
-            case 53: actionsFor = nil; return true                     // Esc
-            case 125: actionSel = min(actionSel + 1, max(0, filteredActions.count - 1)); return true
-            case 126: actionSel = max(0, actionSel - 1); return true
-            case 36, 76: runAction(actionSel); return true
+            case Key.escape: actionsFor = nil; return true                     // Esc
+            case Key.down: actionSel = min(actionSel + 1, max(0, filteredActions.count - 1)); return true
+            case Key.up: actionSel = max(0, actionSel - 1); return true
+            case Key.enter, Key.keypadEnter: runAction(actionSel); return true
             default: return typing && !cmd ? false : false
             }
         }
@@ -292,16 +295,16 @@ final class Shell: ObservableObject {
                 return true
             }
         }
-        if e.keyCode == 53 {                                       // Esc
+        if e.keyCode == Key.escape {                                       // Esc
             if searching { query = ""; return true }
             if CommandPalette.shared.isOpen { CommandPalette.shared.close(); return true }
             return false
         }
         if searching {
             switch e.keyCode {
-            case 125: move(1); return true
-            case 126: move(-1); return true
-            case 36, 76: runCurrent(); return true
+            case Key.down: move(1); return true
+            case Key.up: move(-1); return true
+            case Key.enter, Key.keypadEnter: runCurrent(); return true
             default: break
             }
         }
@@ -332,7 +335,7 @@ final class KeyView: NSView {
 
 // MARK: - 侧栏
 struct Sidebar: View {
-    @Binding var sel: Int
+    @Binding var sel: Page
     func item(_ p: NavPage) -> some View {
         let on = sel == p.id
         return Button { sel = p.id } label: {
@@ -620,6 +623,8 @@ final class CommandPalette: NSObject {
 struct SettingsPage: View {
     @ObservedObject var ui = UIState.shared
     @ObservedObject var alerts = BatteryAlerts.shared
+    @ObservedObject var ka = KeepAwake.shared
+    @ObservedObject var dock = DockMode.shared
     @State private var recording = false
     @State private var monitor: Any?
     @State private var label = CommandPalette.label(code: CommandPalette.shared.shortcut.code,
@@ -657,9 +662,19 @@ struct SettingsPage: View {
                             .toggleStyle(.switch).controlSize(.small).labelsHidden()
                             .accessibilityIdentifier("set.login")
                     }
+                    Hairline().padding(.leading, 38)
+                    row("常驻模式", "sun.max", "常亮", "临时阻止自动息屏，关闭后恢复系统默认") {
+                        Toggle("", isOn: Binding(get: { ka.on }, set: { if $0 != ka.on { ka.toggle() } }))
+                            .toggleStyle(.switch).controlSize(.small).labelsHidden().accessibilityIdentifier("set.awake")
+                    }
+                    Hairline().padding(.leading, 38)
+                    row("常驻模式", "powerplug", "接显示器模式", "插电并连接外接屏时，息屏仍保持网络") {
+                        Toggle("", isOn: Binding(get: { dock.enabled }, set: { dock.setEnabled($0) }))
+                            .toggleStyle(.switch).controlSize(.small).labelsHidden().accessibilityIdentifier("set.dock")
+                    }
                 }.padding(6).card()
                 VStack(spacing: 1) {
-                    row("关于", "info.circle", "Mac 一键优化 2.5", "纯本地运行，不上传任何数据") {
+                    row("关于", "info.circle", "Mac 一键优化 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")", "纯本地运行，不上传任何数据") {
                         Button("介绍页") { NSWorkspace.shared.open(URL(string: "https://yostyang.github.io/mac-optimizer/")!) }
                             .buttonStyle(PillButton(filled: false))
                     }
