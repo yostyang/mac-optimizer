@@ -5,15 +5,22 @@ final class FakeScreens: SplitScreens {
     var displays: [SplitDisplay]; var primaryHeight: CGFloat
     init(_ d: [SplitDisplay], _ h: CGFloat) { displays = d; primaryHeight = h }
 }
+final class FakeWin { var frame: CGRect?; init(_ f: CGRect?) { frame = f } }
 final class FakeDriver: SplitWindowDriver {
-    var ok = true; var frame: CGRect? = CGRect(x: 100, y: 100, width: 800, height: 600)
+    var ok = true
+    var focusedWin = FakeWin(CGRect(x: 100, y: 100, width: 800, height: 600))
+    private var armed: FakeWin?
+    var frame: CGRect? { get { focusedWin.frame } set { focusedWin.frame = newValue } }
+    var armedWindow: AnyObject? { armed }
+    func arm(_ w: AnyObject) -> CGRect? { guard let f = w as? FakeWin, f.frame != nil else { armed = nil; return nil }; armed = f; return f.frame }
     var minW: CGFloat = 0; var fixed = false; var moves = 0
     func trusted() -> Bool { ok }
     var pids: [pid_t] = []
-    func focusedFrame(pid: pid_t) -> CGRect? { pids.append(pid); return frame }
+    func focusedFrame(pid: pid_t) -> CGRect? { pids.append(pid); armed = frame == nil ? nil : focusedWin; return frame }
     func setFocused(_ r: CGRect) -> CGRect? {
-        guard !fixed, frame != nil else { return frame }
-        moves += 1; frame = CGRect(x: r.minX, y: r.minY, width: max(r.width, minW), height: r.height); return frame
+        guard let w = armed else { return nil }
+        guard !fixed, w.frame != nil else { return w.frame }
+        moves += 1; w.frame = CGRect(x: r.minX, y: r.minY, width: max(r.width, minW), height: r.height); armed = nil; return w.frame
     }
 }
 
@@ -96,6 +103,27 @@ enum V26 {
         T.check(c.place(.left) == "没有找到要移动的应用窗口", "没有外部应用→明确提示")
         trk.lastExternal = wx; let f0 = drv.frame; drv.frame = nil
         T.check(c.place(.left) == "「微信」没有可移动的窗口", "应用无窗口→点名提示"); drv.frame = f0
+        T.sec("撤销绑定具体窗口与空 ⌘K（v2.6.2）")
+        drv.fixed = false; drv.minW = 0; c.captured = nil; trk.lastExternal = SplitTarget(pid: 900, name: "Chrome")
+        let w1 = FakeWin(CGRect(x: 50, y: 60, width: 700, height: 500)); drv.focusedWin = w1
+        _ = c.place(.left)
+        let w2 = FakeWin(CGRect(x: 900, y: 60, width: 700, height: 500)); drv.focusedWin = w2   // 同一应用的另一个窗口成了焦点
+        T.check(c.undoLast() == "已把 Chrome 撤销归位", "撤销成功")
+        T.check(w1.frame == CGRect(x: 50, y: 60, width: 700, height: 500) && w2.frame == CGRect(x: 900, y: 60, width: 700, height: 500), "只还原当初移动的窗口，不动同应用的另一个窗口")
+        drv.focusedWin = w1; _ = c.place(.right); w1.frame = nil   // 窗口被关闭
+        T.check(c.undoLast().contains("已关闭") && w2.frame == CGRect(x: 900, y: 60, width: 700, height: 500), "原窗口已关闭→明确提示且不误移")
+        T.check(c.undoLast() == "没有可撤销的归位", "关闭后撤销记录被清掉")
+        T.check(Shell.contextItem(page: -9)?.actions.count == 4, "分区页空 ⌘K：左/中/右/撤销四个操作")
+        T.check(Shell.contextItem(page: -2) == nil, "其它页没有分区操作")
+        var hints: [String] = []; SplitHUD.sink = { hints.append($0) }
+        let oldSel = Nav.shared.sel; Nav.shared.sel = -2
+        let shl = Shell.shared; let oldQ = shl.query; shl.query = ""; shl.actionsFor = nil
+        shl.openActions()
+        T.check(hints.count == 1 && hints[0].contains("⌘K") && shl.actionsFor == nil, "其它页空 ⌘K：给出明确提示")
+        Nav.shared.sel = -9; shl.openActions()
+        T.check(shl.actionsFor?.id == "ctx.split", "分区页空 ⌘K：打开分区操作面板")
+        shl.actionsFor = nil; Nav.shared.sel = oldSel; shl.query = oldQ; SplitHUD.sink = nil
+
         let sh = SplitController.shared; let fd = FakeDriver(); fd.ok = false
         sh.driver = fd; sh.tracker = FakeTracker(nil)   // 绝不碰真实 AX
         var shown: [String] = []; SplitHUD.sink = { shown.append($0) }
