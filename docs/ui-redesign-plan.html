@@ -135,6 +135,25 @@ td:first-child{white-space:nowrap;font-weight:600}
 .proc span:nth-child(n+2){text-align:right}
 .c-bad{color:var(--bad)} .c-warn{color:var(--warn)} .c-sub{color:var(--sub)} .c-blue{color:var(--accent2)}
 .label-old{font-size:12px;color:var(--ter)}
+/* 代码问题 */
+.issues{display:flex;flex-direction:column;gap:10px}
+.iss{display:grid;grid-template-columns:64px minmax(0,1fr);gap:4px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.iss .sev{grid-row:span 3;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.iss .sev .rank{font-family:var(--num);font-size:13px;color:var(--ter);font-weight:700}
+.iss h3{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.iss h3 code{font-weight:400}
+.iss .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;font-size:14px}
+.iss .two > div{min-width:0;display:flex;flex-direction:column;gap:6px}
+.iss .two b{font-size:12px;letter-spacing:.06em;color:var(--ter)}
+.iss .two p{color:var(--sub)}
+.iss ul{margin:0;padding-left:18px;color:var(--sub);display:flex;flex-direction:column;gap:2px}
+pre{margin:0;overflow-x:auto;background:var(--code);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12.5px;line-height:1.55;color:var(--fg)}
+.t-mid{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.t-low{color:var(--sub);background:color-mix(in srgb,var(--fg) 7%,transparent)}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.metric{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.metric b{font-family:var(--num);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+.metric span{font-size:12.5px;color:var(--sub)}
 /* 分期 */
 .phases{display:flex;flex-direction:column;gap:10px}
 .ph{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1fr);gap:18px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
@@ -149,6 +168,12 @@ td:first-child{white-space:nowrap;font-weight:600}
   .netgrid .lat{grid-column:span 2}
   .swatches{grid-template-columns:repeat(4,minmax(0,1fr))}
   .ph{grid-template-columns:1fr}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .iss .two{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .iss{grid-template-columns:1fr}
+  .iss .sev{grid-row:auto;flex-direction:row;align-items:center}
 }
 @media (max-width:640px){
   .verdict,.principles,.grid3,.netgrid,.netgrid2,.compare,.risks{grid-template-columns:1fr}
@@ -180,9 +205,9 @@ td:first-child{white-space:nowrap;font-weight:600}
 <div class="wrap">
 
 <header style="display:flex;flex-direction:column;gap:14px">
-  <div class="eyebrow">MAC 一键优化 · 界面优化方案 · 2026-11-06</div>
+  <div class="eyebrow">MAC 一键优化 · 界面与代码优化方案 · 2026-11-06</div>
   <h1>从「有界面」到「看得懂的数据」</h1>
-  <p class="lede">参考你选的两张界面，保留现在的列表结构和品牌紫，把监控类页面改成「大数字 + 整卡曲线 + 二级数据」的卡片，指标和状态各用一套颜色。下面是原则、规范调整、页面示意和分四期的落地计划。</p>
+  <p class="lede">界面部分：参考你选的两张界面，保留现在的列表结构和品牌紫，把监控类页面改成「大数字 + 整卡曲线 + 二级数据」的卡片，指标和状态各用一套颜色。代码部分：按严重程度列出 8 个问题和改法。最后把两部分合成一份分期计划，先修安全问题。</p>
   <p class="small muted">示意图里的数字都是示例值。示意直接用 App 现有的灰阶、品牌紫和状态色绘制，浅色和深色跟随你的系统主题切换。</p>
 </header>
 
@@ -457,11 +482,113 @@ td:first-child{white-space:nowrap;font-weight:600}
 </section>
 
 <section>
-  <h2>分四期落地</h2>
+  <h2>代码问题与优化（按严重程度）</h2>
+  <p class="muted">来自通读源码和统计，没有在真机上编译验证。行号对应当前 <code>main</code> 分支（2.6.1）。</p>
+  <div class="metrics">
+    <div class="metric"><b>40+</b><span>源文件手动列在 <code>build.sh</code></span></div>
+    <div class="metric"><b>20</b><span>全局单例 <code>static let shared</code></span></div>
+    <div class="metric"><b>105</b><span>处 <code>try?</code> 直接吞掉错误</span></div>
+    <div class="metric"><b>201</b><span>行超过 200 个字符</span></div>
+  </div>
+  <div class="issues">
+
+    <div class="iss">
+      <div class="sev"><span class="rank">1</span><span class="tag t-drop"><i></i>高</span></div>
+      <h3>登录项名称拼进命令，有注入风险 <code>main.swift:164</code></h3>
+      <div class="two">
+        <div><b>问题</b><p>登录项名称直接拼进 bash 和 AppleScript 两层字符串。名称里有 <code>'</code> 或 <code>"</code> 时命令会出错，构造过的名称还能执行任意命令。</p>
+<pre>sh("osascript -e 'tell application \"System Events\" to delete login item \"\(n)\"'")</pre></div>
+        <div><b>改法</b><p>不经过 bash，用 <code>Process</code> 直接调用 osascript，把名称作为参数传给脚本，AppleScript 里只读 <code>argv</code>。</p>
+<pre>run("/usr/bin/osascript", [
+  "-e", "on run argv",
+  "-e", "tell application \"System Events\" to delete login item (item 1 of argv)",
+  "-e", "end run", "--", n])</pre></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">2</span><span class="tag t-drop"><i></i>高</span></div>
+      <h3><code>sh()</code> 可能卡死，且所有命令都经过 bash <code>main.swift:8</code></h3>
+      <div class="two">
+        <div><b>问题</b><ul><li>标准错误接了一个 <code>Pipe()</code> 却从不读取。命令往标准错误写超过约 64KB 时会阻塞，调用方一直等下去。</li><li>没有超时，<code>osascript</code> 被权限弹窗挡住时也会一直挂着。</li><li>全部走 <code>/bin/bash -c</code>，拼参数容易出第 1 条那样的问题。</li></ul></div>
+        <div><b>改法</b><ul><li>把 <code>DNSCore.swift</code> 里的 <code>RealRunner</code> 提成全局唯一的 <code>run(path, args, timeout:)</code>，标准错误接 <code>FileHandle.nullDevice</code> 或一起读出。</li><li>默认 10 秒超时，超时后 <code>terminate()</code>。</li><li><code>sh()</code> 只留给确实需要管道的场景，并逐处迁移。</li></ul></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">3</span><span class="tag t-mid"><i></i>中</span></div>
+      <h3>文件按版本号组织，构建列表全靠手写</h3>
+      <div class="two">
+        <div><b>问题</b><ul><li><code>V16.swift</code>、<code>V24.swift</code>、<code>V25Shell.swift</code>、<code>V26Split.swift</code>，测试从 <code>V15Tests</code> 到 <code>V26Tests</code> 有 13 个。看文件名找不到功能。</li><li><code>build.sh</code> 手写 40 多个源文件，<code>test.sh</code> 手写 40 多张截图名，漏写一个就静默不编译或报缺图。</li><li>测试代码和正式代码一起编进发布的二进制。</li></ul></div>
+        <div><b>改法</b><ul><li>按功能分目录：<code>App/</code>、<code>Shell/</code>、<code>Design/</code>、<code>Monitor/</code>、<code>Network/</code>、<code>Battery/</code>、<code>Clean/</code>、<code>Helper/</code>。只用 <code>git mv</code> 移动，不改逻辑。</li><li>迁到 SwiftPM：App、Helper、Core 共享库、测试各为一个目标，<code>build.sh</code> 只负责打包和签名。</li><li>截图清单改由测试代码输出，<code>test.sh</code> 读这份清单核对。</li></ul></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">4</span><span class="tag t-mid"><i></i>中</span></div>
+      <h3>页面和按键用数字编号</h3>
+      <div class="two">
+        <div><b>问题</b><p>页面靠 <code>nav.sel = -1 … -9</code> 加 <code>features</code> 下标区分；<code>Loaders.rows(_ id: Int)</code> 按数字 switch；按键直接写 <code>125 / 126 / 36</code>。加一页或调整顺序很容易错位。</p></div>
+        <div><b>改法</b>
+<pre>enum Page: Hashable { case overview, monitor, battery, display,
+  network, clean, changes, settings, split, tool(ToolKind) }
+enum Key { static let down: UInt16 = 125, up: UInt16 = 126,
+  enter: UInt16 = 36, keypadEnter: UInt16 = 76 }</pre>
+        <p>通知跳转里的 <code>userInfo["page"]</code> 改成存 <code>Page</code> 的字符串名。</p></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">5</span><span class="tag t-mid"><i></i>中</span></div>
+      <h3>只适合作者本机的规则写死在诊断里</h3>
+      <div class="two">
+        <div><b>问题</b><ul><li><code>"鹊桥"</code>、<code>"Grok"</code>、Claude 桌面版虚拟机等名称写死在 <code>Model.scan</code> 和 <code>Loaders</code> 里。</li><li><code>on: v.name.contains("Lets")</code>：名字含 Lets 的 VPN 默认勾选退出，其他用户点「处理所选」就可能被关掉。</li></ul></div>
+        <div><b>改法</b><ul><li>抽成一张规则表（名称匹配、标题、说明、是否默认勾选），内置规则默认全部不勾选。</li><li>用户自己的规则放进「设置」，存到 <code>Application Support</code>。</li><li>VPN 互斥只提示，不默认勾选任何一个。</li></ul></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">6</span><span class="tag t-mid"><i></i>中</span></div>
+      <h3>线程与全局状态没有约束</h3>
+      <div class="two">
+        <div><b>问题</b><ul><li>20 个全局单例，<code>@MainActor</code> 全项目只有 1 处，后台任务一律 <code>DispatchQueue.global()</code>。</li><li><code>ToolPage</code> 在 <code>onAppear</code> 覆盖全局 <code>Shell.shared.listHandler</code>，<code>onDisappear</code> 置空。页面切换时旧页面的置空可能晚于新页面的设置，键盘就失灵了。</li><li>用 <code>-swift-version 5</code> 编译，数据竞争没有任何检查。</li></ul></div>
+        <div><b>改法</b><ul><li>所有 <code>ObservableObject</code> 标 <code>@MainActor</code>，后台读取写成 <code>async</code> 函数。</li><li><code>listHandler</code> 改成带令牌的注册，<code>onDisappear</code> 只注销自己注册的那一个。</li><li>先开 <code>-strict-concurrency=targeted</code> 看警告，逐个目录清零后再切 Swift 6。</li></ul></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">7</span><span class="tag t-low"><i></i>低</span></div>
+      <h3>代码很密，错误被静默吞掉</h3>
+      <div class="two">
+        <div><b>问题</b><ul><li>201 行超过 200 字符，常见一行用 <code>;</code> 塞好几条语句，审阅和看改动都很吃力。</li><li>105 处 <code>try?</code>。比如白名单保存失败（<code>Clean.swift:124</code>）不会提示，而白名单本身是安全机制。</li></ul></div>
+        <div><b>改法</b><ul><li>加 swift-format，行宽 140，只格式化本次改动的文件，避免一次性大改。</li><li>逐处检查 <code>try?</code>：涉及持久化、白名单、DNS 备份的改成 <code>do/catch</code>，失败时用 Toast 告诉用户；只读缓存类的保留。</li></ul></div>
+      </div>
+    </div>
+
+    <div class="iss">
+      <div class="sev"><span class="rank">8</span><span class="tag t-low"><i></i>低</span></div>
+      <h3>处理结果的核验不一致 <code>main.swift · ToolPage.run</code></h3>
+      <div class="two">
+        <div><b>问题</b><p>概览体检的处理会等 <code>OperationCheck</code> 核验结果；工具页（资源排行、浏览器、VPN 等）只提示「已发起」，进程没退出也看不出来。</p></div>
+        <div><b>改法</b><p>给 <code>Row</code> 加 <code>verify: (() -&gt; Bool)?</code>，退出类操作传 <code>{ app.isTerminated }</code>，执行后复用 <code>OperationCheck.wait</code>，成功才计入优化统计。</p></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <h2>分期落地</h2>
+  <p class="muted">界面和代码合在一起排。安全问题最先修；文件改名放在界面改版之后，避免两边同时改同一批文件。</p>
   <div class="phases">
     <div class="ph">
+      <div><div class="no">第零期</div><h3>安全与稳定</h3></div>
+      <ul><li>修登录项命令注入（代码问题 1）</li><li><code>sh()</code> 改成带超时、不经过 bash 的 <code>run()</code>（代码问题 2）</li><li>VPN 互斥不再默认勾选（代码问题 5 的一部分）</li><li>工具页操作接入核验（代码问题 8）</li></ul>
+      <div class="acc"><b>验收</b>新增测试：带引号和分号的登录项名称不会执行额外命令；大量标准错误输出和超时都不会卡住；<code>./test.sh</code> 全部通过。涉及 <code>main.swift</code>、<code>DNSCore.swift</code>。</div>
+    </div>
+    <div class="ph">
       <div><div class="no">第一期</div><h3>规范 + 实时监控</h3></div>
-      <ul><li>新增 <code>DS.hero / unit / label / eyebrow / metric</code></li><li>实现 7 个新组件</li><li>实时监控改成 3×3 网格，设置开关挪到「设置」页</li><li>修正进程 CPU 数字的颜色</li></ul>
+      <ul><li>新增 <code>DS.hero / unit / label / eyebrow / metric</code></li><li>实现 7 个新组件，新组件标 <code>@MainActor</code></li><li>实时监控改成 3×3 网格，设置开关挪到「设置」页</li><li>修正进程 CPU 数字的颜色</li><li>改 <code>RootView</code> 时顺手换成 <code>enum Page</code> 和具名键码（代码问题 4）</li></ul>
       <div class="acc"><b>验收</b>浅色和深色截图、对比度测试、最小窗口放得下。<code>./test.sh --approve</code> 重拍黄金图后，再跑一次 <code>./test.sh</code>。涉及 <code>V25Design.swift</code>、<code>Dashboard.swift</code>、<code>main.swift</code>。</div>
     </div>
     <div class="ph">
@@ -471,13 +598,18 @@ td:first-child{white-space:nowrap;font-weight:600}
     </div>
     <div class="ph">
       <div><div class="no">第三期</div><h3>新增数据 + 清理</h3></div>
-      <ul><li>每核 CPU 柱状图（新增按核读取）</li><li>内存应用 / 锁定 / 压缩明细（读 <code>host_statistics64</code>）</li><li>清理剩余直接写的字号和颜色</li><li><code>test.sh</code> 加检查：页面里不允许直接写字号和颜色</li></ul>
+      <ul><li>每核 CPU 柱状图（新增按核读取）</li><li>内存应用 / 锁定 / 压缩明细（读 <code>host_statistics64</code>）</li><li>清理剩余直接写的字号和颜色</li><li><code>test.sh</code> 加检查：页面里不允许直接写字号和颜色</li><li>检查 <code>try?</code>，持久化类改成失败可见（代码问题 7）</li></ul>
       <div class="acc"><b>验收</b>新读数有单元测试；检查不通过时 <code>test.sh</code> 判失败。涉及 <code>Monitor.swift</code> 和各页面。</div>
     </div>
     <div class="ph">
       <div><div class="no">第四期</div><h3>其余页面 + 文档</h3></div>
       <ul><li>电池、显示器、清理、改动与提醒换用新组件</li><li>新组件补齐朗读文字</li><li>更新 README、HANDOFF 和 <code>docs/</code> 截图</li></ul>
       <div class="acc"><b>验收</b>VoiceOver 能读出每张卡片的名称和数值；文档版本号与 <code>Info.plist</code> 一致。</div>
+    </div>
+    <div class="ph">
+      <div><div class="no">第五期</div><h3>工程结构</h3></div>
+      <ul><li>按功能分目录，迁到 SwiftPM，测试单独成目标（代码问题 3）</li><li>个人规则抽成规则表，放进「设置」（代码问题 5）</li><li>全部 <code>ObservableObject</code> 标 <code>@MainActor</code>，<code>listHandler</code> 改令牌注册，开严格并发检查（代码问题 6）</li><li>本次改动的文件跑 swift-format</li></ul>
+      <div class="acc"><b>验收</b>纯移动的提交和改逻辑的提交分开；发布的二进制里不再含测试代码；<code>-strict-concurrency=targeted</code> 无警告；助手源码哈希不变（升级不需要重新授权）。</div>
     </div>
   </div>
 </section>
