@@ -149,6 +149,7 @@ enum MOTests {
         v241Tests()
         V25.tests()
         V26.tests()
+        SafetyTests.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)

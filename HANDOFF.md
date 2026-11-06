@@ -175,3 +175,11 @@
 ## 2.6.2
 - 空 ⌘K：Shell.contextItem(page:)；撤销按具体窗口（driver.armedWindow / arm）。
 - UI 测试稳定性：SwiftUI 树需外部 AX 查询触发（primeAX），等待需分发 AppKit 事件（pump）。
+
+## 第零期（安全与稳定，见 docs/ui-redesign-plan.html）
+- `Exec.run(路径, 参数, timeout:)`（Exec.swift）：不经过 shell，标准错误丢弃，默认 10 秒超时。`sh()` 只留给需要管道/重定向的命令，内部也走 `Exec.run`。**不要把变量拼进命令字符串。**
+- 登录项：`LoginItems.names()/delete(_:)`，名称只进 AppleScript 的转义字面量；以前名称带引号可执行任意命令。
+- 工具页 `Row.verify`：退出类操作等到能观察到结果才算完成，成功才计入优化统计；打开系统设置这类无法核对的仍提示「已发起」。
+- 体检里「多个 VPN」不再默认勾选任何一个。
+- 测试：SafetyTests.swift（参数不被 shell 解释、300KB 标准错误不卡、超时终止、AppleScript 字面量往返、工具页核验）。
+- 特权助手的 `RealRunner`（DNSCore.swift）有同样的标准错误问题，但改助手源码会让用户重新授权，留到下次必须改助手时一起修。

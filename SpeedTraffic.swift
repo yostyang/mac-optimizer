@@ -224,7 +224,7 @@ final class TrafficStore: ObservableObject {
     func stopMinuteTimer() { timer?.invalidate(); timer = nil }
     func refreshApps() {
         DispatchQueue.global().async {
-            let out = sh("lsof -i -P -n 2>/dev/null")
+            let out = sh("lsof -i -P -n 2>/dev/null", timeout: 20)
             let apps = TrafficParse.parseLsof(out)
             DispatchQueue.main.async {
                 self.apps = apps

@@ -4,7 +4,7 @@ set -e
 # SWIFTFLAGS：可选的额外编译参数（例如在受限沙盒里编译时传 -disable-sandbox）
 SWIFTFLAGS="${SWIFTFLAGS:-}"
 cd "$(dirname "$0")"
-SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift V24.swift V24View.swift V24Tests.swift V241Tests.swift V25Design.swift V25Shell.swift V25Tests.swift V26Split.swift V26Tests.swift"
+SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift V24.swift V24View.swift V24Tests.swift V241Tests.swift V25Design.swift V25Shell.swift V25Tests.swift V26Split.swift V26Tests.swift Exec.swift SafetyTests.swift"
 HSRC="ChargeCore.swift ChargeHelper.swift DNSCore.swift"
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86
