@@ -10,6 +10,73 @@ enum MOTests {
         if c { pass += 1; print("  ✓ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) } else { fail += 1; print("  ✗ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) }
     }
     static func info(_ s: String) { print("  · \(s)") }
+    /// 诊断记录：进程、前台、窗口与辅助功能树概况（只读，不改变断言）
+    static func diag(_ tag: String, _ w: NSWindow?) {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let fa = NSWorkspace.shared.frontmostApplication
+        let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let axCount = w.map { axNodes($0) } ?? 0
+        let sess = CGSessionCopyCurrentDictionary() as? [String: Any]
+        let locked = (sess?["CGSSessionScreenIsLocked"] as? Bool) ?? false
+        let asleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").map { $0.processIdentifier }.filter { $0 != me }
+        info("诊断[\(tag)] pid=\(me) v\(ver) path=\(Bundle.main.bundlePath) active=\(NSApp.isActive) front=\(fa?.localizedName ?? "nil")(\(fa?.processIdentifier ?? 0)) 同 ID 其它进程=\(others) "
+             + "win: visible=\(w?.isVisible ?? false) key=\(w?.isKeyWindow ?? false) main=\(w?.isMainWindow ?? false) occl=\(w.map { $0.occlusionState.contains(.visible) } ?? false) host=\(w?.contentView is NSHostingView<RootView>) "
+             + "ax节点=\(axCount) trusted=\(AXIsProcessTrusted()) locked=\(locked) displayAsleep=\(asleep)")
+    }
+    static func axNodes(_ w: NSWindow) -> Int {
+        guard let root = w.contentView else { return 0 }
+        var n = 0; var stack: [NSObject] = [root]
+        while let x = stack.popLast(), n < 5000 { n += 1; stack.append(contentsOf: axChildren(x)) }
+        return n
+    }
+    /// 开始找控件前的前置条件：活动应用、活动窗口、未被遮挡、辅助功能树非空。返回不满足的原因（nil = 就绪）
+    static func notReady(_ w: NSWindow) -> String? {
+        var r: [String] = []
+        if !NSApp.isActive { r.append("测试程序不是活动应用（前台：\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nil")）") }
+        if !w.isKeyWindow { r.append("窗口不是活动窗口") }
+        if !w.occlusionState.contains(.visible) { r.append("窗口被遮挡") }
+        let n = axNodes(w); if n <= 1 { r.append("辅助功能树为空（\(n) 个节点）") }
+        return r.isEmpty ? nil : r.joined(separator: "；")
+    }
+    /// SwiftUI 的 NSHostingView 通常只在有"辅助功能客户端"来查询之后才生成子元素；
+    /// 测试在进程内用 NSAccessibility 遍历，自己并不算客户端。这里在后台线程用公开 AX API
+    /// 像外部客户端一样查询一次本进程（主线程同时在泵送事件，负责应答），以触发树生成。
+    /// 只读查询，不改任何属性；设 MO_TEST_NO_AX_PRIME=1 可关闭。
+    static let noAXPrime = ProcessInfo.processInfo.environment["MO_TEST_NO_AX_PRIME"] == "1"
+    static func primeAX(_ tag: String) {
+        guard !noAXPrime, AXIsProcessTrusted() else { info("诊断[\(tag)] 跳过 AX 预查询（关闭或未授权）"); return }
+        let pid = getpid()
+        var done = false, seen = 0
+        DispatchQueue.global(qos: .userInitiated).async {
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 2)
+            var n = 0
+            func walk(_ e: AXUIElement, _ depth: Int) {
+                guard depth < 6, n < 400 else { return }
+                var v: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &v) == .success, let kids = v as? [AXUIElement] else { return }
+                for k in kids { n += 1; walk(k, depth + 1) }
+            }
+            var ws: CFTypeRef?
+            if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &ws) == .success, let wins = ws as? [AXUIElement] {
+                for w in wins { walk(w, 0) }
+            }
+            DispatchQueue.main.async { seen = n; done = true }
+        }
+        _ = waitUntil(5) { done }
+        info("诊断[\(tag)] AX 预查询完成=\(done) 外部视角元素数=\(seen)")
+    }
+    /// 可靠窗口准备：激活后等待真正成为前台，没成功就再请求一次（不改断言，只记录）
+    static func ensureActive(_ w: NSWindow, _ tag: String) {
+        NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)
+        if !waitUntil(3, { NSApp.isActive }) {
+            info("诊断[\(tag)] 首次激活未生效，再请求一次")
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            w.makeKeyAndOrderFront(nil)
+            _ = waitUntil(3, { NSApp.isActive })
+        }
+    }
     static func sec(_ s: String) { print("== \(s)  [login=\(SMAppService.mainApp.status.rawValue)]") }
 
     // MARK: 指标与逻辑自检
@@ -169,10 +236,23 @@ enum MOTests {
     // MARK: 界面测试与截图
     static func waitUntil(_ t: TimeInterval = 3, _ c: () -> Bool) -> Bool {
         let end = Date().addingTimeInterval(t)
-        while Date() < end { if c() { return true }; RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        while Date() < end { if c() { return true }; pump(0.05) }
         return c()
     }
-    static func settle(_ t: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(t)) }
+    static func settle(_ t: TimeInterval) { pump(t) }
+    /// 测试整体跑在一个 Timer 回调里，NSApp 的事件循环被挡住：只转 RunLoop 不会分发 AppKit 事件，
+    /// 激活 / 成为活动窗口等状态就一直不更新。这里在等待时用 nextEvent + sendEvent 把排队的事件分发掉
+    /// （nextEvent 带超时时同样会在 .default 模式下运行 RunLoop，计时器与主队列照常执行）。
+    /// 设 MO_TEST_PLAIN_RUNLOOP=1 可回退到旧的纯 RunLoop 等待。
+    static let plainRunLoop = ProcessInfo.processInfo.environment["MO_TEST_PLAIN_RUNLOOP"] == "1"
+    static func pump(_ t: TimeInterval) {
+        let until = Date().addingTimeInterval(t)
+        if plainRunLoop || NSApp == nil { RunLoop.main.run(until: until); return }
+        while Date() < until {
+            guard let e = NSApp.nextEvent(matching: .any, until: until, inMode: .default, dequeue: true) else { break }
+            NSApp.sendEvent(e)
+        }
+    }
     static func axChildren(_ o: NSObject) -> [NSObject] {
         if let e = o as? NSAccessibilityProtocol { return (e.accessibilityChildren() ?? []).compactMap { $0 as? NSObject } }
         let sel = NSSelectorFromString("accessibilityChildren")
@@ -532,13 +612,25 @@ enum MOTests {
         sec("主窗口")
         // 窗口若被系统回收过 contentView，先恢复 SwiftUI 根视图，否则整棵辅助功能树都是空的
         if !(w.contentView is NSHostingView<RootView>) { w.contentView = NSHostingView(rootView: RootView()) }
-        w.setFrameOrigin(NSPoint(x: -4000, y: 0)); w.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil); w.makeFirstResponder(w.contentView)
+        // 放在主屏可见区域内（屏幕外窗口不会成为活动窗口，SwiftUI 也不生成辅助功能树）
+        if let f = NSScreen.screens.first?.visibleFrame {
+            let s = w.frame.size
+            w.setFrameOrigin(NSPoint(x: f.midX - s.width / 2, y: max(f.minY, f.midY - s.height / 2)))
+        }
+        w.orderFrontRegardless()
+        diag("主窗口-准备前", w)
+        ensureActive(w, "主窗口"); w.makeFirstResponder(w.contentView)
         w.displayIfNeeded()
         settle(2.0)
+        primeAX("主窗口")
+        var why = notReady(w)
+        if why != nil { _ = waitUntil(6) { Nav.shared.objectWillChange.send(); why = notReady(w); return why == nil } }
+        diag("主窗口-准备后", w)
+        check(why == nil, "测试窗口就绪（活动应用、活动窗口、未遮挡、辅助功能树非空）", why ?? "")
         check(waitUntil(8) { find(w.contentView!, label: "实时监控") != nil }, "侧边栏「实时监控」")
         if let b = find(w.contentView!, label: "实时监控") { b.press() }
         check(waitUntil(2) { Nav.shared.sel == -2 && mon.dashboardShown }, "侧边栏打开实时监控")
+        if find1(w.contentView!, label: "实时监控") == nil { diag("主窗口-失败时", w) }
         sec("快捷操作")
         let pv = w.contentView!
         check(waitUntil(5) { find(pv, id: "act.awake") != nil }, "找到快捷按钮（与菜单栏面板同一组件）")

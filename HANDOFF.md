@@ -171,3 +171,7 @@
 
 ## 2.6.1
 - 分区目标：SystemAppTracker 记最近激活的外部应用；CommandPalette.open 先 capture()。结果走 SplitHUD（Toast + 无焦点浮层）。
+
+## 2.6.2
+- 空 ⌘K：Shell.contextItem(page:)；撤销按具体窗口（driver.armedWindow / arm）。
+- UI 测试稳定性：SwiftUI 树需外部 AX 查询触发（primeAX），等待需分发 AppKit 事件（pump）。
