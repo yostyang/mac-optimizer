@@ -21,7 +21,12 @@ fi
 ./build.sh > "$OUT/build.log" 2>&1 || { tail -30 "$OUT/build.log"; echo "❌ 编译失败"; mo_relaunch; exit 1; }
 BIN="$PWD/build/Mac一键优化.app/Contents/MacOS/MacOptimizer"
 "$BIN" --selftest > "$OUT/selftest.log" 2>&1; S=$?
+{ echo "== uitest 前环境 $(date +%T)"; echo "残留 MacOptimizer: $(pgrep -lx MacOptimizer | tr '\n' ' ')"
+  echo "前台: $(osascript -e 'tell application "System Events" to get {name, unix id} of first process whose frontmost is true' 2>&1)"
+  ioreg -n Root -d1 | grep -o '"CGSSessionScreenIsLocked"=[A-Za-z]*' || echo "未锁屏"
+  ioreg -c IOHIDSystem -d4 | awk '/HIDIdleTime/{print "空闲 " int($NF/1e9) "s";exit}'; } > "$OUT/env.log" 2>&1
 "$BIN" --uitest "$OUT/ui" > "$OUT/uitest.log" 2>&1; U=$?
+echo "== uitest 后 $(date +%T) 前台: $(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>&1)" >> "$OUT/env.log"
 "$BIN" --snapshot "$OUT/shots" --goldens "$PWD/goldens" ${APPROVE:-} > "$OUT/snapshot.log" 2>&1; P=$?
 grep -E "✗" "$OUT"/*.log
 for f in selftest uitest snapshot; do tail -1 "$OUT/$f.log"; done | tee "$OUT/summary.txt"

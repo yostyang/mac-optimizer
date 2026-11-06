@@ -10,6 +10,37 @@ enum MOTests {
         if c { pass += 1; print("  ✓ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) } else { fail += 1; print("  ✗ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) }
     }
     static func info(_ s: String) { print("  · \(s)") }
+    /// 诊断记录：进程、前台、窗口与辅助功能树概况（只读，不改变断言）
+    static func diag(_ tag: String, _ w: NSWindow?) {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let fa = NSWorkspace.shared.frontmostApplication
+        let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        var axCount = 0
+        if let root = w?.contentView {
+            var stack: [NSObject] = [root]
+            while let x = stack.popLast(), axCount < 5000 {
+                axCount += 1
+                stack.append(contentsOf: axChildren(x))
+            }
+        }
+        let sess = CGSessionCopyCurrentDictionary() as? [String: Any]
+        let locked = (sess?["CGSSessionScreenIsLocked"] as? Bool) ?? false
+        let asleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").map { $0.processIdentifier }.filter { $0 != me }
+        info("诊断[\(tag)] pid=\(me) v\(ver) path=\(Bundle.main.bundlePath) active=\(NSApp.isActive) front=\(fa?.localizedName ?? "nil")(\(fa?.processIdentifier ?? 0)) 同 ID 其它进程=\(others) "
+             + "win: visible=\(w?.isVisible ?? false) key=\(w?.isKeyWindow ?? false) main=\(w?.isMainWindow ?? false) occl=\(w.map { $0.occlusionState.contains(.visible) } ?? false) host=\(w?.contentView is NSHostingView<RootView>) "
+             + "ax节点=\(axCount) trusted=\(AXIsProcessTrusted()) locked=\(locked) displayAsleep=\(asleep)")
+    }
+    /// 可靠窗口准备：激活后等待真正成为前台，没成功就再请求一次（不改断言，只记录）
+    static func ensureActive(_ w: NSWindow, _ tag: String) {
+        NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)
+        if !waitUntil(3, { NSApp.isActive }) {
+            info("诊断[\(tag)] 首次激活未生效，再请求一次")
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            w.makeKeyAndOrderFront(nil)
+            _ = waitUntil(3, { NSApp.isActive })
+        }
+    }
     static func sec(_ s: String) { print("== \(s)  [login=\(SMAppService.mainApp.status.rawValue)]") }
 
     // MARK: 指标与逻辑自检
@@ -533,12 +564,15 @@ enum MOTests {
         // 窗口若被系统回收过 contentView，先恢复 SwiftUI 根视图，否则整棵辅助功能树都是空的
         if !(w.contentView is NSHostingView<RootView>) { w.contentView = NSHostingView(rootView: RootView()) }
         w.setFrameOrigin(NSPoint(x: -4000, y: 0)); w.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil); w.makeFirstResponder(w.contentView)
+        diag("主窗口-准备前", w)
+        ensureActive(w, "主窗口"); w.makeFirstResponder(w.contentView)
         w.displayIfNeeded()
         settle(2.0)
+        diag("主窗口-准备后", w)
         check(waitUntil(8) { find(w.contentView!, label: "实时监控") != nil }, "侧边栏「实时监控」")
         if let b = find(w.contentView!, label: "实时监控") { b.press() }
         check(waitUntil(2) { Nav.shared.sel == -2 && mon.dashboardShown }, "侧边栏打开实时监控")
+        if find1(w.contentView!, label: "实时监控") == nil { diag("主窗口-失败时", w) }
         sec("快捷操作")
         let pv = w.contentView!
         check(waitUntil(5) { find(pv, id: "act.awake") != nil }, "找到快捷按钮（与菜单栏面板同一组件）")
