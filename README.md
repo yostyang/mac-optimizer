@@ -6,7 +6,7 @@
 
 当前代码版本为 **2.7.0（26）**，完成改版方案第零至第二期：登录项与命令执行加固、操作结果核验、实时监控 3×3 指标网格、集中设置、网络首屏总览、菜单面板二级信息和概览指标条。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
 
-范围与验收记录：[第零期](docs/phase-zero-safety.md) · [第一期](docs/phase-one-monitor.md) · [第二期](docs/phase-two-summary.md)。双列菜单面板新样式和后续功能先列入待办评估。
+范围与验收记录：[第零期](docs/phase-zero-safety.md) · [第一期](docs/phase-one-monitor.md) · [第二期](docs/phase-two-summary.md)。后续体验、电池、显示器、Keychron 与分屏安排见 [待办优先级](docs/BACKLOG.md)。
 
 2.4 补齐按应用真实网络字节、后台流量历史、系统测速、网络卡片、TUN 去重与应用卸载；验收和范围见 [2.4 说明](docs/2.4-network-uninstall.md)。2.4.1 修复了重新启动后恢复已开启的「常亮」。
 
