@@ -233,9 +233,25 @@ final class Shell: ObservableObject {
     }
 
     func openActions() {
-        guard items.indices.contains(sel) else { return }
+        guard items.indices.contains(sel) else {
+            // 空搜索时：桌面分区页给分区操作，其它页明确提示（不再静默无响应）
+            if let ctx = Self.contextItem(page: Nav.shared.sel) {
+                actionQuery = ""; actionSel = 0
+                withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = ctx }
+            } else {
+                SplitHUD.show("在顶部搜索框输入关键词（页面、操作或进程），选中后按 ⌘K 查看更多操作")
+            }
+            return
+        }
         actionQuery = ""; actionSel = 0
         withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = items[sel] }
+    }
+
+    static func contextItem(page: Int) -> CmdItem? {
+        guard page == -9 else { return nil }
+        let acts = SplitController.commands("分区").flatMap { $0.actions }
+        return CmdItem(id: "ctx.split", kind: .action, title: "桌面分区", subtitle: "把最近使用的应用窗口放进分区",
+                       symbol: "rectangle.split.3x1", actions: acts)
     }
 
     var filteredActions: [CmdAction] {

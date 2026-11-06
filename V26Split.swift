@@ -87,7 +87,9 @@ final class SystemAppTracker: SplitAppTracker {
 
 protocol SplitWindowDriver {
     func trusted() -> Bool
-    func focusedFrame(pid: pid_t) -> CGRect?  // AX 坐标
+    func focusedFrame(pid: pid_t) -> CGRect?  // AX 坐标；同时把该窗口设为下一次 setFocused 的对象
+    var armedWindow: AnyObject? { get }       // 当前选中的具体窗口（撤销用）
+    func arm(_ window: AnyObject) -> CGRect?  // 重新选中一个具体窗口；窗口已关闭返回 nil
     func setFocused(_ r: CGRect) -> CGRect? // 返回读回
 }
 final class AXWindowDriver: SplitWindowDriver {
@@ -113,6 +115,13 @@ final class AXWindowDriver: SplitWindowDriver {
               AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &s) == .success,
               AXValueGetValue(p as! AXValue, .cgPoint, &pt), AXValueGetValue(s as! AXValue, .cgSize, &sz) else { return nil }
         return CGRect(origin: pt, size: sz)
+    }
+    var armedWindow: AnyObject? { lastWin }
+    func arm(_ window: AnyObject) -> CGRect? {
+        guard trusted(), CFGetTypeID(window) == AXUIElementGetTypeID() else { lastWin = nil; return nil }
+        let w = window as! AXUIElement
+        guard let f = frame(w) else { lastWin = nil; return nil }
+        lastWin = w; return f
     }
     func focusedFrame(pid: pid_t) -> CGRect? { lastWin = nil; guard let w = window(pid) else { return nil }; lastWin = w; return frame(w) }
     func setFocused(_ r: CGRect) -> CGRect? {
@@ -151,6 +160,7 @@ final class SplitController: ObservableObject {
     @Published var last: String = ""
     private(set) var undo: CGRect?   // 一步撤销（AX 坐标）
     private var undoTarget: SplitTarget?
+    private var undoWindow: AnyObject?
 
     /// 窗口中心所在显示器（AX 坐标比较）
     func display(for axFrame: CGRect) -> SplitDisplay? {
@@ -165,13 +175,14 @@ final class SplitController: ObservableObject {
         guard let tg = captured ?? tracker.lastExternal else { return report("没有找到要移动的应用窗口") }
         captured = nil
         guard let cur = driver.focusedFrame(pid: tg.pid) else { return report("「\(tg.name)」没有可移动的窗口") }
+        let win = driver.armedWindow
         guard let disp = display(for: cur) else { return report("没有检测到显示器") }
         guard let t = prefs.template(disp.uuid) else { return report("这块屏幕还没选分区模板") }
         guard let r = SplitLayout.rect(t, z, in: disp.visible) else { return report("当前模板没有\(z.title)") }
         let target = SplitLayout.toAX(r, primaryHeight: screens.primaryHeight)
         let got = driver.setFocused(target)
         let o = SplitLayout.classify(target: target, actual: got)
-        if o != .notMovable { undo = cur; undoTarget = tg }
+        if o != .notMovable { undo = cur; undoTarget = tg; undoWindow = win }
         tracker.reactivate(tg)
         switch o {
         case .ok: return report("已把 \(tg.name) 放到\(z.title)")
@@ -184,8 +195,12 @@ final class SplitController: ObservableObject {
         guard driver.trusted() else { return report("需要先授予“辅助功能”权限") }
         guard let u = undo, let tg = undoTarget else { return report("没有可撤销的归位") }
         captured = nil
-        guard driver.focusedFrame(pid: tg.pid) != nil else { return report("「\(tg.name)」的窗口已不可用") }
-        _ = driver.setFocused(u); undo = nil; undoTarget = nil
+        // 撤销只作用于当初移动的那个具体窗口，不按应用重新取焦点窗口（同一应用多窗口时不会错移）
+        guard let win = undoWindow, driver.arm(win) != nil else {
+            undo = nil; undoTarget = nil; undoWindow = nil
+            return report("「\(tg.name)」原来的窗口已关闭，无法撤销")
+        }
+        _ = driver.setFocused(u); undo = nil; undoTarget = nil; undoWindow = nil
         tracker.reactivate(tg)
         return report("已把 \(tg.name) 撤销归位")
     }
