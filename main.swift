@@ -3,17 +3,6 @@ import AppKit
 import Combine
 import UserNotifications
 
-@discardableResult
-func sh(_ cmd: String) -> String {
-    let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/bash")
-    p.arguments = ["-c", cmd]
-    var env = ProcessInfo.processInfo.environment; env["LANG"] = "en_US.UTF-8"; env["LC_ALL"] = "en_US.UTF-8"; p.environment = env
-    let pipe = Pipe(); p.standardOutput = pipe; p.standardError = Pipe()
-    do { try p.run() } catch { return "" }
-    let d = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
-    return String(data: d, encoding: .utf8) ?? ""
-}
-
 struct Proc { var pid: Int32 = 0; let cpu: Double; let rss: Double; let comm: String
     var name: String { (comm as NSString).lastPathComponent } }
 
@@ -21,11 +10,50 @@ struct AppUse { let name: String; let cpu: Double; let memGB: Double; let app: N
 
 struct Issue: Identifiable { let id = UUID(); let title: String; let detail: String; let action: (() -> Void)?; var on: Bool; var verify: (() -> Bool)? = nil }
 
-struct Row: Identifiable { let id = UUID(); let icon: NSImage?; let title: String; let subtitle: String; let actionTitle: String?; let action: (() -> Void)? }
+struct Row: Identifiable {
+    let id = UUID()
+    let icon: NSImage?
+    let title: String
+    let subtitle: String
+    let actionTitle: String?
+    let action: (() -> Void)?
+    var verify: (() -> Bool)? = nil
+}
+
+enum LoginItems {
+    enum ReadError: Error { case commandFailed, invalidOutput }
+    // JSON 保留名称里的逗号、引号和换行；不按 osascript 的逗号分隔显示文本拆名称。
+    static let listScript = "function run() { return JSON.stringify(Application('System Events').loginItems.name()); }"
+    static let deleteScript = ["-e", "on run argv",
+                               "-e", "tell application \"System Events\" to delete login item (item 1 of argv)",
+                               "-e", "end run", "--"]
+
+    static func names(using runner: CommandRunner = RealRunner()) -> Result<[String], ReadError> {
+        let result = runner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", listScript])
+        guard result.code == 0 else { return .failure(.commandFailed) }
+        guard let names = try? JSONDecoder().decode([String].self, from: Data(result.out.utf8)) else {
+            return .failure(.invalidOutput)
+        }
+        return .success(names)
+    }
+
+    @discardableResult
+    static func remove(_ name: String, using runner: CommandRunner = RealRunner()) -> Int32 {
+        runner.run("/usr/bin/osascript", deleteScript + [name]).code
+    }
+
+    static func row(_ name: String, using runner: CommandRunner = RealRunner()) -> Row {
+        Row(icon: nil, title: name, subtitle: "开机时自动启动", actionTitle: "禁止自启",
+            action: { _ = remove(name, using: runner) }, verify: {
+                guard case .success(let current) = names(using: runner) else { return false }
+                return !current.contains(name)
+            })
+    }
+}
 
 enum Sys {
     static func procs() -> [Proc] {
-        sh("ps -Axo pid=,pcpu=,rss=,comm=").split(separator: "\n").compactMap { line in
+        ProcessRunner.run("/bin/ps", ["-Axo", "pid=,pcpu=,rss=,comm="]).out.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
             guard parts.count == 4, let pid = Int32(parts[0]), let c = Double(parts[1]), let r = Double(parts[2]) else { return nil }
             return Proc(pid: pid, cpu: c, rss: r, comm: String(parts[3]))
@@ -43,7 +71,21 @@ enum Sys {
     static func isBrowser(_ n: String) -> Bool { browserWords.contains { n.contains($0) } && !n.contains("工作") }
     static func isVPN(_ n: String) -> Bool { n.contains("VPN") || n.contains("鹊桥") }
     static func quitClaude() { for app in NSWorkspace.shared.runningApplications where app.bundleIdentifier == "com.anthropic.claudefordesktop" { _ = app.terminate() } }
-    static func restartSpotlight() { sh("killall corespotlightd helpd mds_stores") }
+    static func restartSpotlight() { _ = ProcessRunner.run("/usr/bin/killall", ["corespotlightd", "helpd", "mds_stores"]) }
+    static func memoryFreePercentage(_ output: String) -> Int? {
+        guard let line = output.split(whereSeparator: \.isNewline).first(where: { $0.contains("free percentage:") }),
+              let value = line.split(separator: ":").last else { return nil }
+        return Int(value.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "%", with: ""))
+    }
+    static func vpnConflicts(_ apps: [AppUse]) -> [Issue] {
+        guard apps.count > 1 else { return [] }
+        return apps.map { item in
+            let app = item.app
+            return Issue(title: "多个 VPN 同时运行：\(item.name)",
+                         detail: "请按需要保留客户端；不会自动选择要退出的 VPN", action: { _ = app.terminate() },
+                         on: false, verify: { app.isTerminated })
+        }
+    }
     static let osMajor = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
     static func openAppearance() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!) }
     static func openA11y(_ pane: String) { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension?" + pane)!) }
@@ -67,9 +109,10 @@ final class Model: ObservableObject {
             let ps = Sys.procs()
             let apps = Sys.appUsage(ps)
             var iss: [Issue] = []; var pen = 0
-            let loadStr = sh("sysctl -n vm.loadavg").split(separator: " ").dropFirst().first.map(String.init) ?? "0"
+            let loadStr = ProcessRunner.run("/usr/sbin/sysctl", ["-n", "vm.loadavg"]).out
+                .split(separator: " ").dropFirst().first.map(String.init) ?? "0"
             let load = Double(loadStr) ?? 0
-            let memFree = Int(sh("memory_pressure | awk -F': ' '/free percentage/{print $2}'").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: "")) ?? 100
+            let memFree = Sys.memoryFreePercentage(ProcessRunner.run("/usr/bin/memory_pressure", []).out) ?? 100
             let days = Int(ProcessInfo.processInfo.systemUptime / 86400)
             let cores = Double(ProcessInfo.processInfo.activeProcessorCount)
 
@@ -87,10 +130,10 @@ final class Model: ObservableObject {
             let vpns = apps.filter { Sys.isVPN($0.name) }
             if vpns.count > 1 {
                 pen += 10
-                for v in vpns.dropFirst() { let a = v.app; iss.append(Issue(title: "多个 VPN 同时运行：\(v.name)", detail: "VPN 互相冲突容易让视频卡顿，建议只留一个", action: { _ = a.terminate() }, on: v.name.contains("Lets"), verify: { a.isTerminated })) }
+                iss.append(contentsOf: Sys.vpnConflicts(vpns))
             }
             if ps.contains(where: { $0.comm.contains("鹊桥VPN.app/Contents/MacOS/console") }) {
-                pen += 5; iss.append(Issue(title: "鹊桥VPN 控制台窗口", detail: "网页窗口持续占用 CPU，关掉不影响 VPN 连接", action: { for p in ps where p.comm.contains("鹊桥VPN.app/Contents/MacOS/console") && p.pid > 1 && p.pid != getpid() { _ = kill(p.pid, SIGTERM) } }, on: true, verify: { ps.filter { $0.comm.contains("鹊桥VPN.app/Contents/MacOS/console") }.allSatisfy { !OperationCheck.processExists($0.pid) } }))
+                pen += 5; iss.append(Issue(title: "鹊桥VPN 控制台窗口", detail: "网页窗口持续占用 CPU，可按需选择处理", action: { for p in ps where p.comm.contains("鹊桥VPN.app/Contents/MacOS/console") && p.pid > 1 && p.pid != getpid() { _ = kill(p.pid, SIGTERM) } }, on: false, verify: { ps.filter { $0.comm.contains("鹊桥VPN.app/Contents/MacOS/console") }.allSatisfy { !OperationCheck.processExists($0.pid) } }))
             }
 
             let browsers = apps.filter { Sys.isBrowser($0.name) }
@@ -158,24 +201,31 @@ enum Loaders {
         switch id {
         case 0:
             return Sys.appUsage(ps).prefix(15).map { u in let a = u.app
-                return Row(icon: a.icon, title: u.name, subtitle: String(format: "内存 %.1f GB · CPU %.0f%%", u.memGB, u.cpu), actionTitle: u.name.contains("Grok") ? nil : "退出", action: { _ = a.terminate() }) }
+                return Row(icon: a.icon, title: u.name, subtitle: String(format: "内存 %.1f GB · CPU %.0f%%", u.memGB, u.cpu), actionTitle: u.name.contains("Grok") ? nil : "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
         case 1:
-            let names = sh("osascript -e 'tell application \"System Events\" to get name of every login item'").trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: ", ").filter { !$0.isEmpty }
-            return names.map { n in Row(icon: nil, title: n, subtitle: "开机时自动启动", actionTitle: "禁止自启", action: { sh("osascript -e 'tell application \"System Events\" to delete login item \"\(n)\"'") }) }
+            switch LoginItems.names() {
+            case .success(let names): return names.map { LoginItems.row($0) }
+            case .failure:
+                return [Row(icon: nil, title: "无法读取登录项", subtitle: "读取失败或未获得系统权限，请检查系统提示后刷新", actionTitle: nil, action: nil)]
+            }
         case 2:
             return Sys.appUsage(ps).filter { Sys.isBrowser($0.name) }.map { u in let a = u.app
-                return Row(icon: a.icon, title: u.name, subtitle: String(format: "占用 %.1f GB 内存", u.memGB), actionTitle: "退出", action: { _ = a.terminate() }) }
+                return Row(icon: a.icon, title: u.name, subtitle: String(format: "占用 %.1f GB 内存", u.memGB), actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
         case 3:
             let sp = Sys.cpu(["corespotlightd", "helpd", "mds_stores"], ps)
-            return [Row(icon: nil, title: "Spotlight 索引服务", subtitle: String(format: "当前占用 %.0f%% CPU，", sp) + (sp > 40 ? "可能卡住了，建议重启" : "状态正常"), actionTitle: "重启索引", action: Sys.restartSpotlight)]
+            let targets = ps.filter { ["corespotlightd", "helpd", "mds_stores"].contains($0.name) }.map(\.pid)
+            return [Row(icon: nil, title: "Spotlight 索引服务", subtitle: String(format: "当前占用 %.0f%% CPU，", sp) + (sp > 40 ? "可能卡住了，建议重启" : "状态正常"), actionTitle: targets.isEmpty ? nil : "重启索引", action: Sys.restartSpotlight,
+                        verify: { !targets.isEmpty && targets.allSatisfy { !OperationCheck.processExists($0) } })]
         case 4:
             let vm = ps.filter { $0.name == Sys.vmName }
             if vm.isEmpty { return [] }
-            return [Row(icon: nil, title: "虚拟机（Claude 桌面版等）", subtitle: String(format: "占用 %.0f%% CPU、%.1f GB 内存", vm.reduce(0) { $0 + $1.cpu }, vm.reduce(0) { $0 + $1.rss } / 1048576), actionTitle: "退出 Claude", action: Sys.quitClaude)]
+            let targets = NSWorkspace.shared.runningApplications.filter { $0.bundleIdentifier == "com.anthropic.claudefordesktop" }
+            return [Row(icon: nil, title: "虚拟机（Claude 桌面版等）", subtitle: String(format: "占用 %.0f%% CPU、%.1f GB 内存", vm.reduce(0) { $0 + $1.cpu }, vm.reduce(0) { $0 + $1.rss } / 1048576), actionTitle: targets.isEmpty ? nil : "退出 Claude", action: Sys.quitClaude,
+                        verify: { !targets.isEmpty && targets.allSatisfy { $0.isTerminated } })]
         case 5:
             let v = Sys.appUsage(ps).filter { Sys.isVPN($0.name) }
             return v.map { u in let a = u.app
-                return Row(icon: a.icon, title: u.name, subtitle: v.count > 1 ? "⚠️ 同时开着 \(v.count) 个 VPN，建议只留一个" : "运行中", actionTitle: "退出", action: { _ = a.terminate() }) }
+                return Row(icon: a.icon, title: u.name, subtitle: v.count > 1 ? "⚠️ 同时开着 \(v.count) 个 VPN，建议只留一个" : "运行中", actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
         case 6:
             let ws = Sys.cpu(["WindowServer"], ps)
             let tr = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency, mo = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -390,6 +440,7 @@ struct Overview: View {
 // MARK: - 工具页（列表 + 详情）
 struct ToolPage: View {
     let feature: Feature
+    @StateObject private var operation = ToolOperation()
     @State private var rows: [Row] = []
     @State private var loading = true
     @State private var sel = 0
@@ -399,6 +450,7 @@ struct ToolPage: View {
             PageHeader(title: feature.title, sub: feature.sub) {
                 Button { loading = true; reload() } label: { Label("刷新", systemImage: "arrow.clockwise") }
                     .buttonStyle(PillButton(filled: false))
+                    .disabled(operation.busy)
             }
             if loading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -448,12 +500,17 @@ struct ToolPage: View {
                 Text(r.subtitle).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 Hairline()
                 if let t = r.actionTitle, r.action != nil {
-                    Button(t) { run(r) }.buttonStyle(PillButton()).frame(maxWidth: .infinity)
+                    Button(operation.busy ? "正在核对…" : t) { run(r) }.buttonStyle(PillButton()).frame(maxWidth: .infinity)
+                        .disabled(operation.busy)
                     HStack(spacing: 6) { Kbd(text: "↵"); Text("主操作").font(DS.cap()).foregroundColor(.secondary) }
                 } else {
                     Text("这项不需要处理").font(DS.sub()).foregroundColor(.secondary)
                 }
                 Spacer(minLength: 0)
+                if !operation.note.isEmpty {
+                    Text(operation.note).font(DS.sub()).foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("tool.operation.status")
+                }
                 Text("列表共 \(rows.count) 项 · ↑↓ 选择").font(DS.cap()).foregroundColor(.secondary)
             } else {
                 EmptyState(symbol: feature.icon, title: "选择一项")
@@ -462,15 +519,12 @@ struct ToolPage: View {
         .padding(12).frame(maxHeight: .infinity, alignment: .topLeading).card()
     }
     func run(_ r: Row) {
-        guard let t = r.actionTitle, let act = r.action else { return }
+        guard !operation.busy, let t = r.actionTitle, r.action != nil else { return }
         guard FixRunner.confirm(t + "？", r.title + "。操作后会重新读取列表；未确认的结果不会计入优化统计。", t) else { return }
         ToastCenter.shared.show("正在执行：" + r.title, symbol: "clock", tint: accent)
-        DispatchQueue.global().async {
-            act()
-            DispatchQueue.main.async {
-                ToastCenter.shared.show("已发起：" + r.title + "，请核对刷新后的状态", symbol: "arrow.clockwise", tint: accent)
-                reload()
-            }
+        operation.perform(r) { verified, message in
+            ToastCenter.shared.show(message, symbol: verified ? "checkmark.circle" : "info.circle", tint: verified ? good : accent)
+            reload()
         }
     }
     func reload() {

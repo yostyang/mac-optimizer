@@ -159,13 +159,13 @@ extension MOTests {
         check((try? String(contentsOfFile: items[3].path, encoding: .utf8)) == "new", "已有文件保持不变")
 
         sec("2.4 息屏不断网自动核对（不触发熄屏/睡眠）")
-        let before = sh("/usr/bin/pmset -g custom")
+        let before = ProcessRunner.run("/usr/bin/pmset", ["-g", "custom"]).out
         let suite = "mo-v24-dock-" + UUID().uuidString
         let dock = DockMode(defaults: UserDefaults(suiteName: suite)!); dock.observe = false
         dock.readPower = { true }; dock.readExternal = { true }
         dock.setEnabled(true)
         check(dock.active && DockMode.systemSeesAssertion(), "开启后系统里有「阻止空闲睡眠」断言")
-        let pa = sh("/usr/bin/pmset -g assertions")
+        let pa = ProcessRunner.run("/usr/bin/pmset", ["-g", "assertions"]).out
         check(pa.components(separatedBy: "\n").contains { $0.contains("pid \(getpid())(") && $0.contains("PreventUserIdleSystemSleep") }, "pmset -g assertions 能看到本进程的阻止空闲睡眠断言")
         dock.screens(asleep: true); dock.readExternal = { false }; dock.evaluate()
         check(dock.active, "熄屏期间外接屏“断开”不撤销断言")
@@ -174,8 +174,8 @@ extension MOTests {
         dock.readExternal = { true }; dock.evaluate(); check(dock.active, "重新接上恢复")
         dock.readPower = { false }; dock.evaluate(); check(!dock.active, "拔电后撤销，不在电池下阻止睡眠")
         dock.readPower = { true }; dock.evaluate(); dock.setEnabled(false)
-        check(!dock.active && !DockMode.systemSeesAssertion() && !sh("/usr/bin/pmset -g assertions").components(separatedBy: "\n").contains { $0.contains("pid \(getpid())(") && $0.contains("PreventUserIdleSystemSleep") }, "关闭后断言完全释放")
-        check(sh("/usr/bin/pmset -g custom") == before, "全程没有改动 pmset 睡眠设置（只用断言，关掉即恢复）")
+        check(!dock.active && !DockMode.systemSeesAssertion() && !ProcessRunner.run("/usr/bin/pmset", ["-g", "assertions"]).out.components(separatedBy: "\n").contains { $0.contains("pid \(getpid())(") && $0.contains("PreventUserIdleSystemSleep") }, "关闭后断言完全释放")
+        check(ProcessRunner.run("/usr/bin/pmset", ["-g", "custom"]).out == before, "全程没有改动 pmset 睡眠设置（只用断言，关掉即恢复）")
         UserDefaults().removePersistentDomain(forName: suite)
     }
 

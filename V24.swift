@@ -88,7 +88,7 @@ enum NetTop {
         }
         return out
     }
-    static func run(_ type: String) -> String { sh("/usr/bin/nettop -P -L 1 -n -x -t \(type) -J bytes_in,bytes_out 2>/dev/null") }
+    static func run(_ type: String) -> String { ProcessRunner.run("/usr/bin/nettop", ["-P", "-L", "1", "-n", "-x", "-t", type, "-J", "bytes_in,bytes_out"]).out }
     static let vpnNames = ["letsvpn", "鹊桥", "clash", "mihomo", "sing-box", "surge", "stash", "v2ray", "xray", "shadowrocket", "quantumult", "loon", "hiddify", "nekoray", "tailscale", "wireguard", "openvpn"]
     static func looksLikeVPN(_ n: String) -> Bool { let l = n.lowercased(); return vpnNames.contains { l.contains($0) } }
 }
