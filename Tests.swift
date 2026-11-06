@@ -39,6 +39,34 @@ enum MOTests {
         let n = axNodes(w); if n <= 1 { r.append("辅助功能树为空（\(n) 个节点）") }
         return r.isEmpty ? nil : r.joined(separator: "；")
     }
+    /// SwiftUI 的 NSHostingView 通常只在有"辅助功能客户端"来查询之后才生成子元素；
+    /// 测试在进程内用 NSAccessibility 遍历，自己并不算客户端。这里在后台线程用公开 AX API
+    /// 像外部客户端一样查询一次本进程（主线程同时在泵送事件，负责应答），以触发树生成。
+    /// 只读查询，不改任何属性；设 MO_TEST_NO_AX_PRIME=1 可关闭。
+    static let noAXPrime = ProcessInfo.processInfo.environment["MO_TEST_NO_AX_PRIME"] == "1"
+    static func primeAX(_ tag: String) {
+        guard !noAXPrime, AXIsProcessTrusted() else { info("诊断[\(tag)] 跳过 AX 预查询（关闭或未授权）"); return }
+        let pid = getpid()
+        var done = false, seen = 0
+        DispatchQueue.global(qos: .userInitiated).async {
+            let app = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(app, 2)
+            var n = 0
+            func walk(_ e: AXUIElement, _ depth: Int) {
+                guard depth < 6, n < 400 else { return }
+                var v: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &v) == .success, let kids = v as? [AXUIElement] else { return }
+                for k in kids { n += 1; walk(k, depth + 1) }
+            }
+            var ws: CFTypeRef?
+            if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &ws) == .success, let wins = ws as? [AXUIElement] {
+                for w in wins { walk(w, 0) }
+            }
+            DispatchQueue.main.async { seen = n; done = true }
+        }
+        _ = waitUntil(5) { done }
+        info("诊断[\(tag)] AX 预查询完成=\(done) 外部视角元素数=\(seen)")
+    }
     /// 可靠窗口准备：激活后等待真正成为前台，没成功就再请求一次（不改断言，只记录）
     static func ensureActive(_ w: NSWindow, _ tag: String) {
         NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)
@@ -594,6 +622,7 @@ enum MOTests {
         ensureActive(w, "主窗口"); w.makeFirstResponder(w.contentView)
         w.displayIfNeeded()
         settle(2.0)
+        primeAX("主窗口")
         var why = notReady(w)
         if why != nil { _ = waitUntil(6) { Nav.shared.objectWillChange.send(); why = notReady(w); return why == nil } }
         diag("主窗口-准备后", w)
