@@ -365,6 +365,8 @@ final class DisplayManager: ObservableObject {
     @Published var probing = false
     @Published var gammaNotes: [CGDirectDisplayID: String] = [:]
     @Published var ddcNotes: [CGDirectDisplayID: String] = [:]
+    /// 2.8：最近一次硬件写入（失败后「重试」用）
+    var lastDDCAttempt: [CGDirectDisplayID: (code: VCP, value: Int)] = [:]
     @Published var profileStates: [CGDirectDisplayID: DisplayProfileState] = [:]
     @Published var profileNotes: [CGDirectDisplayID: String] = [:]
     @Published var profilesLoading = false
@@ -519,6 +521,7 @@ final class DisplayManager: ObservableObject {
         if [.colorPreset, .displayMode].contains(code), !(ddc[id]?.caps.values[code.rawValue]?.contains(UInt8(clamping: value)) ?? false), originalDDC[display.key]?[code.rawValue] != value { return }
         let key = DDCOperationKey(display: id, code: code.rawValue), token = UUID(), revision = epoch
         ddcWork[key]?.cancel(); ddcTokens[key] = token; ddcPending[key] = value; ddcNotes[id] = "正在应用并核对…"
+        lastDDCAttempt[id] = (code, value)
         let work = DispatchWorkItem {
             let valid = DispatchQueue.main.sync { self.epoch == revision && self.ddcTokens[key] == token }
             guard valid else { return }

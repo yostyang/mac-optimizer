@@ -49,7 +49,9 @@ struct AppTrafficList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if t.updated == nil || (t.live.isEmpty && t.liveForwarder == nil) {
-                Text(t.updated == nil ? "正在采样（两次读数相减才有速率，约 2 秒）…" : "这 2 秒内没有应用在收发数据").font(.system(size: 11)).foregroundColor(.secondary)
+                StateLine(kind: t.updated == nil ? .loading : .empty,
+                          text: t.updated == nil ? "正在采样" : "这 2 秒内没有应用在收发数据",
+                          detail: t.updated == nil ? "两次读数相减才有速率，约 2 秒。" : "", id: "apptraffic.state")
             }
             ForEach(t.live.prefix(limit)) { a in
                 HStack(spacing: 6) {
@@ -123,7 +125,7 @@ struct TrafficTab24: View {
                 Text("有记录 \(coverage(tot.coveredMinutes))").foregroundColor(.secondary)
             }.font(.system(size: 11, weight: .medium)).monospacedDigit()
             let apps = h.apps(range).prefix(5)
-            if apps.isEmpty { Text("这段时间还没有按应用的记录").font(.system(size: 11)).foregroundColor(.secondary) }
+            if apps.isEmpty { StateLine(kind: .empty, text: "这段时间还没有按应用的记录", detail: "App 没运行的时段留空，不按 0 计。", id: "traffic.apps.state") }
             ForEach(Array(apps)) { a in
                 HStack { Text(a.name).font(.system(size: 11)).lineLimit(1); Spacer(); Text("↓ " + Fmt24.bytes(a.inB) + "  ↑ " + Fmt24.bytes(a.outB)).font(.system(size: 11)).monospacedDigit().foregroundColor(.secondary) }
             }
@@ -243,7 +245,7 @@ struct UninstallTab: View {
                 Text("只按 Bundle ID 精确匹配残留；共享的 Group Containers 不列入；系统应用、本应用、白名单里的应用不能卸载；应用在运行时请先自己退出。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }.frame(maxWidth: .infinity)
             Card(title: "卸载记录", icon: "clock.arrow.circlepath") {
-                if u.records.isEmpty { Text("暂无卸载记录").font(.system(size: 11)).foregroundColor(.secondary) }
+                if u.records.isEmpty { StateLine(kind: .empty, text: "暂无卸载记录", id: "uninstall.state") }
                 ForEach(u.records.suffix(6).reversed()) { r in
                     HStack {
                         VStack(alignment: .leading, spacing: 0) {

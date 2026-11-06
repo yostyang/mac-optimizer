@@ -1,6 +1,6 @@
 # Mac 一键优化 · 开发交接
 
-更新：2026-11-05 · 当前代码版本 **2.5（22）** · 最低系统 macOS 13
+更新：2026-11-06 · 当前代码版本 **2.8.0（27）** · 最低系统 macOS 13（2.8 内容见文末「2.8 精致化」）
 
 本文面向接手开发的人：先讲怎么跑起来，再讲 2.5 改了什么、设计令牌在哪、键盘与全局热键怎么接、测试与截图怎么处理，最后是还没做完/需要真机确认的事。
 
@@ -193,3 +193,38 @@
 最终 2.7.0：自检 598、交互 137、截图 72 全部执行项通过；48 次离屏 AX 对比度跳过已注明并人工查看相关截图。批准黄金图后正常复测差异 0.00%；实际 DMG 包内自检 598 通过。详见 `docs/phase-two-summary.md` 和 `docs/release-validation-2.7.0.md`。
 
 后续顺序：发布到 GitHub 并回下载核对哈希，再评估待办。用户新发双列下拉面板参考图暂不实现；电池数据、Keychron、电源/显示器能力与窗口工作流也先评估。首版分屏不考虑 iPad。不要把未验证的硬件读数或数据覆盖缺口当作 0。
+
+## 2026-11-06 · 2.8.0（27）精致化
+
+对应 `docs/BACKLOG.md` 的 U03、U04、B03、B05、D02。新代码集中在 `V28.swift`（状态/单位/功率趋势/能耗覆盖/色彩命名）、`V28Panel.swift`（双列面板）、`V28Tests.swift`。
+
+### U04 统一状态与单位
+- `StateLine(kind:text:detail:actions:updated:id:)`：六种状态 `loading / empty / unknown / stale / failed / done`，状态色只用 `good/warn/bad`，朗读前缀区分状态。失败或空白时用 `StateAction.retry / .refresh / .openSettings(url:)` 给出下一步。新页面写「正在读取」「暂无」「失败」一律用它，不再手写灰字。
+- 单位口径（`extension Fmt`）：`Fmt.watts` 一位小数，`Fmt.percent` 整数，读不到一律 `Fmt.dash`（「—」）而不是 0；时间用 `Fmt.ago`（刚刚 / 42 秒前 / 10 分钟前）、`Fmt.clock`（今天 HH:mm，其他 MM-dd HH:mm）、`Fmt.span`（35 分钟 / 18 小时 40 分）。`UpdatedText` 每 5 秒刷新文字，不触发采样。
+- 已迁移：电池功率/能耗、显示器色彩、改动记录、按应用流量、流量历史、卸载记录、清理白名单、进程列表空状态。其余页面的旧写法（例如清理扫描提示、DNS 失败文案）留待 A03 统一。
+
+### U03 双列菜单面板
+- 宽 400（`PanelLayout.width`），结构：结论头（图标 + 健康分 + 不卡/有点卡/很卡）→ 系统芯片行（`ViewThatFits` 放不下时依次去掉代理、运行时长）→ 3×2 指标卡（`PanelTile`，右上角状态标签：温度、内存压力、容量、网络类型、风扇个数）→ 电池宽卡（外设电量 `DeviceRing`，读不到画虚线环、朗读「电量未取得」）→ 进程列表（CPU / 内存列头对齐）→ 6 个快捷操作两行网格 + 优化记录。
+- 保留的标识：`panel.open`、`panel.traffic`（现在在网络卡上）、`panel.battery.compact`、`act.*`；新增 `panel.header / panel.metrics / panel.battery / panel.stats / panel.device.<名称>`。
+- 只用 DS 令牌；参考图里的风扇调速按钮没有做（需要特权写 SMC，会改动充电助手 → 用户要重新授权，也不符合「只读风扇」的现状）。
+- 面板高度约 840（`PanelHeight` 仍按屏幕可见高度封顶，矮屏幕可无滚动条滚动）。黄金图 `goldens/panel-*.png` 已按新样式重拍；截图时蓝牙外设用 `V28.btFixture()` 固定数据。
+
+### B03 电池功率趋势
+- `PowerHistory`：只在内存里保留最近 2 小时；`Monitor.sample` 末尾 `record(snapshot)`，同一读数时间戳只记一次，超过 30 秒的旧读数不记。前台每 10 秒读一次电池（原有），后台新增每 30 秒读一次（只读 AppleSmartBattery 一个 IORegistry 对象）。
+- 三条线分开画、不相加：输入（电源遥测）、充入、放电；系统功耗是估算，不画。相邻样本间隔 > 75 秒算断档，接电/拔电处断线并画虚线；`PowerHistory.segments` 是唯一的分段逻辑。
+- 「功率与能耗」标签改为左右两列：左「整机功率 + 功率趋势」，右「电池详情 + 应用能耗」。原「紧凑条（菜单栏面板同款）」卡已去掉（面板不再用 `BatteryCompactBar`）。
+
+### B05 能耗采样覆盖
+- `EnergyStore` 新增可选字段 `sampled`（小时 → 采到的分钟数）、`firstSample`、`lastSample`；旧版 `energy.json` 没有这些字段仍能读，界面注明「约从…（旧记录按小时推断）」。
+- `EnergyCoverage.compute(store, range:, now:)` 给出覆盖分钟、覆盖比例（只从首次采样起算）、每格覆盖、缺口段数；`CoverageStrip` 画在时间范围选择器旁。没有数据时显示 `StateLine`，不显示 0。
+- 文案明确区分：应用能耗 = 按进程估算的处理器能耗（`ri_energy_nj`），整机功率 = 电源遥测与电池电流。
+
+### D02 色彩模式语义
+- 色彩模式卡分三组：① 系统 ICC（只改 Mac 输出换算）② 显示器硬件（VCP 0x14 色彩预设、0xDC 显示模式，写入显示器本身）③ 软件色温（右侧护眼卡）。
+- 命名优先级：本机命名 > MCCS 标准名 > 编号。`DDCCaps.modeName`（0xDC）与 `presetStandardName`（0x14）；`DDCNames` 按「显示器身份 | VCP | 值」保存到 `UserDefaults` 的 `ddc.localNames`，多屏互不影响，留空恢复默认。
+- 反馈：`DDCFeedback.kind(note)` 把原有核对文案映射成统一状态；失败时给「重试」（`DisplayManager.lastDDCAttempt`）和「恢复」。
+
+### 测试与验收
+- 基线（2.7.0 原样）在用户机器上：自检 598 / 界面 137 / 截图 72 全绿。
+- 2.8 结果与真机待办见 PR 描述；`./measure.sh` 的面板打开 CPU/RSS 对比、矮屏面板观感、真实外设（含 Keychron「未取得」）与 Kuycon 显示器的硬件模式命名需在真机核对。
+- Codex 沙盒里可以编译（`SWIFTFLAGS=-disable-sandbox`、`TMPDIR` 指到项目内），但启动不了图形界面；`test.sh` 必须在普通终端跑。

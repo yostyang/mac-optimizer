@@ -472,12 +472,15 @@ final class Monitor: ObservableObject {
         } else if x.diskTotalGB == 0 { Readers.disk(into: &x) }
         if !full && DispatchQueue.main.sync(execute: { BatteryAlerts.shared.settings.menuIndicator == "net" }) { Readers.network(into: &x) }
         if !full && alertsEnabled && tick % 6 == 1 { Readers.disk(into: &x); Readers.battery(into: &x) }
+        // 2.8 功率趋势：后台每 30 秒读一次电池（只读 IORegistry 一个对象，开销很小）；前台沿用每 10 秒
+        else if !full && tick % 6 == 1 { Readers.battery(into: &x) }
         let full2 = full
         DispatchQueue.main.async {
             self.s = x
             func push(_ a: inout [Double], _ v: Double) { a.append(v); if a.count > self.histLen { a.removeFirst(a.count - self.histLen) } }
             push(&self.cpuHist, x.cpu)
             if full2 { push(&self.gpuHist, x.gpu ?? 0); push(&self.upHist, x.upBps); push(&self.downHist, x.downBps) }
+            PowerHistory.shared.record(x)
             self.onSample?(x)
         }
     }
