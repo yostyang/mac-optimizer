@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mac 一键优化改版方案</title>
+<style>
+/* 布局：单栏文档，内嵌按 App 真实令牌绘制的界面示意；示意随浏览者的浅色/深色主题切换 */
+:root{
+  --bg:#F2F2F5; --card:#FFFFFF; --fg:#1B1B24; --sub:#6B6B78; --ter:#9A9AA6; --border:rgba(20,20,40,.09);
+  --accent:#6B5CFA; --accentText:#5B4BE8; --accent2:#2EB3F5;
+  --good:#0E9F6E; --warn:#B26A00; --bad:#D93B3B;
+  --m-cpu:#0F9D9A; --m-gpu:#4F6BED; --m-mem:#C2418C; --m-disk:#1E88C8; --m-net:#2EB3F5; --m-bat:#4D9E1F; --m-fan:#64748B;
+  --win:#ECECF1; --tile:#FFFFFF; --code:#F7F7FA;
+  --sans:-apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --num:"SF Pro Rounded",ui-rounded,-apple-system,"PingFang SC",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16162A; --card:#1E1E33; --fg:#ECECF4; --sub:#A3A3B8; --ter:#74748A; --border:rgba(255,255,255,.09);
+  --accent:#7C6BFF; --accentText:#A99BFF; --accent2:#4CC2FF;
+  --good:#34D399; --warn:#FFB340; --bad:#FF6B6B;
+  --m-cpu:#3DD6D0; --m-gpu:#8EA2FF; --m-mem:#F27BBE; --m-disk:#5DB8F0; --m-net:#4CC2FF; --m-bat:#8BD45A; --m-fan:#9AA8BC;
+  --win:#12121F; --tile:#1B1B2E; --code:#1A1A2C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16162A; --card:#1E1E33; --fg:#ECECF4; --sub:#A3A3B8; --ter:#74748A; --border:rgba(255,255,255,.09);
+  --accent:#7C6BFF; --accentText:#A99BFF; --accent2:#4CC2FF;
+  --good:#34D399; --warn:#FFB340; --bad:#FF6B6B;
+  --m-cpu:#3DD6D0; --m-gpu:#8EA2FF; --m-mem:#F27BBE; --m-disk:#5DB8F0; --m-net:#4CC2FF; --m-bat:#8BD45A; --m-fan:#9AA8BC;
+  --win:#12121F; --tile:#1B1B2E; --code:#1A1A2C; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 72px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+section{display:flex;flex-direction:column;gap:18px;min-width:0}
+h1{font-size:34px;line-height:1.2;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:22px;margin:0;text-wrap:balance}
+h3{font-size:16px;margin:0}
+p{margin:0;max-width:68ch}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;color:var(--ter);font-weight:600}
+.lede{font-size:17px;color:var(--sub);max-width:62ch}
+.muted{color:var(--sub)} .small{font-size:13px}
+code{font-family:var(--mono);font-size:.88em;background:var(--code);border:1px solid var(--border);border-radius:5px;padding:1px 5px}
+.verdict{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.vcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.vcard b{font-size:15px}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;width:max-content}
+.tag i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.t-keep{color:var(--good);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.t-take{color:var(--accentText);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.t-drop{color:var(--bad);background:color-mix(in srgb,var(--bad) 11%,transparent)}
+/* 表格 */
+.tbl{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12px;color:var(--ter);font-weight:600;letter-spacing:.04em}
+tr:last-child td{border-bottom:0}
+td:first-child{white-space:nowrap;font-weight:600}
+/* 原则 */
+.principles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;counter-reset:p}
+.pr{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.pr h3{display:flex;gap:10px;align-items:baseline}
+.pr h3::before{counter-increment:p;content:counter(p);font-family:var(--num);color:var(--accentText);font-size:14px}
+.pr p{font-size:14px;color:var(--sub)}
+/* 色板 */
+.swatches{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.sw{display:flex;flex-direction:column;gap:6px;font-size:12px;min-width:0}
+.sw span{height:36px;border-radius:8px;border:1px solid var(--border)}
+.sw b{font-size:13px}
+.status-row{display:flex;flex-wrap:wrap;gap:8px}
+/* 示意窗口 */
+.mock{background:var(--win);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.mock-cap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ter)}
+.kpi{display:flex;flex-wrap:wrap;gap:8px 28px;padding:2px 4px}
+.kpi div{display:flex;flex-direction:column;gap:1px}
+.kpi small{font-size:10.5px;letter-spacing:.08em;color:var(--ter);font-weight:600}
+.kpi b{font-size:15px;font-variant-numeric:tabular-nums}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--tile);border:1px solid var(--border);white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--good)}
+.pill.off i{background:var(--ter)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tile{background:var(--tile);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tl{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600}
+.tl svg{width:14px;height:14px;flex:none}
+.tl em{margin-left:auto;font-style:normal;font-weight:500;color:var(--ter);font-size:11.5px}
+.hero{font-family:var(--num);font-size:30px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.hero small{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--sub);margin-left:3px;letter-spacing:0}
+.hero.word{font-family:var(--sans);font-size:26px}
+.chart{width:100%;height:38px;display:block}
+.kv{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+.kv span b{color:var(--fg);font-weight:500}
+.na{color:var(--ter);border-bottom:1px dashed var(--ter);cursor:help}
+.track{height:5px;border-radius:999px;background:color-mix(in srgb,var(--fg) 8%,transparent);overflow:hidden}
+.track i{display:block;height:100%;border-radius:999px}
+.cores{display:flex;gap:3px;align-items:flex-end;height:38px}
+.cores i{flex:1;border-radius:2px;background:var(--m-cpu)}
+.cores i.e{opacity:.45}
+.subs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border);padding-top:10px}
+.subs div{display:flex;flex-direction:column;gap:1px;padding:0 10px;border-left:1px solid var(--border);min-width:0}
+.subs div:first-child{border-left:0;padding-left:0}
+.subs small{font-size:10.5px;letter-spacing:.08em;color:var(--ter);font-weight:600}
+.subs b{font-family:var(--num);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.subs b small{font-family:var(--sans);font-size:11px;color:var(--sub);font-weight:500;letter-spacing:0;margin-left:2px}
+.barlist{display:flex;flex-direction:column;gap:9px}
+.bl{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:2px 8px;align-items:center;font-size:13px}
+.bl .ic{width:18px;height:18px;border-radius:5px}
+.bl b{font-weight:500;font-variant-numeric:tabular-nums}
+.bl .track{grid-column:2 / 4;height:3px}
+.seg{display:inline-flex;background:color-mix(in srgb,var(--fg) 6%,transparent);border-radius:6px;padding:2px;font-size:11px;margin-left:auto}
+.seg span{padding:1px 9px;border-radius:5px;color:var(--sub)}
+.seg span.on{background:var(--tile);color:var(--fg);box-shadow:0 0 0 1px var(--border)}
+.foot{font-size:11.5px;color:var(--ter);padding:0 4px}
+.span2{grid-column:span 2}
+.netgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
+.netgrid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:12px}
+/* 面板前后对比 */
+.compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.panel{background:var(--win);border:1px solid var(--border);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;max-width:380px;width:100%;min-width:0}
+.prow{display:grid;grid-template-columns:20px 44px 1fr minmax(60px,1.3fr);gap:8px;align-items:center;font-size:13px}
+.prow .ib{width:20px;height:20px;border-radius:5px;display:grid;place-items:center}
+.prow .ib svg{width:12px;height:12px}
+.prow .v{font-family:var(--num);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.prow .nm{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.prow .nm small{font-size:10.5px;color:var(--ter);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow.new{grid-template-columns:20px minmax(0,1fr) auto minmax(70px,1fr)}
+.ptop{display:flex;align-items:center;gap:10px;padding:4px 2px}
+.ptop .ring{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-family:var(--num);font-weight:700;font-size:14px;
+  background:conic-gradient(var(--accent2),var(--accent) 83%,color-mix(in srgb,var(--fg) 10%,transparent) 0);position:relative}
+.ptop .ring::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--win)}
+.ptop .ring span{position:relative;z-index:1}
+.ptop b{font-size:15px}
+.ptop small{display:block;font-size:11px;color:var(--ter)}
+.pbox{background:var(--tile);border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+.proc{display:grid;grid-template-columns:minmax(0,1fr) 54px 54px;gap:6px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.proc span:nth-child(n+2){text-align:right}
+.c-bad{color:var(--bad)} .c-warn{color:var(--warn)} .c-sub{color:var(--sub)} .c-blue{color:var(--accent2)}
+.label-old{font-size:12px;color:var(--ter)}
+/* 分期 */
+.phases{display:flex;flex-direction:column;gap:10px}
+.ph{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1fr);gap:18px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.ph h3{font-size:15px}
+.ph .no{font-family:var(--num);font-size:13px;color:var(--accentText);font-weight:700}
+.ph ul{margin:0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:3px}
+.ph .acc{font-size:13px;color:var(--sub)}
+.ph .acc b{color:var(--fg);font-size:12px;letter-spacing:.06em;display:block;margin-bottom:3px}
+.risks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:860px){
+  .grid3,.netgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .netgrid .lat{grid-column:span 2}
+  .swatches{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .ph{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .verdict,.principles,.grid3,.netgrid,.netgrid2,.compare,.risks{grid-template-columns:1fr}
+  .netgrid .lat,.span2{grid-column:auto}
+  h1{font-size:28px}
+  .pills{margin-left:0}
+}
+@media (prefers-reduced-motion:no-preference){.tile{transition:border-color .15s}.tile:hover{border-color:color-mix(in srgb,var(--accent) 35%,var(--border))}}
+</style>
+<style>*,*::before,*::after{box-sizing:border-box}img{max-width:100%}</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-cpu" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-gpu" viewBox="0 0 16 16"><path d="M8 1.8 14 5 8 8.2 2 5Z M2 8l6 3.2L14 8 M2 11l6 3.2 6-3.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-mem" viewBox="0 0 16 16"><rect x="1.8" y="4.5" width="12.4" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 11.5v2M8 11.5v2M11 11.5v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 16 16"><rect x="1.8" y="8" width="12.4" height="5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 8l1.6-4.5h6.8L13 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="11.5" cy="10.5" r=".9" fill="currentColor"/></symbol>
+    <symbol id="i-net" viewBox="0 0 16 16"><path d="M5 2.5v10M2.5 10 5 12.5 7.5 10M11 13.5v-10M8.5 6 11 3.5 13.5 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bat" viewBox="0 0 16 16"><rect x="1.5" y="4.5" width="11.5" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="3.2" y="6.2" width="6.6" height="3.6" rx=".8" fill="currentColor"/><path d="M14.5 7v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-fan" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.4" fill="currentColor"/><path d="M8 6.6C6 3 9.5 1.5 10.5 3.5S9.6 6.8 8 6.6ZM9.4 8c3.6-2 5.1 1.5 3.1 2.5S9.2 9.6 9.4 8ZM8 9.4c2 3.6-1.5 5.1-2.5 3.1S6.4 9.2 8 9.4ZM6.6 8C3 10 1.5 6.5 3.5 5.5S6.8 6.4 6.6 8Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 16 16"><path d="M8 14.2c-2.8 0-4.6-1.9-4.6-4.4 0-2.9 2.6-4.3 2.9-7.6 2.5 1.4 3.4 3.4 3.3 5 .7-.4 1.2-1.1 1.4-2 1.2 1.2 1.6 2.8 1.6 4.6 0 2.5-1.8 4.4-4.6 4.4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-lat" viewBox="0 0 16 16"><path d="M1.5 8h2.2l1.5-4 2.4 8 2-6 1.3 2h3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:14px">
+  <div class="eyebrow">MAC 一键优化 · 界面优化方案 · 2026-11-06</div>
+  <h1>从「有界面」到「看得懂的数据」</h1>
+  <p class="lede">参考你选的两张界面，保留现在的列表结构和品牌紫，把监控类页面改成「大数字 + 整卡曲线 + 二级数据」的卡片，指标和状态各用一套颜色。下面是原则、规范调整、页面示意和分四期的落地计划。</p>
+  <p class="small muted">示意图里的数字都是示例值。示意直接用 App 现有的灰阶、品牌紫和状态色绘制，浅色和深色跟随你的系统主题切换。</p>
+</header>
+
+<section>
+  <h2>一句话结论</h2>
+  <div class="verdict">
+    <div class="vcard"><span class="tag t-keep"><i></i>保留</span><b>2.5 的结构</b><p class="small muted">中性灰阶、品牌紫、列表 + 详情、键盘操作、⌘K 面板、底部状态栏。菜单栏面板的紧凑列表也保留。</p></div>
+    <div class="vcard"><span class="tag t-take"><i></i>借鉴</span><b>两张参考图的数据表达</b><p class="small muted">大数字配小单位，曲线横跨整张卡片，主数字下面放子数据，注明数据来源，每类指标固定一个色相。</p></div>
+    <div class="vcard"><span class="tag t-drop"><i></i>去掉</span><b>现在的不一致</b><p class="small muted">约 230 处直接写的字号、31 处直接写的颜色、CPU 数字用青蓝色、醒目的「不可读」、混在监控页里的设置开关。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>现状的主要问题</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>位置</th><th>问题</th><th>改法</th></tr></thead>
+    <tbody>
+      <tr><td>主数字</td><td><code>DS.num(17)</code>，和标签、图标分量差不多，扫一眼抓不到重点</td><td>新增 <code>DS.hero()</code>，30pt、rounded 字体、等宽数字，单位缩小变灰</td></tr>
+      <tr><td>曲线</td><td>面板里的迷你曲线只占中间一段，右边空着；监控页的曲线贴在卡片中部</td><td>曲线横跨整张卡片，加淡色面积和末端圆点</td></tr>
+      <tr><td>颜色</td><td>青蓝 <code>accent2</code> 被用在进程 CPU 数字上，和规范冲突；<code>Color.orange/red</code> 直接写在页面里</td><td>指标色和状态色各成一套；数字只在超过阈值时着状态色</td></tr>
+      <tr><td>二级信息</td><td>面板每行只剩一个百分比；温度、负载、压力、交换都被拿掉了</td><td>每行加一行灰色小字；监控卡片固定 2～4 行键值</td></tr>
+      <tr><td>读不到的值</td><td>「充电 不可读 · 系统 不可读」显示得很醒目</td><td>统一显示灰色「—」，悬停说明原因</td></tr>
+      <tr><td>页面职责</td><td>实时监控页底部放着「菜单栏显示 / 登录启动」开关，快捷操作里开关和像按钮的小标签并排</td><td>设置类开关挪到「设置」页；正在生效的状态改成顶栏的状态标签</td></tr>
+      <tr><td>读屏支持</td><td><code>accessibilityLabel</code> 只有 4 处，只有图标的按钮用 VoiceOver 读不出用途</td><td>新组件默认带朗读文字，例如「CPU 37%，温度 68 度」</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>6 条设计原则</h2>
+  <div class="principles">
+    <div class="pr"><h3>大数字配小单位</h3><p>数值约 30pt，单位 13pt、灰色。数字就是视觉中心，不用渐变和彩色方块来撑场面。</p></div>
+    <div class="pr"><h3>每张卡片三层</h3><p>标签行（左边名称，右边补充信息，如「均温 68°C」），中间是大数字和图表，底部 2～4 行二级数据。</p></div>
+    <div class="pr"><h3>颜色只用来表示数据</h3><p>每类指标固定一个色相，只用在标签文字和图表上。卡片和背景保持中性。状态色单独一套，只在超过阈值时出现。</p></div>
+    <div class="pr"><h3>图表是卡片的一部分</h3><p>曲线横跨整张卡片，带淡色面积和末端圆点；不再是缩在中间的小迷你图。</p></div>
+    <div class="pr"><h3>主数字下面放子数据</h3><p>例如延迟卡片里大字是「28 ms」，下面用竖线分隔开「路由器 / DNS / 代理」三个小指标。</p></div>
+    <div class="pr"><h3>说清数据来源</h3><p>「1 分钟负载（非百分比）」「仅读取」「状态来自 macOS 热压力」，页面底部再加一行采样频率和单位说明。这是你们已有的长处，把它固定成组件。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>设计规范调整</h2>
+  <p class="muted">改在 <code>V25Design.swift</code> 和 <code>CDSDesign.swift</code>；旧的 <code>CDS</code> 令牌继续指向同一套值。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>令牌</th><th>现在</th><th>改为</th></tr></thead>
+    <tbody>
+      <tr><td>DS.hero()</td><td>无，主数字用 <code>DS.num(17)</code></td><td>30pt semibold rounded，等宽数字；菜单栏面板用 22pt</td></tr>
+      <tr><td>DS.unit()</td><td>无</td><td>13pt medium，<code>.secondary</code></td></tr>
+      <tr><td>DS.label()</td><td><code>IconBadge</code> 彩色方块 + 名称</td><td>12.5pt semibold，指标色；配 14pt 线条图标。彩色方块只留给列表行</td></tr>
+      <tr><td>DS.eyebrow()</td><td>无</td><td>10.5pt semibold，字距加宽，<code>.tertiary</code>，用于子数据小标题</td></tr>
+      <tr><td>DS.metric.*</td><td>混用 <code>accent2</code>、<code>Color.orange</code> 等</td><td>7 个指标色，浅色和深色各一套，进对比度测试</td></tr>
+      <tr><td>卡片</td><td>圆角 10，内边距 12</td><td>圆角 12，内边距 16，间距 12；深色下卡片比背景深一档</td></tr>
+      <tr><td>Unavailable</td><td>显示「不可读」</td><td>灰色「—」加虚线下划线，悬停和朗读时说明原因</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 style="margin-top:6px">指标色（只用在标签和图表上）</h3>
+  <div class="swatches">
+    <div class="sw"><span style="background:var(--m-cpu)"></span><b>CPU</b>青绿</div>
+    <div class="sw"><span style="background:var(--m-gpu)"></span><b>GPU</b>靛蓝</div>
+    <div class="sw"><span style="background:var(--m-mem)"></span><b>内存</b>玫红</div>
+    <div class="sw"><span style="background:var(--m-disk)"></span><b>磁盘</b>天蓝</div>
+    <div class="sw"><span style="background:var(--m-net)"></span><b>网络</b>青蓝</div>
+    <div class="sw"><span style="background:var(--m-bat)"></span><b>电池</b>草绿</div>
+    <div class="sw"><span style="background:var(--m-fan)"></span><b>风扇</b>石板灰</div>
+  </div>
+  <p class="small muted">参考图 1 用纯绿表示 CPU、橙色表示内存，会和「正常 / 注意」的状态色撞色。这里有意避开纯绿、橙、红，让指标色永远不会被看成状态。</p>
+  <h3 style="margin-top:6px">状态色（只在超过阈值时出现）</h3>
+  <div class="status-row">
+    <span class="tag t-keep"><i></i>正常 good</span>
+    <span class="tag" style="color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)"><i></i>注意 warn</span>
+    <span class="tag t-drop"><i></i>危险 bad</span>
+  </div>
+</section>
+
+<section>
+  <h2>新组件</h2>
+  <p class="muted">放进 <code>V25Design.swift</code>，替换 <code>Dashboard.swift</code> 里的 <code>MetricTiles</code> 和 <code>BigValue</code>。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>组件</th><th>作用</th><th>用在</th></tr></thead>
+    <tbody>
+      <tr><td>MetricTile</td><td>三层卡片：标签行、大数字加单位、图表位置、键值行 <code>[(键, 值)]</code></td><td>实时监控、电池、网络、概览</td></tr>
+      <tr><td>SubStats</td><td>用竖线分隔的 2～4 个小指标，小标题在上、数值在下</td><td>延迟、总流量、电池功率</td></tr>
+      <tr><td>KPIStrip</td><td>页面顶部不带卡片的一行关键指标</td><td>实时监控、网络、概览</td></tr>
+      <tr><td>StatusPill</td><td>带圆点的状态标签，例如「● 充电上限 80%」</td><td>顶栏右侧、菜单栏面板顶部</td></tr>
+      <tr><td>BarList</td><td>名称加数值，下面一条细横条表示占比</td><td>联网应用流量、高占用进程</td></tr>
+      <tr><td>InlineSegment</td><td>卡片内的小号分段切换（今天 / 本月）</td><td>流量、测速历史</td></tr>
+      <tr><td>Footnote</td><td>页面底部的数据说明</td><td>所有监控类页面</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>示意 1 · 实时监控（改动最大）</h2>
+  <p class="muted">3×3 卡片网格。原来页面下方的快捷操作挪到顶栏状态标签，「菜单栏显示 / 登录启动」挪到「设置」页。</p>
+  <div class="mock" role="img" aria-label="实时监控页改版示意：顶部一行关键指标和状态标签，下面九张指标卡片">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="kpi">
+        <div><small>芯片</small><b>M2 Max · 96 GB</b></div>
+        <div><small>系统</small><b>macOS 15.7</b></div>
+        <div><small>开机</small><b>8 天 9 小时</b></div>
+        <div><small>网络</small><b>Wi-Fi · 直连</b></div>
+      </div>
+      <div class="pills">
+        <span class="pill"><i></i>充电上限 80%</span>
+        <span class="pill"><i></i>接显示器</span>
+        <span class="pill off"><i></i>常亮</span>
+      </div>
+    </div>
+    <div class="grid3">
+      <div class="tile">
+        <div class="tl" style="color:var(--good)"><svg><use href="#i-ok"/></svg>系统状态<em>健康分 92</em></div>
+        <div class="hero word">不卡</div>
+        <div class="kv"><span>主要负载 <b>Xcode 编译</b></span><span>内存压力 <b>正常</b></span><span>状态来自 macOS 热压力和诊断规则</span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-cpu)"><svg><use href="#i-cpu"/></svg>CPU<em>均温 68°C</em></div>
+        <div class="hero">37<small>%</small></div>
+        <div class="cores" aria-hidden="true"><i style="height:92%"></i><i style="height:84%"></i><i style="height:88%"></i><i style="height:80%"></i><i style="height:40%"></i><i style="height:22%"></i><i style="height:18%"></i><i style="height:12%"></i><i class="e" style="height:30%"></i><i class="e" style="height:26%"></i><i class="e" style="height:14%"></i><i class="e" style="height:10%"></i></div>
+        <div class="kv"><span>12 核 · 每核柱状图（第三期）</span><span>1 分钟负载 <b>10.5</b>（非百分比）</span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-gpu)"><svg><use href="#i-gpu"/></svg>GPU<em>均温 66°C</em></div>
+        <div class="hero">15<small>%</small></div>
+        <svg class="chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30 L20 28 L40 31 L60 27 L80 29 L100 26 L120 30 L140 28 L160 29 L180 25 L200 28 L220 27 L240 29 L260 26 L275 14 L285 24 L295 10 L300 20 L300 38 L0 38Z" fill="var(--m-gpu)" opacity=".12"/><polyline points="0,30 20,28 40,31 60,27 80,29 100,26 120,30 140,28 160,29 180,25 200,28 220,27 240,29 260,26 275,14 285,24 295,10 300,20" fill="none" stroke="var(--m-gpu)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+        <div class="kv"><span>38 核 · 驱动报告的设备利用率</span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-mem)"><svg><use href="#i-mem"/></svg>内存<em>压力正常</em></div>
+        <div class="hero">62.5<small>%</small></div>
+        <svg class="chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 16 L60 15 L100 16 L120 19 L160 17 L220 17 L300 16 L300 38 L0 38Z" fill="var(--m-mem)" opacity=".12"/><polyline points="0,16 60,15 100,16 120,19 160,17 220,17 300,16" fill="none" stroke="var(--m-mem)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+        <div class="kv"><span>已用 <b>60.0 / 96.0 GB</b></span><span>交换 <b>0.0 GB</b></span><span>应用 / 锁定 / 压缩明细（第三期）</span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-bat)"><svg><use href="#i-bat"/></svg>电池<em>健康度 85%</em></div>
+        <div class="hero">80<small>%</small></div>
+        <div class="track"><i style="width:80%;background:var(--m-bat)"></i></div>
+        <div class="kv"><span>已暂停充电 · 充电上限 80%</span><span>循环 <b>228 次</b> · 31°C</span><span>充电器功率 <span class="na" title="这台充电器不报告实时输入功率">—</span></span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-fan)"><svg><use href="#i-fan"/></svg>风扇<em>2 个 · 仅读取</em></div>
+        <div class="hero">1513<small>RPM</small></div>
+        <div class="kv"><span>风扇 1 <b>1384</b> / 5349 · 26%</span><span>风扇 2 <b>1513</b> / 5777 · 26%</span><span>大数字为最快那台</span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-disk)"><svg><use href="#i-disk"/></svg>磁盘<em>启动盘 · APFS</em></div>
+        <div class="hero">376<small>GB 可用</small></div>
+        <div class="track"><i style="width:63.5%;background:var(--m-disk)"></i></div>
+        <div class="kv"><span>已用 <b>631.9 / 994.7 GB</b> · 63.5%</span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-net)"><svg><use href="#i-net"/></svg>网络<em>Wi-Fi · en0</em></div>
+        <div class="hero">82<small>KB/s ↓</small></div>
+        <svg class="chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 34 L30 33 L50 28 L70 33 L100 30 L130 24 L150 26 L170 18 L185 22 L200 12 L215 26 L240 30 L270 32 L290 33 L300 20 L300 38 L0 38Z" fill="var(--m-net)" opacity=".12"/><polyline points="0,34 30,33 50,28 70,33 100,30 130,24 150,26 170,18 185,22 200,12 215,26 240,30 270,32 290,33 300,20" fill="none" stroke="var(--m-net)" stroke-width="1.6" vector-effect="non-scaling-stroke"/><polyline points="0,35 40,34 80,33 120,30 160,31 200,28 240,33 300,32" fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke" opacity=".8"/></svg>
+        <div class="kv"><span>↑ 上行 <b>130 KB/s</b></span></div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--warn)"><svg><use href="#i-flame"/></svg>近期高负载<em>最近 94 秒</em></div>
+        <div class="hero word" style="font-size:20px">siriknowledged</div>
+        <div class="kv"><span>平均 <b>0.3</b> 个 CPU 核 · 峰值内存 <b>0.1 GB</b></span><span>在执行后台任务（具体任务未确认）</span><span>原因见概览</span></div>
+      </div>
+    </div>
+    <div class="foot">打开页面时每秒刷新，后台每 5 秒采样。磁盘按十进制 GB，内存按二进制 GiB，温度为已识别传感器的均温。</div>
+  </div>
+  <p class="small muted">最小窗口 1080×720 下必须放得下 3×3。放不下时降成 3×2，把磁盘、风扇、电池合并成一行小卡片；现有的 <code>MOTests.fits</code> 检查会兜底。</p>
+</section>
+
+<section>
+  <h2>示意 2 · 网络首屏</h2>
+  <p class="muted">「诊断 / 测速 / 流量」三个分页保留，首屏先给总览。按应用的流量直接用 2.4 已有的 <code>AppTraffic</code>。</p>
+  <div class="mock" role="img" aria-label="网络页首屏示意：延迟卡片带三个子指标，上行下行卡片，总流量和按应用流量列表">
+    <div class="kpi">
+      <div><small>网络</small><b>Wi-Fi · Home</b></div>
+      <div><small>代理 / VPN</small><b>直连</b></div>
+      <div><small>DNS</small><b>自动（路由器分配）</b></div>
+      <div><small>外网 IP</small><b>203.0.113.1</b></div>
+    </div>
+    <div class="netgrid">
+      <div class="tile lat">
+        <div class="tl" style="color:var(--m-net)"><svg><use href="#i-lat"/></svg>公网延迟<em>11:30 检测</em></div>
+        <div class="hero">28<small>ms</small></div>
+        <div class="subs">
+          <div><small>路由器</small><b>3<small>ms</small></b></div>
+          <div><small>DNS</small><b>22<small>ms</small></b></div>
+          <div><small>丢包</small><b>0<small>%</small></b></div>
+        </div>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--accentText)">上行<em>峰值 2.0 MB/s</em></div>
+        <div class="hero">130<small>KB/s</small></div>
+        <svg class="chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30 L50 29 L100 31 L150 27 L200 30 L250 28 L300 29 L300 38 L0 38Z" fill="var(--accent)" opacity=".12"/><polyline points="0,30 50,29 100,31 150,27 200,30 250,28 300,29" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+      </div>
+      <div class="tile">
+        <div class="tl" style="color:var(--m-net)">下行<em>峰值 18.5 MB/s</em></div>
+        <div class="hero">82<small>KB/s</small></div>
+        <svg class="chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 32 L50 31 L100 30 L150 24 L200 29 L250 31 L300 26 L300 38 L0 38Z" fill="var(--m-net)" opacity=".12"/><polyline points="0,32 50,31 100,30 150,24 200,29 250,31 300,26" fill="none" stroke="var(--m-net)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+      </div>
+    </div>
+    <div class="netgrid2">
+      <div class="tile">
+        <div class="tl">总流量<span class="seg"><span class="on">今天</span><span>本月</span></span></div>
+        <div class="hero">729<small>MB</small></div>
+        <div class="subs" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+          <div><small>下行</small><b>551<small>MB</small></b></div>
+          <div><small>上行</small><b>178<small>MB</small></b></div>
+        </div>
+        <div class="track" style="display:flex;height:6px;gap:2px;background:transparent"><i style="width:75.6%;background:var(--m-net)"></i><i style="width:24.4%;background:var(--accent)"></i></div>
+      </div>
+      <div class="tile">
+        <div class="tl">按应用<em>今天 · 真实字节</em></div>
+        <div class="barlist">
+          <div class="bl"><span class="ic" style="background:var(--m-gpu)"></span><span>Safari</span><b>211.9 MB</b><div class="track"><i style="width:100%;background:var(--m-net)"></i></div></div>
+          <div class="bl"><span class="ic" style="background:var(--m-cpu)"></span><span>Xcode</span><b>170.6 MB</b><div class="track"><i style="width:80%;background:var(--m-net)"></i></div></div>
+          <div class="bl"><span class="ic" style="background:var(--m-mem)"></span><span>微信</span><b>144.2 MB</b><div class="track"><i style="width:68%;background:var(--m-net)"></i></div></div>
+          <div class="bl"><span class="ic" style="background:var(--m-disk)"></span><span>iCloud 云盘</span><b>40.6 MB</b><div class="track"><i style="width:19%;background:var(--m-net)"></i></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>示意 3 · 菜单栏面板（小幅调整）</h2>
+  <p class="muted">结构不动，只做三件事：每行加一行二级小字，曲线拉到行尾，进程 CPU 按阈值着色、不再用青蓝。</p>
+  <div class="compare">
+    <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+      <span class="label-old">现在</span>
+      <div class="panel" role="img" aria-label="现在的菜单栏面板：只有百分比和缩在中间的迷你曲线">
+        <div class="pbox">
+          <div class="prow"><span class="ib" style="background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)"><svg><use href="#i-cpu"/></svg></span><span>CPU</span><span class="v">23%</span><svg viewBox="0 0 100 14" preserveAspectRatio="none" style="width:60%;height:14px"><polyline points="0,8 20,6 40,9 60,7 80,8 100,7" fill="none" stroke="var(--accent2)" stroke-width="1.4" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="prow"><span class="ib" style="background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)"><svg><use href="#i-mem"/></svg></span><span>内存</span><span class="v">60%</span><div class="track" style="width:60%"><i style="width:60%;background:var(--accent2)"></i></div></div>
+          <div class="prow"><span class="ib" style="background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)"><svg><use href="#i-bat"/></svg></span><span>电池</span><span class="v">76%</span><div class="track" style="width:60%"><i style="width:76%;background:var(--accent2)"></i></div></div>
+        </div>
+        <div class="pbox">
+          <div class="proc"><span>Google Chrome Helper</span><span class="c-blue">38%</span><span class="c-sub">1.4 GB</span></div>
+          <div class="proc"><span>WindowServer</span><span class="c-blue">12%</span><span class="c-sub">820 MB</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+      <span class="label-old" style="color:var(--accentText)">改版后</span>
+      <div class="panel" role="img" aria-label="改版后的菜单栏面板：每行带二级说明，曲线到行尾，进程 CPU 按阈值着色">
+        <div class="ptop"><span class="ring"><span>83</span></span><div><b class="c-warn">CPU 有点忙</b><small>MenuBarAgent 占用 103%</small></div><span class="pill" style="margin-left:auto"><i></i>80%</span></div>
+        <div class="pbox">
+          <div class="prow new"><span class="ib" style="color:var(--m-cpu)"><svg><use href="#i-cpu"/></svg></span><span class="nm">CPU<small>68°C · 负载 4.6</small></span><span class="v">68%</span><svg viewBox="0 0 100 18" preserveAspectRatio="none" style="width:100%;height:18px"><path d="M0 14 L15 12 L30 13 L45 10 L60 12 L75 9 L90 11 L100 4 L100 18 L0 18Z" fill="var(--m-cpu)" opacity=".14"/><polyline points="0,14 15,12 30,13 45,10 60,12 75,9 90,11 100,4" fill="none" stroke="var(--m-cpu)" stroke-width="1.4" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="prow new"><span class="ib" style="color:var(--m-mem)"><svg><use href="#i-mem"/></svg></span><span class="nm">内存<small>压力正常 · 交换 9.6 GB</small></span><span class="v">41%</span><div class="track"><i style="width:41%;background:var(--m-mem)"></i></div></div>
+          <div class="prow new"><span class="ib" style="color:var(--m-bat)"><svg><use href="#i-bat"/></svg></span><span class="nm">电池<small>已暂停充电 · 循环 156</small></span><span class="v">84%</span><div class="track"><i style="width:84%;background:var(--m-bat)"></i></div></div>
+        </div>
+        <div class="pbox">
+          <div class="proc"><span>MenuBarAgent</span><span class="c-bad">103%</span><span class="c-sub">51 MB</span></div>
+          <div class="proc"><span>pboard</span><span class="c-warn">30%</span><span class="c-sub">8 MB</span></div>
+          <div class="proc"><span>微信</span><span>27%</span><span class="c-sub">866 MB</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="small muted">进程着色阈值建议：≥ 80% 用 bad，≥ 30% 用 warn，其余用正文色。阈值和 <code>Diagnosis</code> 的判断保持一致，写进同一个常量。</p>
+</section>
+
+<section>
+  <h2>其他页面</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>页面</th><th>改法</th></tr></thead>
+    <tbody>
+      <tr><td>概览</td><td>顶部用 <code>KPIStrip</code> 代替三张 <code>MetricCard</code>；结论卡片和问题清单不变；健康分圆环保留渐变（全局唯一的渐变）</td></tr>
+      <tr><td>电池</td><td>大数字电量，<code>SubStats</code> 放「功率 / 电压 / 温度」，充电上限做成状态标签</td></tr>
+      <tr><td>显示器</td><td>每块屏一张 <code>MetricTile</code>（分辨率、刷新率、亮度），DDC 控件留在详情区</td></tr>
+      <tr><td>清理预览、改动与提醒</td><td>只换字号、卡片和 <code>Footnote</code>，结构不动</td></tr>
+      <tr><td>工具页（列表 + 详情）</td><td>不动，已经符合列表规范；只把直接写的字号收进规范</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>分四期落地</h2>
+  <div class="phases">
+    <div class="ph">
+      <div><div class="no">第一期</div><h3>规范 + 实时监控</h3></div>
+      <ul><li>新增 <code>DS.hero / unit / label / eyebrow / metric</code></li><li>实现 7 个新组件</li><li>实时监控改成 3×3 网格，设置开关挪到「设置」页</li><li>修正进程 CPU 数字的颜色</li></ul>
+      <div class="acc"><b>验收</b>浅色和深色截图、对比度测试、最小窗口放得下。<code>./test.sh --approve</code> 重拍黄金图后，再跑一次 <code>./test.sh</code>。涉及 <code>V25Design.swift</code>、<code>Dashboard.swift</code>、<code>main.swift</code>。</div>
+    </div>
+    <div class="ph">
+      <div><div class="no">第二期</div><h3>网络、面板、概览</h3></div>
+      <ul><li>网络首屏总览</li><li>菜单栏面板加二级信息、曲线到行尾、进程按阈值着色</li><li>概览顶部换成 <code>KPIStrip</code></li></ul>
+      <div class="acc"><b>验收</b>同上，并在真机跑 <code>./measure.sh</code>，确认面板打开时 CPU 和内存没有上升。涉及 <code>NetView.swift</code>、<code>V24View.swift</code>、<code>Dashboard.swift</code>。</div>
+    </div>
+    <div class="ph">
+      <div><div class="no">第三期</div><h3>新增数据 + 清理</h3></div>
+      <ul><li>每核 CPU 柱状图（新增按核读取）</li><li>内存应用 / 锁定 / 压缩明细（读 <code>host_statistics64</code>）</li><li>清理剩余直接写的字号和颜色</li><li><code>test.sh</code> 加检查：页面里不允许直接写字号和颜色</li></ul>
+      <div class="acc"><b>验收</b>新读数有单元测试；检查不通过时 <code>test.sh</code> 判失败。涉及 <code>Monitor.swift</code> 和各页面。</div>
+    </div>
+    <div class="ph">
+      <div><div class="no">第四期</div><h3>其余页面 + 文档</h3></div>
+      <ul><li>电池、显示器、清理、改动与提醒换用新组件</li><li>新组件补齐朗读文字</li><li>更新 README、HANDOFF 和 <code>docs/</code> 截图</li></ul>
+      <div class="acc"><b>验收</b>VoiceOver 能读出每张卡片的名称和数值；文档版本号与 <code>Info.plist</code> 一致。</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>注意事项</h2>
+  <div class="risks">
+    <div class="vcard"><b>不照搬参考图</b><p class="small muted">不用参考图 1 的暖色背景，也不用参考图 2 那款产品的配色和标志。只借鉴卡片结构、字号层级和数据表达，品牌紫保留。</p></div>
+    <div class="vcard"><b>颜色别太花</b><p class="small muted">7 个指标色加 3 个状态色容易显得花。指标色只用在标签文字和图表线上，不做大面积填充。</p></div>
+    <div class="vcard"><b>性能</b><p class="small muted">整卡宽曲线和 3×3 网格会让重绘面积更大。曲线继续复用 <code>Monitor</code> 已有的历史数据，不新增定时器；第二期用 <code>measure.sh</code> 实测。</p></div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
