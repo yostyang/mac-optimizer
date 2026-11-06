@@ -208,10 +208,23 @@ enum MOTests {
     // MARK: 界面测试与截图
     static func waitUntil(_ t: TimeInterval = 3, _ c: () -> Bool) -> Bool {
         let end = Date().addingTimeInterval(t)
-        while Date() < end { if c() { return true }; RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        while Date() < end { if c() { return true }; pump(0.05) }
         return c()
     }
-    static func settle(_ t: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(t)) }
+    static func settle(_ t: TimeInterval) { pump(t) }
+    /// 测试整体跑在一个 Timer 回调里，NSApp 的事件循环被挡住：只转 RunLoop 不会分发 AppKit 事件，
+    /// 激活 / 成为活动窗口等状态就一直不更新。这里在等待时用 nextEvent + sendEvent 把排队的事件分发掉
+    /// （nextEvent 带超时时同样会在 .default 模式下运行 RunLoop，计时器与主队列照常执行）。
+    /// 设 MO_TEST_PLAIN_RUNLOOP=1 可回退到旧的纯 RunLoop 等待。
+    static let plainRunLoop = ProcessInfo.processInfo.environment["MO_TEST_PLAIN_RUNLOOP"] == "1"
+    static func pump(_ t: TimeInterval) {
+        let until = Date().addingTimeInterval(t)
+        if plainRunLoop || NSApp == nil { RunLoop.main.run(until: until); return }
+        while Date() < until {
+            guard let e = NSApp.nextEvent(matching: .any, until: until, inMode: .default, dequeue: true) else { break }
+            NSApp.sendEvent(e)
+        }
+    }
     static func axChildren(_ o: NSObject) -> [NSObject] {
         if let e = o as? NSAccessibilityProtocol { return (e.accessibilityChildren() ?? []).compactMap { $0 as? NSObject } }
         let sel = NSSelectorFromString("accessibilityChildren")
