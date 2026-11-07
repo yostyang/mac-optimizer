@@ -2,7 +2,7 @@
 
 发布日期：2026-11-07
 
-状态：发布包验收完成，待上传。
+状态：已发布，并完成 GitHub 下载资产回核。
 
 Release：[v2.9.1](https://github.com/yostyang/mac-optimizer/releases/tag/v2.9.1)
 
@@ -27,6 +27,7 @@ Release：[v2.9.1](https://github.com/yostyang/mac-optimizer/releases/tag/v2.9.1
 - 只读挂载后，主程序、充电助手与本地构建逐字节一致
 - 从挂载后的 DMG 运行自检：**656/0**
 - SHA-256：`498dd1993ca6b402699289a0881ac585d9151413d46aacd3a12bfa7d3d895c8b`
+- 从 GitHub Release 实际下载安装包后，文件哈希与本地发布包一致；GitHub 记录的资产摘要也相同。
 
 签名为项目固定本地证书，本机信任设置未把该证书标为受信任根，因此 `codesign --verify --strict` 会在证书信任评估处返回 `CSSMERR_TP_NOT_TRUSTED`。
 
