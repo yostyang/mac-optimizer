@@ -74,9 +74,16 @@ extension MOTests {
             NSApp.appearance = NSAppearance(named: appearance)
             var snapshot = fixture(); snapshot.batteryVoltageV = 12.8; snapshot.batteryCurrentA = 2
             snapshot.batteryInputWatts = 65; snapshot.batteryAdapterWatts = 100
+            var unknownDischarge = fixture(); unknownDischarge.onAC = false; unknownDischarge.charging = false
+            unknownDischarge.batteryVoltageV = 12.8; unknownDischarge.batteryCurrentA = 0
+            unknownDischarge.batteryInputWatts = nil; unknownDischarge.batteryAdapterWatts = nil
+            unknownDischarge.batteryPowerUpdated = Date()
+            let unknownHistory = PowerHistory()
+            unknownHistory.add(PowerSample(t: Date(), onAC: false, inputW: nil, chargeW: nil, dischargeW: nil))
             let views: [(AnyView, String)] = [
                 (AnyView(DisplayPage(colorTab: true).frame(height: Layout.minSize.height)), "display-color-min"),
-                (AnyView(BatteryPage(m: mon).powerTab(snapshot).padding(20)), "power-charging")
+                (AnyView(BatteryPage(m: mon).powerTab(snapshot).padding(20)), "power-charging"),
+                (AnyView(BatteryPage(m: mon).powerTab(unknownDischarge, history: unknownHistory).padding(20)), "power-battery-unreadable")
             ]
             for (view, tag) in views {
                 let host = NSHostingView(rootView: view.frame(width: Layout.minSize.width - 212).background(pageBG))

@@ -46,17 +46,20 @@ struct BatteryPage: View {
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
     }
 
-    func powerTab(_ s: Snapshot) -> some View {
+    func powerTab(_ s: Snapshot, history: PowerHistory = .shared) -> some View {
         let flow = PowerFlowCalc.fromSnapshot(s)
         let top = PowerFlowCalc.topMW(store: en.store, now: now)
         let stale = s.batteryPowerUpdated.map { now.timeIntervalSince($0) >= 30 } ?? false
+        let batteryPowerLabel = !flow.onAC || flow.dischargeWatts != nil ? "电池放电" : "充入电池"
+        let batteryPowerValue = flow.dischargeWatts.map { Fmt.watts($0) }
+            ?? (!flow.onAC ? "未取得" : (flow.charging ? Fmt.watts(flow.chargeWatts) : "未充电"))
         return HStack(alignment: .top, spacing: 14) {
             VStack(spacing: 14) {
                 Card(title: "整机功率", icon: "bolt.fill") {
                     HStack(spacing: 6) { ClayDot(); Text(flow.supplyText).font(DS.sub()).foregroundColor(.secondary) }
                     HStack(spacing: 18) {
                         reading("充电器输入", flow.onAC ? Fmt.watts(flow.inputWatts) : Fmt.dash)
-                        reading(flow.dischargeWatts != nil ? "电池放电" : "充入电池", flow.dischargeWatts.map { Fmt.watts($0) } ?? (flow.charging ? Fmt.watts(flow.chargeWatts) : "未充电"))
+                        reading(batteryPowerLabel, batteryPowerValue)
                         reading("系统功耗（估算）", Fmt.watts(flow.systemWatts))
                         Spacer(minLength: 0)
                     }
@@ -66,7 +69,7 @@ struct BatteryPage: View {
                     Footnote(text: flow.inputNote + "；" + flow.systemNote + "。输入为进入 Mac 的功率，适配器上报功率单列；不代表插座侧实测，屏幕与外设不单独估算。")
                     if let updated = s.batteryPowerUpdated { UpdatedText(date: updated) }
                 }
-                PowerTrendCard()
+                PowerTrendCard(history: history)
             }.frame(maxWidth: .infinity)
             VStack(spacing: 14) {
                 Card(title: "电池详情", icon: "info.circle") {

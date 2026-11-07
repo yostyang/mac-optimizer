@@ -134,6 +134,10 @@ struct PowerSample: Equatable {
     let inputW: Double?      // 电源遥测 DC 输入，只在接电时有
     let chargeW: Double?     // 充入电池（电压 × 正电流）
     let dischargeW: Double?  // 电池放电（电压 × 负电流）
+    var dischargeStatus: String? {
+        guard dischargeW == nil else { return nil }
+        return onAC ? "未放电" : "未取得"
+    }
 }
 
 final class PowerHistory: ObservableObject {
@@ -237,9 +241,13 @@ struct PowerTrendChart: View {
 }
 
 struct PowerTrendCard: View {
-    @ObservedObject var h = PowerHistory.shared
+    @ObservedObject var h: PowerHistory
     @State private var minutes = 30
     var now: Date? = nil   // 截图时固定时间
+    init(history: PowerHistory = .shared, now: Date? = nil) {
+        _h = ObservedObject(wrappedValue: history)
+        self.now = now
+    }
     var body: some View {
         let t = now ?? Date()
         let w = PowerHistory.window(h.samples, seconds: Double(minutes * 60), now: t)
@@ -247,7 +255,7 @@ struct PowerTrendCard: View {
             HStack {
                 legend("输入", DS.metric.network, w.latest?.inputW, w.latest.map { !$0.onAC } ?? false ? "未接电" : nil)
                 legend("充入电池", good, w.latest?.chargeW, w.latest.map { $0.chargeW == nil } ?? false ? "未充电" : nil)
-                legend("电池放电", warn, w.latest?.dischargeW, w.latest.map { $0.dischargeW == nil } ?? false ? "未放电" : nil)
+                legend("电池放电", warn, w.latest?.dischargeW, w.latest?.dischargeStatus)
                 Spacer(minLength: 6)
                 InlineSegment(items: [("30 分钟", 30), ("2 小时", 120)], selection: $minutes).fixedSize()
             }
