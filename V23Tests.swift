@@ -15,10 +15,11 @@ final class V23DDC: DDCChannel {
     var failWrite = false
     var ignoreWrite = false
     var readDelay: UInt32 = 0
+    var caps = "(vcp(10 14(05 08) DC(00 02)))"
     var writes: [Int] = []
     func read(_ code: UInt8) -> (value: Int, max: Int)? { if readDelay > 0 { usleep(readDelay) }; return (value, 100) }
     func write(_ code: UInt8, _ value: Int) -> Bool { writes.append(value); if !failWrite && !ignoreWrite { self.value = value }; return !failWrite }
-    func capabilities() -> String { "(vcp(10 14(05 08) DC(00 02)))" }
+    func capabilities() -> String { caps }
 }
 final class V23Profiles: DisplayProfileSystem {
     let a = URL(fileURLWithPath: "/tmp/display-original.icc"), b = URL(fileURLWithPath: "/tmp/display-custom.icc")
@@ -48,6 +49,20 @@ extension MOTests {
         check(waitUntil(3) { manager.ddc[3]?.colorPreset == 8 && manager.ddcPending.isEmpty }, "点击硬件色彩选项，等待实际回读")
         if let button = find(window.contentView!, id: "disp.color.restore") { button.press() }
         check(waitUntil(3) { manager.ddc[3]?.colorPreset == 5 && manager.ddcPending.isEmpty }, "界面恢复原硬件色彩并回读")
+        let blocked = MockDDC(); blocked.ignoreWrite = true; manager.channels = { _ in blocked }
+        if let button = find(window.contentView!, id: "disp.mode.2") { button.press() }
+        check(waitUntil(3) {
+            guard manager.ddcPending.isEmpty, manager.isIncompatible(manager.displays[0], .displayMode, 2),
+                  let button = find1(window.contentView!, id: "disp.mode.2") else { return false }
+            return axString(button.o, "accessibilityLabel").contains("上次写入未生效")
+        }, "写入未生效时界面与朗读提示兼容性")
+        blocked.ignoreWrite = false
+        if let button = find(window.contentView!, id: "disp.mode.2") { button.press() }
+        check(waitUntil(3) {
+            guard manager.ddcPending.isEmpty, !manager.isIncompatible(manager.displays[0], .displayMode, 2),
+                  let button = find1(window.contentView!, id: "disp.mode.2") else { return false }
+            return !axString(button.o, "accessibilityLabel").contains("上次写入未生效")
+        }, "重试成功后界面移除兼容性提示")
         fits(window.contentView!, "色彩页默认窗口")
     }
     static func v23Snapshots(_ out: String) {
@@ -59,9 +74,16 @@ extension MOTests {
             NSApp.appearance = NSAppearance(named: appearance)
             var snapshot = fixture(); snapshot.batteryVoltageV = 12.8; snapshot.batteryCurrentA = 2
             snapshot.batteryInputWatts = 65; snapshot.batteryAdapterWatts = 100
+            var unknownDischarge = fixture(); unknownDischarge.onAC = false; unknownDischarge.charging = false
+            unknownDischarge.batteryVoltageV = 12.8; unknownDischarge.batteryCurrentA = 0
+            unknownDischarge.batteryInputWatts = nil; unknownDischarge.batteryAdapterWatts = nil
+            unknownDischarge.batteryPowerUpdated = Date()
+            let unknownHistory = PowerHistory()
+            unknownHistory.add(PowerSample(t: Date(), onAC: false, inputW: nil, chargeW: nil, dischargeW: nil))
             let views: [(AnyView, String)] = [
                 (AnyView(DisplayPage(colorTab: true).frame(height: Layout.minSize.height)), "display-color-min"),
-                (AnyView(BatteryPage(m: mon).powerTab(snapshot).padding(20)), "power-charging")
+                (AnyView(BatteryPage(m: mon).powerTab(snapshot).padding(20)), "power-charging"),
+                (AnyView(BatteryPage(m: mon).powerTab(unknownDischarge, history: unknownHistory).padding(20)), "power-battery-unreadable")
             ]
             for (view, tag) in views {
                 let host = NSHostingView(rootView: view.frame(width: Layout.minSize.width - 212).background(pageBG))
@@ -100,7 +122,7 @@ extension MOTests {
         s.batteryCurrentA = nil
         check(PowerFlowCalc.fromSnapshot(s).systemWatts == nil, "没有电池电流时不假定电池功率为0")
         s.batteryPowerUpdated = Date().addingTimeInterval(-60)
-        check(PowerFlowCalc.fromSnapshot(s).inputWatts == nil && PowerFlowCalc.fromSnapshot(s).inputNote.contains("过期"), "过期遥测不展示为实时读数")
+        check(PowerFlowCalc.fromSnapshot(s).inputWatts == nil && PowerFlowCalc.fromSnapshot(s).voltageV == nil && PowerFlowCalc.fromSnapshot(s).inputNote.contains("过期"), "过期遥测不展示为实时读数")
         s.batteryPowerUpdated = Date(); s.batteryCurrentA = 0; s.batteryFullyCharged = true
         check(PowerFlowCalc.fromSnapshot(s).supplyText.contains("已充满"), "系统已充满标志独立于百分比")
 
@@ -143,6 +165,18 @@ extension MOTests {
         settle(0.9); first.readDelay = 0
         check(!first.writes.contains(55), "读取旧值期间刷新，写入前再次核对连接代次")
         check(DDCCaps.parse("(vcp(14(05\n08) DC(00\t02)))").values[0xdc] == [0, 2], "能力字符串换行和制表符")
+
+        sec("2.9 DDC 声明支持但拒绝写入")
+        first.ignoreWrite = true; manager.setDDC(3, .displayMode, 2)
+        check(waitUntil(3) { manager.ddcPending.isEmpty } && manager.isIncompatible(displays.list[0], .displayMode, 2), "写入后读到原值才标记不兼容")
+        check(!manager.isIncompatible(displays.list[1], .displayMode, 2), "兼容性记录按显示器隔离")
+        first.ignoreWrite = false; manager.setDDC(3, .displayMode, 2)
+        check(waitUntil(3) { manager.ddcPending.isEmpty } && !manager.isIncompatible(displays.list[0], .displayMode, 2), "重试成功后清除不兼容提示")
+        first.ignoreWrite = true; manager.setDDC(3, .displayMode, 0)
+        check(waitUntil(3) { manager.ddcPending.isEmpty } && manager.isIncompatible(displays.list[0], .displayMode, 0), "其他值可单独记录")
+        first.caps = "(vcp(10 14(05 08) DC(00 02 03)))"
+        manager.probeDDC { done = true }
+        check(waitUntil(3) { manager.ddc[3]?.caps.values[0xdc] == [0, 2, 3] } && !manager.isIncompatible(displays.list[0], .displayMode, 0), "能力列表变化后清除旧兼容性记录")
 
         sec("2.3 ICC 操作与恢复")
         let profileName = "mo-profile-" + UUID().uuidString + ".icc"

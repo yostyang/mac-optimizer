@@ -24,7 +24,7 @@ struct Snapshot: Equatable {
     var fans: [Double]? = nil; var fanMin = 0.0; var fanMax = 0.0
     var battery: Int? = nil; var batteryHealth: Int? = nil; var charging = false; var onAC = false; var cycles: Int? = nil; var timeRemaining: Int? = nil
     var devices: [DeviceBattery] = []
-    var batteryTemp: Double? = nil; var batteryCondition = ""; var designMah = 0; var fullMah = 0
+    var batteryTemp: Double? = nil; var batteryTempSource = ""; var batteryCondition = ""; var designMah = 0; var fullMah = 0
     var batteryVoltageV: Double? = nil; var batteryCurrentA: Double? = nil; var batteryAdapterWatts: Double? = nil; var lowPowerMode: Bool? = nil
     var batteryInputWatts: Double?; var batteryPowerUpdated: Date?; var batteryInputSource = ""; var batteryFullyCharged = false
     var top: [ProcInfo] = []
@@ -181,7 +181,10 @@ enum Readers {
     static func battery(into s: inout Snapshot) {
         let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard svc != 0 else {
-            s.battery = nil; s.batteryVoltageV = nil; s.batteryCurrentA = nil
+            s.battery = nil; s.batteryHealth = nil; s.cycles = nil; s.timeRemaining = nil
+            s.batteryTemp = nil; s.batteryTempSource = ""; s.batteryCondition = ""
+            s.designMah = 0; s.fullMah = 0; s.lowPowerMode = nil
+            s.batteryVoltageV = nil; s.batteryCurrentA = nil
             s.batteryInputWatts = nil; s.batteryAdapterWatts = nil; s.batteryPowerUpdated = nil
             s.batteryInputSource = ""; s.batteryFullyCharged = false; s.onAC = false; s.charging = false
             return
@@ -191,15 +194,18 @@ enum Readers {
         IORegistryEntryCreateCFProperties(svc, &raw, nil, 0)
         let properties = raw?.takeRetainedValue() as? [String: Any] ?? [:]
         func prop(_ k: String) -> Any? { properties[k] }
-        s.battery = (prop("CurrentCapacity") as? NSNumber)?.intValue
+        s.battery = ((prop("CurrentCapacity") as? NSNumber)?.intValue).flatMap { (0...100).contains($0) ? $0 : nil }
         s.charging = (prop("IsCharging") as? NSNumber)?.boolValue ?? false
         s.onAC = (prop("ExternalConnected") as? NSNumber)?.boolValue ?? false
         s.cycles = (prop("CycleCount") as? NSNumber)?.intValue
         let bd = prop("BatteryData") as? [String: Any]
         let design = (prop("DesignCapacity") as? NSNumber)?.doubleValue ?? (bd?["DesignCapacity"] as? NSNumber)?.doubleValue ?? 0
         let full = (prop("AppleRawMaxCapacity") as? NSNumber)?.doubleValue ?? (prop("NominalChargeCapacity") as? NSNumber)?.doubleValue ?? (bd?["NominalChargeCapacity"] as? NSNumber)?.doubleValue ?? 0
-        s.designMah = Int(design); s.fullMah = Int(full)
-        s.batteryTemp = (prop("Temperature") as? NSNumber).map { $0.doubleValue / 100 } ?? HIDTemp.batteryTemp()
+        s.designMah = design > 0 ? Int(design) : 0; s.fullMah = full > 0 ? Int(full) : 0
+        let smartTemp = (prop("Temperature") as? NSNumber).map { $0.doubleValue / 100 }.flatMap { (0...80).contains($0) ? $0 : nil }
+        let hidTemp = smartTemp == nil ? HIDTemp.batteryTemp() : nil
+        s.batteryTemp = smartTemp ?? hidTemp
+        s.batteryTempSource = smartTemp != nil ? "电池控制器" : (hidTemp != nil ? "HID 传感器" : "")
         s.batteryCondition = "未取得健康状态"
         if let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(), let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] {
             for ps in list { if let d = IOPSGetPowerSourceDescription(info, ps)?.takeUnretainedValue() as? [String: Any], let h = d[kIOPSBatteryHealthKey] as? String {

@@ -365,6 +365,8 @@ final class DisplayManager: ObservableObject {
     @Published var probing = false
     @Published var gammaNotes: [CGDirectDisplayID: String] = [:]
     @Published var ddcNotes: [CGDirectDisplayID: String] = [:]
+    @Published private(set) var incompatibleDDC: [String: Set<String>] = [:]
+    private var knownCaps: [String: DDCCaps] = [:]
     /// 2.8：最近一次硬件写入（失败后「重试」用）
     var lastDDCAttempt: [CGDirectDisplayID: (code: VCP, value: Int)] = [:]
     @Published var profileStates: [CGDirectDisplayID: DisplayProfileState] = [:]
@@ -423,6 +425,10 @@ final class DisplayManager: ObservableObject {
         ddcWork.values.forEach { $0.cancel() }; ddcWork = [:]; ddcTokens = [:]; ddcPending = [:]
         let previous = displays
         displays = sys.displays()
+        for old in previous where !displays.contains(where: { $0.id == old.id && $0.key == old.key }) {
+            incompatibleDDC.removeValue(forKey: old.key)
+            knownCaps.removeValue(forKey: old.key)
+        }
         for old in previous where !displays.contains(where: { $0.id == old.id && $0.key == old.key }) { gamma.forget(old.id) }
         ddc = ddc.filter { id, _ in displays.contains { display in display.id == id && previous.contains { $0.id == id && $0.key == display.key } } }
         for id in profileBusy { profileNotes[id] = "显示配置已变化，请核对刷新后的描述文件" }
@@ -511,11 +517,20 @@ final class DisplayManager: ObservableObject {
             }
             DispatchQueue.main.async {
                 guard self.epoch == revision, self.probeToken == token else { done?(); return }
+                for display in pairs.map({ $0.0 }) {
+                    guard let caps = result[display.id]?.caps else { continue }
+                    if let old = self.knownCaps[display.key], old != caps { self.incompatibleDDC.removeValue(forKey: display.key) }
+                    self.knownCaps[display.key] = caps
+                }
                 self.ddc = result; self.probing = false; done?()
             }
         }
     }
     func displayedValue(_ id: CGDirectDisplayID, _ code: VCP) -> Int? { ddcPending[DDCOperationKey(display: id, code: code.rawValue)] ?? ddc[id]?.value(code) }
+    static func compatibilityKey(_ code: VCP, _ value: Int) -> String { String(format: "%02X:%04X", code.rawValue, value) }
+    func isIncompatible(_ display: DisplayInfo, _ code: VCP, _ value: Int) -> Bool {
+        incompatibleDDC[display.key]?.contains(Self.compatibilityKey(code, value)) == true
+    }
     func setDDC(_ id: CGDirectDisplayID, _ code: VCP, _ value: Int) {
         guard (0...65535).contains(value), let display = displays.first(where: { $0.id == id }), let channel = channels(display) else { ddcNotes[id] = "未匹配到可用的显示器通道，请刷新"; return }
         if [.colorPreset, .displayMode].contains(code), !(ddc[id]?.caps.values[code.rawValue]?.contains(UInt8(clamping: value)) ?? false), originalDDC[display.key]?[code.rawValue] != value { return }
@@ -542,9 +557,17 @@ final class DisplayManager: ObservableObject {
                 guard self.ddcTokens[key] == token else { return }
                 self.ddcPending.removeValue(forKey: key); self.ddcTokens.removeValue(forKey: key); self.ddcWork.removeValue(forKey: key)
                 self.ddc[id]?.set(code, actual)
-                if sent && actual == value { self.ddcNotes[id] = "已核对显示器读数" }
+                if sent && actual == value {
+                    self.incompatibleDDC[display.key]?.remove(Self.compatibilityKey(code, value))
+                    self.ddcNotes[id] = "已核对显示器读数"
+                }
                 else if sent && code == .input { self.ddcNotes[id] = "已发送输入切换，无法回读确认；请在显示器上核对" }
-                else { self.ddcNotes[id] = "未确认修改成功，已显示可读取的实际值；可重试或恢复" }
+                else {
+                    if sent, let actual, actual != value, [.colorPreset, .displayMode].contains(code) {
+                        self.incompatibleDDC[display.key, default: []].insert(Self.compatibilityKey(code, value))
+                    }
+                    self.ddcNotes[id] = "未确认修改成功，已显示可读取的实际值；可重试或恢复"
+                }
             }
         }
         ddcWork[key] = work

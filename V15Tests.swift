@@ -45,8 +45,9 @@ final class MockGamma: GammaSystem {
 final class MockDDC: DDCChannel {
     var vals: [UInt8: Int] = [0x10: 80, 0x12: 50, 0x60: 0x0F, 0x14: 5, 0xdc: 0]
     var writes: [(UInt8, Int)] = []
+    var ignoreWrite = false
     func read(_ code: UInt8) -> (value: Int, max: Int)? { vals[code].map { ($0, 100) } }
-    func write(_ code: UInt8, _ value: Int) -> Bool { writes.append((code, value)); vals[code] = value; return true }
+    func write(_ code: UInt8, _ value: Int) -> Bool { writes.append((code, value)); if !ignoreWrite { vals[code] = value }; return true }
     func capabilities() -> String { "(prot(monitor)type(lcd)MStarcmds(01 02 03 07 0C E3 F3)vcp(02 04 05 08 10 12 14(05 08 0B 0C) 16 18 1A 52 60( 11 0F 10) AA(01 02) AC AE B2 B6 C6 C8 C9 D6(01 04 05) DC(00 02 03 05 ) DF FD)mccs_ver(2.1)mswhql(1))" }
 }
 final class MockNet: NetProbe {

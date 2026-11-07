@@ -49,6 +49,7 @@ enum V28 {
         T.check(h3.samples.count == 1 && h3.samples[0].inputW == 40 && h3.samples[0].chargeW.map { abs($0 - 12.5) < 0.01 } == true, "同一读数只记一次，充电功率 = 电压 × 电流")
         snap.onAC = false; snap.batteryCurrentA = -0.8; snap.batteryPowerUpdated = rnow.addingTimeInterval(-1); h3.record(snap, now: rnow)
         T.check(h3.samples.last?.inputW == nil && h3.samples.last?.dischargeW.map { abs($0 - 10) < 0.01 } == true, "拔电后不保留输入功率")
+        T.check(PowerSample(t: rnow, onAC: false, inputW: nil, chargeW: nil, dischargeW: nil).dischargeStatus == "未取得", "电池供电但放电读数为零或缺失时不称未放电")
         let old = PowerHistory()
         old.add(PowerSample(t: now.addingTimeInterval(-3 * 3600), onAC: true, inputW: 10, chargeW: nil, dischargeW: nil), now: now)
         old.add(PowerSample(t: now, onAC: true, inputW: 10, chargeW: nil, dischargeW: nil), now: now)

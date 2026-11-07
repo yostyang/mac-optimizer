@@ -262,9 +262,10 @@ struct DisplayPage: View {
             }
             FlowRow(spacing: 6) { ForEach(values, id: \.self) { value in
                 let label = names.label(display.key, code.rawValue, value)
-                ChoiceChip(text: label.0, on: current == Int(value), sub: String(format: "0x%02X", value)) { dm.setDDC(display.id, code, Int(value)) }
-                    .help(label.1)
-                    .accessibilityLabel(title + " " + label.0 + "，" + label.1)
+                let incompatible = dm.isIncompatible(display, code, Int(value))
+                ChoiceChip(text: label.0, on: current == Int(value), sub: incompatible ? "⚠︎ 可能不兼容" : String(format: "0x%02X", value)) { dm.setDDC(display.id, code, Int(value)) }
+                    .help(label.1 + (incompatible ? "；这台显示器上次声明支持，但写入后回读未生效。可点击重试。" : ""))
+                    .accessibilityLabel(title + " " + label.0 + "，" + label.1 + (incompatible ? "，上次写入未生效，可重试" : ""))
                     .accessibilityIdentifier(code == .colorPreset ? "disp.color.\(value)" : "disp.mode.\(value)")
             } }
         }

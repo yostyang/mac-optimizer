@@ -46,17 +46,20 @@ struct BatteryPage: View {
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
     }
 
-    func powerTab(_ s: Snapshot) -> some View {
+    func powerTab(_ s: Snapshot, history: PowerHistory = .shared) -> some View {
         let flow = PowerFlowCalc.fromSnapshot(s)
         let top = PowerFlowCalc.topMW(store: en.store, now: now)
         let stale = s.batteryPowerUpdated.map { now.timeIntervalSince($0) >= 30 } ?? false
+        let batteryPowerLabel = !flow.onAC || flow.dischargeWatts != nil ? "电池放电" : "充入电池"
+        let batteryPowerValue = flow.dischargeWatts.map { Fmt.watts($0) }
+            ?? (!flow.onAC ? "未取得" : (flow.charging ? Fmt.watts(flow.chargeWatts) : "未充电"))
         return HStack(alignment: .top, spacing: 14) {
             VStack(spacing: 14) {
                 Card(title: "整机功率", icon: "bolt.fill") {
                     HStack(spacing: 6) { ClayDot(); Text(flow.supplyText).font(DS.sub()).foregroundColor(.secondary) }
                     HStack(spacing: 18) {
                         reading("充电器输入", flow.onAC ? Fmt.watts(flow.inputWatts) : Fmt.dash)
-                        reading(flow.dischargeWatts != nil ? "电池放电" : "充入电池", flow.dischargeWatts.map { Fmt.watts($0) } ?? (flow.charging ? Fmt.watts(flow.chargeWatts) : "未充电"))
+                        reading(batteryPowerLabel, batteryPowerValue)
                         reading("系统功耗（估算）", Fmt.watts(flow.systemWatts))
                         Spacer(minLength: 0)
                     }
@@ -66,7 +69,7 @@ struct BatteryPage: View {
                     Footnote(text: flow.inputNote + "；" + flow.systemNote + "。输入为进入 Mac 的功率，适配器上报功率单列；不代表插座侧实测，屏幕与外设不单独估算。")
                     if let updated = s.batteryPowerUpdated { UpdatedText(date: updated) }
                 }
-                PowerTrendCard()
+                PowerTrendCard(history: history)
             }.frame(maxWidth: .infinity)
             VStack(spacing: 14) {
                 Card(title: "电池详情", icon: "info.circle") {
@@ -76,6 +79,7 @@ struct BatteryPage: View {
                     kv("适配器上报功率", flow.adapterRatedWatts.map { String(format: "%.0f W", $0) } ?? Fmt.dash)
                     kv("循环次数", s.cycles.map { "\($0) 次" } ?? Fmt.dash)
                     kv("低电量模式", flow.lowPowerMode.map { $0 ? "开启" : "关闭" } ?? Fmt.dash)
+                    Footnote(text: "电压、电流来自电池控制器；电流正值表示充电，负值表示放电。适配器上报功率是额定值，不是实时输入或插座实测。")
                     HStack(spacing: 10) {
                         Button("打开系统电源设置") { SystemPanes.battery() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("bat.lowpower.settings")
                         Footnote(text: "低电量模式只展示状态，不在应用内直接改系统设置。")
@@ -115,21 +119,24 @@ struct BatteryPage: View {
                         Circle().trim(from: 0, to: CGFloat(b) / 100).stroke(batteryColor(b), style: StrokeStyle(lineWidth: 7, lineCap: .round)).rotationEffect(.degrees(-90))
                         VStack(spacing: 0) { Text("\(b)%").font(.system(size: 17, weight: .bold, design: .rounded)); Text(s.charging ? "充电中" : (s.onAC ? "已接电源" : "电池供电")).font(.system(size: 10)).foregroundColor(.secondary) }
                     }.frame(width: 78, height: 78)
-                    VStack(spacing: 6) {
-                        kv("健康度", s.batteryHealth.map { "\($0)%" } ?? "不可读", (s.batteryHealth ?? 100) < 80 ? .orange : good)
-                        kv("容量", s.fullMah > 0 ? "\(s.fullMah) / \(s.designMah) mAh" : "—")
+                    VStack(spacing: 4) {
+                        kv("容量比（估算）", s.batteryHealth.map { "\($0)%" } ?? Fmt.dash, (s.batteryHealth ?? 100) < 80 ? .orange : .primary)
+                        kv("当前最大容量", s.fullMah > 0 ? "\(s.fullMah) mAh" : Fmt.dash)
+                        kv("设计容量", s.designMah > 0 ? "\(s.designMah) mAh" : Fmt.dash)
                         kv("循环次数", s.cycles.map { "\($0) 次" } ?? "—")
-                        kv("温度", s.batteryTemp.map { String(format: "%.1f°C", $0) } ?? "不可读", (s.batteryTemp ?? 0) > 40 ? .orange : .primary)
-                        kv("状况", s.batteryCondition)
+                        kv("温度", s.batteryTemp.map { String(format: "%.1f°C", $0) } ?? Fmt.dash, (s.batteryTemp ?? 0) > 40 ? .orange : .primary)
+                        kv("系统健康状态", s.batteryCondition.isEmpty ? "未取得" : s.batteryCondition)
                     }
                 }
+                Footnote(text: "容量比为估算；系统状态独立读取；温度：\(s.batteryTempSource.isEmpty ? "未取得" : s.batteryTempSource)。")
                 Text(advice(s)).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            } else { Text("这台 Mac 没有内置电池").foregroundColor(.secondary) }
+            } else { StateLine(kind: .unknown, text: "未读取到内置电池信息", detail: "可能没有内置电池，或系统暂时未返回数据。", id: "battery.health.unknown") }
         }
     }
     func advice(_ s: Snapshot) -> String {
         if let t = s.batteryTemp, t > 40 { return "⚠️ 电池温度偏高，避免边充电边高负载，放在通风处。" }
-        if let h = s.batteryHealth, h < 80 || s.batteryCondition == "建议维修" { return "电池容量已低于 80%，可以考虑到 Apple 授权服务商检测或更换。" }
+        if s.batteryCondition == "建议维修" { return "系统提示电池需要维修，可在系统电池设置中查看详情。" }
+        if let h = s.batteryHealth, h < 80 { return "估算容量比低于 80%，可在系统电池设置中核对健康状态。" }
         return s.batteryHealth != nil && s.batteryCondition == "正常" ? "电池状态良好。可在下方管理充电上限。" : "部分健康信息尚未取得，可在系统电池设置中查看。"
     }
     func devices(_ s: Snapshot) -> some View {
