@@ -5,11 +5,14 @@ import ServiceManagement
 
 final class ChargeClient: ObservableObject {
     enum Phase: Equatable { case unsupported, notInstalled, needsApproval, starting, ready, failed(String) }
+    enum RetrySetting { case limit(Int, Bool), sail(Int), discharge(Bool), led(Bool), topUp(Bool) }
     static var shared = ChargeClient()
     @Published var phase: Phase = .notInstalled
     @Published var st = ChargeStatus()
     @Published var busy = false
     @Published var note = ""
+    @Published var retrySetting: RetrySetting?
+    private var requestID = 0
     let localCaps: ChargeCaps
     var offline = false                 // 测试/截图：不连接助手、不注册
     private var conn: NSXPCConnection?
@@ -43,6 +46,8 @@ final class ChargeClient: ObservableObject {
     }
     func uninstall() {
         guard !offline else { return }
+        requestID += 1
+        retrySetting = nil
         busy = true
         let finish = {
             DispatchQueue.main.async {
@@ -50,7 +55,12 @@ final class ChargeClient: ObservableObject {
                 self.busy = false; self.drop(); self.st = ChargeStatus(); self.st.caps = self.localCaps; self.refresh()
             }
         }
-        if phase == .ready { proxy(onError: finish) { $0.resetDefaults { _, _ in finish() } } } else { finish() }
+        if phase == .ready {
+            proxy(onError: { self.busy = false }) { $0.resetDefaults { ok, msg in
+                if ok { finish() }
+                else { DispatchQueue.main.async { self.note = msg; self.busy = false; self.refresh() } }
+            } }
+        } else { finish() }
     }
     /// 升级后：助手自己会在文件被替换后退出、由 launchd 拉起新版本。这里只确认能连上；
     /// 连不上时注销再注册（授权按助手 cdhash 记录，build.sh 保证助手不变时 cdhash 不变）。
@@ -105,12 +115,50 @@ final class ChargeClient: ObservableObject {
         } as? ChargeHelperProtocol
         if let p { f(p) }
     }
-    private func done(_ ok: Bool, _ msg: String) { DispatchQueue.main.async { if !ok { self.note = msg }; self.refresh() } }
-    func setLimit(_ v: Int, enabled: Bool) { st.settings.limit = v; st.settings.enabled = enabled; guard !offline else { return }; proxy { $0.setLimit(v, enabled: enabled, reply: done) } }
-    func setSail(_ v: Int) { st.settings.sail = v; guard !offline else { return }; proxy { $0.setSailing(v, reply: done) } }
-    func setDischarge(_ on: Bool) { st.settings.autoDischarge = on; guard !offline else { return }; proxy { $0.setAutoDischarge(on, reply: done) } }
-    func setLED(_ on: Bool) { st.settings.led = on; guard !offline else { return }; proxy { $0.setLED(on, reply: done) } }
-    func topUp(_ on: Bool) { st.topUp = on; guard !offline else { return }; proxy { $0.setTopUp(on, reply: done) } }
+    private func begin(_ action: RetrySetting) -> Int { requestID += 1; retrySetting = action; return requestID }
+    private func done(_ ok: Bool, _ msg: String, id: Int) {
+        DispatchQueue.main.async {
+            guard id == self.requestID else { return }
+            self.note = ok ? "" : msg
+            if ok { self.retrySetting = nil }
+            self.refresh()
+        }
+    }
+    func retrySave() {
+        guard let action = retrySetting else { return }
+        switch action {
+        case let .limit(v, enabled): setLimit(v, enabled: enabled)
+        case let .sail(v): setSail(v)
+        case let .discharge(on): setDischarge(on)
+        case let .led(on): setLED(on)
+        case let .topUp(on): topUp(on)
+        }
+    }
+    func setLimit(_ v: Int, enabled: Bool) {
+        let id = begin(.limit(v, enabled)); st.settings.limit = v; st.settings.enabled = enabled
+        guard !offline else { return }
+        proxy { $0.setLimit(v, enabled: enabled) { [weak self] ok, msg in self?.done(ok, msg, id: id) } }
+    }
+    func setSail(_ v: Int) {
+        let id = begin(.sail(v)); st.settings.sail = v
+        guard !offline else { return }
+        proxy { $0.setSailing(v) { [weak self] ok, msg in self?.done(ok, msg, id: id) } }
+    }
+    func setDischarge(_ on: Bool) {
+        let id = begin(.discharge(on)); st.settings.autoDischarge = on
+        guard !offline else { return }
+        proxy { $0.setAutoDischarge(on) { [weak self] ok, msg in self?.done(ok, msg, id: id) } }
+    }
+    func setLED(_ on: Bool) {
+        let id = begin(.led(on)); st.settings.led = on
+        guard !offline else { return }
+        proxy { $0.setLED(on) { [weak self] ok, msg in self?.done(ok, msg, id: id) } }
+    }
+    func topUp(_ on: Bool) {
+        let id = begin(.topUp(on)); st.topUp = on
+        guard !offline else { return }
+        proxy { $0.setTopUp(on) { [weak self] ok, msg in self?.done(ok, msg, id: id) } }
+    }
 }
 
 struct ChargeCard: View {
@@ -138,7 +186,10 @@ struct ChargeCard: View {
             case .ready:
                 controls
             }
-            if !c.note.isEmpty { small(c.note).foregroundColor(.orange) }
+            if c.note.isEmpty && !c.st.lastError.isEmpty { StateLine(kind: .failed, text: c.st.lastError, id: "charge.error") }
+            if !c.note.isEmpty {
+                StateLine(kind: .failed, text: c.note, actions: c.retrySetting == nil ? [] : [.retry { c.retrySave() }], id: "charge.save.error")
+            }
         }
     }
     func small(_ s: String) -> some View { Text(s).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
@@ -152,6 +203,7 @@ struct ChargeCard: View {
     var stateText: String {
         let s = c.st
         if !s.settings.enabled { return "未启用：按系统默认充电" }
+        if s.dockProtected == true && s.caps.adapterMode { return "已暂停：保护扩展坞供电" }
         if s.displayPaused == true && s.caps.adapterMode { return s.externalDisplay == true ? "已暂停：接了外接显示器" : "外接显示器已拔掉，稍后恢复上限" }
         if s.topUp { return "临时充到 100%（拔掉电源或充满后恢复上限）" }
         if s.adapterCut { return "已到上限，正在用电池供电（降到 \(s.settings.limit - max(s.settings.sail, 1))% 再接通电源）" }
@@ -174,7 +226,10 @@ struct ChargeCard: View {
                 Slider(value: Binding(get: { Double(s.settings.sail) }, set: { c.setSail(Int($0)) }), in: 0...10, step: 1).frame(maxWidth: 90).accessibilityIdentifier("charge.sail")
                 Text("\(s.settings.sail)%").monospacedDigit().frame(width: 26, alignment: .trailing)
             }
-            if s.displayPaused == true && s.caps.adapterMode {
+            if s.dockProtected == true && s.caps.adapterMode {
+                Label("已识别 Plugable TBT4-UD5，保持扩展坞供电。断开扩展坞后，先关闭再开启上限以重新检测连接状态。", systemImage: "display")
+                    .font(.system(size: 11)).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
+            } else if s.displayPaused == true && s.caps.adapterMode {
                 Label("接着外接显示器时不断开电源（否则显示器会掉线），先正常充电；拔掉显示器约 10 秒后自动恢复上限。", systemImage: "display")
                     .font(.system(size: 11)).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
             } else if s.caps.adapterMode {

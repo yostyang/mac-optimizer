@@ -105,6 +105,7 @@ final class CleanStore: ObservableObject {
     @Published var whitelist: [String] = []
     @Published var records: [CleanRecord] = []
     @Published var note = ""
+    @Published var saveError = ""
     @Published var trashing = false
     @Published var failures: [String: String] = [:]
     var moveToTrash: (URL) throws -> URL? = { url in
@@ -118,11 +119,36 @@ final class CleanStore: ObservableObject {
         if let d = try? Data(contentsOf: whitelistURL), let v = try? JSONDecoder().decode([String].self, from: d) { whitelist = v }
         if let d = try? Data(contentsOf: recordsURL), let v = try? JSONDecoder().decode([CleanRecord].self, from: d) { records = v }
     }
-    func saveMeta() {
-        if MOTests.active { return }
-        try? FileManager.default.createDirectory(at: whitelistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(whitelist).write(to: whitelistURL)
-        try? JSONEncoder().encode(records).write(to: recordsURL)
+    @discardableResult func saveWhitelist(force: Bool = false) -> Bool {
+        if MOTests.active && !force { return true }
+        do {
+            try FileManager.default.createDirectory(at: whitelistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(whitelist).write(to: whitelistURL, options: .atomic)
+            saveError = ""
+            return true
+        } catch {
+            saveError = "白名单未保存：\(error.localizedDescription)"
+            return false
+        }
+    }
+    @discardableResult func saveRecords(force: Bool = false) -> Bool {
+        if MOTests.active && !force { return true }
+        do {
+            try FileManager.default.createDirectory(at: recordsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(records).write(to: recordsURL, options: .atomic)
+            saveError = ""
+            return true
+        } catch {
+            saveError = "清理记录未保存：\(error.localizedDescription)"
+            return false
+        }
+    }
+    @discardableResult func saveMeta(force: Bool = false) -> Bool {
+        let whitelistSaved = saveWhitelist(force: force)
+        let whitelistError = saveError
+        let recordsSaved = saveRecords(force: force)
+        if !whitelistSaved { saveError = whitelistError }
+        return whitelistSaved && recordsSaved
     }
     func scan() {
         guard !scanning, !trashing else { return }
@@ -214,7 +240,7 @@ final class CleanStore: ObservableObject {
                                          restoreNote: "从废纸篓手动放回原位置")
                 }
                 self.note = "已移到废纸篓 \(completed.count) 项" + (errors.isEmpty ? "，可从废纸篓放回" : "；\(errors.count) 项未完成，已保留，可检查后重试")
-                self.trashing = false; self.saveMeta()
+                self.trashing = false; self.saveRecords()
             }
         }
     }
@@ -223,7 +249,9 @@ final class CleanStore: ObservableObject {
         guard expanded.hasPrefix("/") else { note = "请输入完整路径，或以 ~/ 开头的路径"; return false }
         let p = URL(fileURLWithPath: expanded).standardizedFileURL.resolvingSymlinksInPath().path
         guard !whitelist.contains(p) else { note = "这个路径已在白名单中"; return false }
-        whitelist.append(p); saveMeta(); note = "已加入白名单"; return true
+        whitelist.append(p)
+        guard saveWhitelist() else { whitelist.removeLast(); note = "白名单未保存，请重试"; return false }
+        note = "已加入白名单"; return true
     }
 
 }
@@ -255,6 +283,10 @@ struct CleanPage: View {
                 }
                 if tab == 1 { UninstallTab() } else {
                 if !store.note.isEmpty { Text(store.note).font(.system(size: 11)).foregroundColor(store.failures.isEmpty ? .secondary : .orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
+                if !store.saveError.isEmpty {
+                    StateLine(kind: .failed, text: store.saveError, id: "clean.save.error")
+                    Button("重试保存") { store.saveMeta() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("clean.save.retry")
+                }
                 Card(title: "清理清单", icon: "trash") {
                     if store.items.isEmpty {
                         Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 11)).foregroundColor(.secondary)

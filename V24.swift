@@ -188,6 +188,7 @@ final class TrafficHistory: ObservableObject {
     @Published private(set) var minutes: [TMinute] = []
     @Published private(set) var minuteApps: [TMinuteApps] = []
     @Published private(set) var hours: [THour] = []
+    @Published var saveError = ""
     var dir: URL
     var lastSave = Date.distantPast
     var dirty = false
@@ -208,12 +209,16 @@ final class TrafficHistory: ObservableObject {
         }
     }
     func save(force: Bool = true) {
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let cur = hours.last
-        let r = TrafficRecent(minutes: minutes, minuteApps: minuteApps, currentHour: cur)
-        try? JSONEncoder().encode(r).write(to: recentURL, options: .atomic)
-        try? JSONEncoder().encode(Array(hours.dropLast())).write(to: hoursURL, options: .atomic)
-        lastSave = Date(); dirty = false
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let r = TrafficRecent(minutes: minutes, minuteApps: minuteApps, currentHour: hours.last)
+            try JSONEncoder().encode(r).write(to: recentURL, options: .atomic)
+            try JSONEncoder().encode(Array(hours.dropLast())).write(to: hoursURL, options: .atomic)
+            lastSave = Date(); dirty = false; saveError = ""
+        } catch {
+            dirty = true
+            saveError = "流量历史未保存：\(error.localizedDescription)"
+        }
     }
     static func trim(_ apps: [String: [UInt64]], max n: Int) -> [String: [UInt64]] {
         guard apps.count > n else { return apps }
@@ -624,6 +629,7 @@ final class Uninstaller: ObservableObject {
     @Published var appPath = ""; @Published var appName = ""; @Published var bundleID = ""
     @Published var items: [UninstallItem] = []
     @Published var note = ""
+    @Published var saveError = ""
     @Published var busy = false
     @Published var records: [UninstallRecord] = []
     var home = NSHomeDirectory()
@@ -632,10 +638,15 @@ final class Uninstaller: ObservableObject {
     var moveToTrash: (URL) throws -> URL? = { url in var r: NSURL?; try FileManager.default.trashItem(at: url, resultingItemURL: &r); return r as URL? }
     var logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("MacOptimizer/uninstall-log.json")
     init() { if let d = try? Data(contentsOf: logURL), let v = try? JSONDecoder().decode([UninstallRecord].self, from: d) { records = v } }
-    func saveLog() {
-        if MOTests.active { return }
-        try? FileManager.default.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(records).write(to: logURL, options: .atomic)
+    func saveLog(force: Bool = false) {
+        if MOTests.active && !force { return }
+        do {
+            try FileManager.default.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(records).write(to: logURL, options: .atomic)
+            saveError = ""
+        } catch {
+            saveError = "卸载记录未保存：\(error.localizedDescription)"
+        }
     }
     func choose() {
         let p = NSOpenPanel(); p.directoryURL = URL(fileURLWithPath: "/Applications"); p.allowedContentTypes = [.applicationBundle]; p.canChooseDirectories = false

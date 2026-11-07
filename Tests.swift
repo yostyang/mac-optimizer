@@ -487,9 +487,11 @@ enum MOTests {
         let realCharge = ChargeClient.shared; ChargeClient.shared = chargeFixture()   // 用最高的「已安装」状态检查布局
         defer { ChargeClient.shared = realCharge }
         let pausedFx = chargeFixture(); pausedFx.st.adapterCut = false; pausedFx.st.externalDisplay = true; pausedFx.st.displayPaused = true
-        for (mode, ap) in modes + [("paused-light", .aqua), ("paused-dark", .darkAqua)] {
+        let dockFx = chargeFixture(); dockFx.st.adapterCut = false; dockFx.st.dockProtected = true; dockFx.st.displayPaused = true
+        for (mode, ap) in modes + [("paused-light", .aqua), ("paused-dark", .darkAqua), ("dock-light", .aqua), ("dock-dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
-            let host = NSHostingView(rootView: ChargeCard(c: mode.hasPrefix("paused") ? pausedFx : ChargeClient.shared).padding(20).frame(width: 520).background(pageBG))
+            let fixture = mode.hasPrefix("paused") ? pausedFx : (mode.hasPrefix("dock") ? dockFx : ChargeClient.shared)
+            let host = NSHostingView(rootView: ChargeCard(c: fixture).padding(20).frame(width: 520).background(pageBG))
             let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
             let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
             cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); settle(1.0)

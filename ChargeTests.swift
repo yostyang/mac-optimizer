@@ -90,6 +90,43 @@ extension MOTests {
         dclk = dclk.addingTimeInterval(6); svcD.tick(); check(c.adapterCut, "稳定 10 秒后才恢复")
         disp = true; svcD.tick(); c.willSleep(); check(!c.adapterCut, "暂停 + 睡眠：保持接通")
         c.evaluate(level: 15, plugged: true); check(!c.adapterCut, "暂停 + 低电量兜底")
+        sec("充电控制：扩展坞供电保护")
+        let dockSMC = MockSMC.tahoe27()
+        let dockCtl = ChargeController(io: dockSMC, settings: ChargeSettings(enabled: true, limit: 80, sail: 5))
+        var dockClock = Date(timeIntervalSince1970: 7_000_000); dockCtl.now = { dockClock }
+        var dockSeen = true, screenSeen = true, savedDock = ChargeSettings()
+        let dockSvc = ChargeService(ctl: dockCtl, reader: { (90, true, false) }, persist: { savedDock = $0 })
+        dockSvc.dock = { dockSeen }; dockSvc.display = { screenSeen }
+        dockSvc.tick()
+        check(savedDock.dockProtected == true && !dockCtl.adapterCut, "识别到 Plugable 后记住供电保护")
+        dockSeen = false; screenSeen = false; dockSvc.tick()
+        dockClock = dockClock.addingTimeInterval(ChargeConst.displayDebounce + 60); dockSvc.tick()
+        check(!dockCtl.adapterCut && dockSMC.writes.allSatisfy { $0.0 != "CHIE" || $0.1 != [8] }, "扩展坞与显示器都掉线后仍不切断供电")
+        let restarted = ChargeController(io: dockSMC, settings: savedDock)
+        restarted.now = { dockClock }
+        restarted.evaluate(level: 90, plugged: true)
+        check(restarted.status.displayPaused == true && !restarted.adapterCut, "助手重启后保持保护")
+        dockSvc.setLimit(80, enabled: false) { ok, _ in check(ok, "关闭上限可以解除保护") }
+        check(dockCtl.settings.dockProtected == false && dockSMC.keys["CHIE"] == [0], "关闭上限接通电源")
+        let failingSvc = ChargeService(ctl: ChargeController(io: MockSMC.tahoe27()), reader: { (80, true, false) }, persist: { _ in throw NSError(domain: "test", code: 13) })
+        failingSvc.setLimit(80, enabled: true) { ok, msg in check(!ok && msg.contains("保存失败") && !failingSvc.ctl.settings.enabled, "充电设置写盘失败不假报成功") }
+        failingSvc.resetDefaults { ok, msg in check(!ok && msg.contains("默认设置保存失败"), "恢复默认写盘失败不假报成功") }
+        let secondSMC = MockSMC.tahoe27()
+        let secondCtl = ChargeController(io: secondSMC)
+        var saveCount = 0
+        let secondSvc = ChargeService(ctl: secondCtl, reader: { (90, true, false) }, persist: { _ in
+            saveCount += 1
+            if saveCount == 2 { throw NSError(domain: "test", code: 14) }
+        })
+        secondSvc.dock = { true }
+        secondSvc.setLimit(80, enabled: true) { ok, msg in check(!ok && msg.contains("扩展坞保护未能保存") && !secondCtl.settings.enabled, "扩展坞保护写盘失败时不启用上限") }
+        check(secondSMC.keys["CHIE"] == [0], "保护写盘失败仍保持接通电源")
+        let reconnectSMC = MockSMC.tahoe27()
+        let reconnectCtl = ChargeController(io: reconnectSMC, settings: ChargeSettings(enabled: true, limit: 80, sail: 5))
+        reconnectCtl.evaluate(level: 90, plugged: true)
+        let reconnectSvc = ChargeService(ctl: reconnectCtl, reader: { (90, false, false) }, persist: { _ in })
+        reconnectSvc.dock = { true }; reconnectSvc.tick()
+        check(!reconnectCtl.adapterCut && reconnectSMC.keys["CHIE"] == [0], "已切电时重新识别扩展坞会立即恢复供电")
         // 停充键模式：外接屏只禁止自动放电（切电），停充照常
         m = MockSMC.legacy(); c = ChargeController(io: m, settings: ChargeSettings(enabled: true, limit: 80, sail: 5)); c.setExternalDisplay(true)
         c.evaluate(level: 90, plugged: true); check(c.inhibited && !c.adapterCut && m.keys["CHIE"] == [0], "停充键模式 + 外接屏：停充但不自动放电")

@@ -93,6 +93,8 @@ struct ChargeSettings: Codable, Equatable {
     var sail = 5
     var autoDischarge = true
     var led = true
+    // 旧版 settings.json 可缺少此字段。见过供电扩展坞后保持保护，直到用户关闭上限。
+    var dockProtected: Bool? = nil
 }
 
 struct ChargeStatus: Codable, Equatable {
@@ -108,6 +110,7 @@ struct ChargeStatus: Codable, Equatable {
     var version = 1
     var externalDisplay: Bool? = nil     // 可选：兼容旧助手返回的 JSON
     var displayPaused: Bool? = nil       // 接了外接屏 → 暂停上限（不切电源）
+    var dockProtected: Bool? = nil
 }
 
 // MARK: - 控制逻辑（纯逻辑 + SMC 写入，可用模拟 SMC 完整测试）
@@ -132,16 +135,17 @@ final class ChargeController {
     private(set) var externalDisplay = false
     private var displayChangedAt: Date = .distantPast
     /// 接着外接屏，或刚插拔不到 10 秒：绝不切断电源
-    var displayPaused: Bool { externalDisplay || now().timeIntervalSince(displayChangedAt) < ChargeConst.displayDebounce }
+    var displayPaused: Bool { settings.dockProtected == true || externalDisplay || now().timeIntervalSince(displayChangedAt) < ChargeConst.displayDebounce }
     func setExternalDisplay(_ on: Bool) { if on != externalDisplay { externalDisplay = on; displayChangedAt = now() } }
 
     init(io: SMCIO, settings: ChargeSettings = ChargeSettings()) {
         self.io = io; self.settings = settings; caps = ChargeCaps.detect(io)
     }
     var lower: Int { settings.limit - max(settings.sail, 1) }
+    func reportError(_ message: String) { lastError = message }
 
     var status: ChargeStatus {
-        ChargeStatus(settings: settings, caps: caps, topUp: topUp, inhibited: inhibited, adapterCut: adapterCut, level: level, plugged: plugged, lastError: lastError, ledWritable: ledWritable, externalDisplay: externalDisplay, displayPaused: displayPaused)
+        ChargeStatus(settings: settings, caps: caps, topUp: topUp, inhibited: inhibited, adapterCut: adapterCut, level: level, plugged: plugged, lastError: lastError, ledWritable: ledWritable, externalDisplay: externalDisplay, displayPaused: displayPaused, dockProtected: settings.dockProtected)
     }
 
     func setTopUp(_ on: Bool) { if topUp && !on { forceNextCut = true }; topUp = on }
@@ -260,12 +264,13 @@ final class ChargeService: NSObject, NSXPCListenerDelegate, ChargeHelperProtocol
     let ctl: ChargeController
     var requirement: String? = ChargeConst.clientRequirement
     var reader: () -> (level: Int?, plugged: Bool, charging: Bool)
-    var persist: (ChargeSettings) -> Void
+    var persist: (ChargeSettings) throws -> Void
     /// 外接显示器检测（助手里用 IOKit；测试用模拟）
     var display: () -> Bool = { false }
+    var dock: () -> Bool = { false }
     /// DNS 修复（助手里用真实 networksetup；测试用模拟命令）
     var dns: DNSFixer?
-    init(ctl: ChargeController, reader: @escaping () -> (level: Int?, plugged: Bool, charging: Bool), persist: @escaping (ChargeSettings) -> Void) {
+    init(ctl: ChargeController, reader: @escaping () -> (level: Int?, plugged: Bool, charging: Bool), persist: @escaping (ChargeSettings) throws -> Void) {
         self.ctl = ctl; self.reader = reader; self.persist = persist
     }
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection c: NSXPCConnection) -> Bool {
@@ -275,16 +280,46 @@ final class ChargeService: NSObject, NSXPCListenerDelegate, ChargeHelperProtocol
         c.exportedObject = self
         c.resume(); return true
     }
-    func tick() { ctl.setExternalDisplay(display()); let r = reader(); ctl.evaluate(level: r.level, plugged: r.plugged, charging: r.charging) }
+    @discardableResult func tick() -> Bool {
+        var saved = true
+        if dock(), ctl.settings.dockProtected != true {
+            ctl.settings.dockProtected = true
+            do { try persist(ctl.settings) }
+            catch {
+                saved = false
+                ctl.settings.enabled = false; ctl.release()
+                ctl.reportError("扩展坞保护未能保存：\(error.localizedDescription)；充电上限已关闭")
+            }
+        }
+        ctl.setExternalDisplay(display())
+        let r = reader(); ctl.evaluate(level: r.level, plugged: r.plugged, charging: r.charging)
+        return saved
+    }
     private func onMain<T>(_ f: () -> T) -> T { Thread.isMainThread ? f() : DispatchQueue.main.sync(execute: f) }
     private func change(_ ok: Bool, _ why: String, _ reply: (Bool, String) -> Void, _ f: () -> Void) {
         guard ok else { reply(false, why); return }
-        onMain { f(); persist(ctl.settings); tick() }
-        reply(true, "")
+        let result: (Bool, String) = onMain {
+            let previous = ctl.settings
+            f()
+            do {
+                try persist(ctl.settings)
+                ctl.reportError("")
+                return tick() ? (true, "") : (false, ctl.lastError)
+            }
+            catch {
+                ctl.settings = previous
+                ctl.settings.enabled = false
+                ctl.setTopUp(false)
+                ctl.release()
+                ctl.reportError("设置保存失败：\(error.localizedDescription)")
+                return (false, "设置保存失败：\(error.localizedDescription)。请重试")
+            }
+        }
+        reply(result.0, result.1)
     }
     func status(_ reply: @escaping (Data) -> Void) { let s = onMain { ctl.status }; reply((try? JSONEncoder().encode(s)) ?? Data()) }
     func setLimit(_ limit: Int, enabled: Bool, reply: @escaping (Bool, String) -> Void) {
-        change(ChargeValidate.limit(limit), "上限超出 50–100", reply) { ctl.settings.limit = limit; ctl.settings.enabled = enabled; if !enabled { ctl.setTopUp(false); ctl.release() } }
+        change(ChargeValidate.limit(limit), "上限超出 50–100", reply) { ctl.settings.limit = limit; ctl.settings.enabled = enabled; if !enabled { ctl.setTopUp(false); ctl.release(); ctl.settings.dockProtected = false } }
     }
     func setSailing(_ range: Int, reply: @escaping (Bool, String) -> Void) { change(ChargeValidate.sail(range), "航行范围超出 0–10", reply) { ctl.settings.sail = range } }
     func setAutoDischarge(_ on: Bool, reply: @escaping (Bool, String) -> Void) { change(true, "", reply) { ctl.settings.autoDischarge = on } }
@@ -296,7 +331,15 @@ final class ChargeService: NSObject, NSXPCListenerDelegate, ChargeHelperProtocol
     }
     func setAliDNS(_ reply: @escaping (Bool, String) -> Void) { guard let dns else { reply(false, "不支持"); return }; let r = dns.setAli(); reply(r.0, r.1) }
     func restoreDNS(_ reply: @escaping (Bool, String) -> Void) { guard let dns else { reply(false, "不支持"); return }; let r = dns.restore(); reply(r.0, r.1) }
-    func resetDefaults(_ reply: @escaping (Bool, String) -> Void) { onMain { ctl.resetDefaults(); persist(ctl.settings) }; reply(true, "") }
+    func resetDefaults(_ reply: @escaping (Bool, String) -> Void) {
+        let result: (Bool, String) = onMain {
+            let previous = ctl.settings
+            ctl.resetDefaults()
+            do { try persist(ctl.settings); return (true, "") }
+            catch { ctl.settings = previous; return (false, "默认设置保存失败：\(error.localizedDescription)。请重试") }
+        }
+        reply(result.0, result.1)
+    }
 }
 
 // MARK: - 电池读数（IORegistry，只读）
@@ -334,5 +377,21 @@ enum DisplayProbe {
             IOObjectRelease(it)
         }
         return n + max(0, intel - 1)
+    }
+}
+
+// 只识别已在真机复现供电/视频共用链路的扩展坞；不按所有 USB Hub 猜测供电来源。
+enum DockProbe {
+    static func plugableTBT4UD5Connected() -> Bool {
+        var it: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &it) == KERN_SUCCESS else { return false }
+        defer { IOObjectRelease(it) }
+        while case let device = IOIteratorNext(it), device != 0 {
+            defer { IOObjectRelease(device) }
+            let name = IORegistryEntryCreateCFProperty(device, "USB Product Name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String
+            let vendor = IORegistryEntryCreateCFProperty(device, "USB Vendor Name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String
+            if name == "TBT4-UD5" && vendor == "Plugable" { return true }
+        }
+        return false
     }
 }
