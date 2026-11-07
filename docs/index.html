@@ -606,7 +606,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
   <!-- ============ HERO ============ -->
   <section class="hero">
     <div class="hero-inner">
-      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">v2.5</span></span></div>
+      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">v2.9.1</span></span></div>
       <h1>
         <span class="line rise" style="--d:.12s" data-i="h1a">不用重启，也能让</span>
         <span class="line rise" style="--d:.2s"><span data-i="h1b">卡顿的 Mac 重新</span> <span class="rot" id="rot"><span>跟手</span></span></span>
@@ -619,7 +619,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </a>
         <a class="btn btn-ghost" href="#core" data-i="cta2">看看它能做什么</a>
       </div>
-      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.5 <i>·</i> 开源免费</div>
+      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.9.1 <i>·</i> 开源免费</div>
     </div>
 
     <!-- app window mockup -->
@@ -844,19 +844,19 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         <div class="card rv" style="--d:.06s">
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="17" height="10" rx="3"/><path d="M21.5 10.5v3"/><path d="M5.5 10.5v3"/></svg></div>
           <h3 data-i="f5t">电池管理</h3>
-          <p data-i="f5d">查看健康度、循环次数、电压、电流、充放电功率与预计充满时间；读不到的充电器实时输入和系统功耗会明确标注。</p>
+          <p data-i="f5d">查看健康度、循环次数、当前最大容量、设计容量、温度来源与充放电功率。2.8 起提供 30 分钟 / 2 小时功率趋势；过期或暂时缺失的读数会明确标注，不保留旧值。</p>
           <div class="mini"><span>24 h</span><span>7 d</span><span>30 d</span></div>
         </div>
         <div class="card rv" style="--d:.1s">
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2.5L5 13h6l-1 8.5 8-11.5h-6l1-8z"/></svg></div>
           <h3 data-i="f6t">充电上限</h3>
-          <p data-i="f6d">把电量停在 50–100% 之间的上限，配合 0–10% 的航行范围，避免反复小幅充电；可临时充到 100%。</p>
+          <p data-i="f6d">把电量停在 50–100% 之间，配合 0–10% 的航行范围；可临时充到 100%。识别 Plugable TBT4-UD5 后会保留扩展坞供电，达到上限也不会因屏幕暂时消失再次切断适配器。</p>
           <div class="mini"><span>50–100%</span><span>0–10%</span></div>
         </div>
         <div class="card rv" style="--d:.02s">
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h8M18 7h2M4 17h3M13 17h7"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></div>
           <h3 data-i="f7t">显示器控制</h3>
-          <p data-i="f7d">支持 DDC/CI 时直接调硬件亮度、对比度和输入源；日间/阅读/观影/夜间四种场景，一键切分辨率与 HiDPI。</p>
+          <p data-i="f7d">支持 DDC/CI 时直接调硬件亮度、对比度、色彩预设、显示模式和输入源；四种场景可一键切换分辨率与 HiDPI。写入成功但回读未生效时会说明兼容性并允许重试。</p>
           <div class="mini"><span>DDC/CI</span><span>HiDPI</span></div>
         </div>
         <div class="card rv" style="--d:.06s">
@@ -873,7 +873,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </div>
 <div class="card rv"><div class="ic">✦</div><h3 data-i="f10t">接显示器模式</h3><p data-i="f10d">插电且连接外接显示器时阻止闲置睡眠，屏幕仍可熄灭；支持手动睡眠，退出 App 自动释放。</p></div>
 <div class="card rv"><div class="ic">✦</div><h3 data-i="f11t">清理预览</h3><p data-i="f11d">扫描缓存、日志、安装包、构建产物与下载目录大文件。清单勾选并确认后移到废纸篓，支持白名单和操作记录。</p></div>
-<div class="card rv"><div class="ic">✦</div><h3 data-i="f12t">改动与提醒</h3><p data-i="f12d">CPU 持续满载、磁盘空间不足、电池健康下降时可选提醒，默认关闭。集中查看 DNS 与清理记录，按可用方式恢复。</p></div>
+<div class="card rv"><div class="ic">✦</div><h3 data-i="f12t">保存失败可见</h3><p data-i="f12d">清理记录、流量历史、卸载记录或充电设置保存失败时，会显示原因和重试入口；充电设置写盘失败会停止本次上限，避免假报成功。</p></div>
       </div>
     </div>
   </section>
@@ -891,7 +891,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
           <div class="st">
             <div class="k"><i></i><span data-i="s1k">电池 · 充电</span></div>
             <h3 data-i="s1t">充电上限，养护电池</h3>
-            <p data-i="s1d">装一次后台充电助手，设置 50–100% 的上限和 0–10% 的航行范围，也可临时充到 100%。部分外接显示器的自动暂停检测仍有限制。</p>
+            <p data-i="s1d">装一次后台充电助手，设置 50–100% 的上限和 0–10% 的航行范围，也可临时充到 100%。2.9.1 识别到 Plugable TBT4-UD5 后会暂停断电控制，优先保住扩展坞、外接屏与 USB 链路。</p>
           </div>
           <div class="shot"><img src="charge.png" alt="充电控制界面" loading="lazy"></div>
         </article>
@@ -899,7 +899,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
           <div class="st">
             <div class="k"><i></i><span data-i="s2k">显示器</span></div>
             <h3 data-i="s2t">亮度、色温、分辨率，一处搞定</h3>
-            <p data-i="s2d">外接显示器支持 DDC/CI 时，直接调硬件亮度、对比度和输入源。四种场景可按时间自动切换，软件调光默认关闭，检测到 MonitorBar 等工具时不抢着改屏幕色彩。</p>
+            <p data-i="s2d">外接显示器支持 DDC/CI 时，直接调硬件亮度、对比度、色彩预设、显示模式和输入源。四种场景可按时间自动切换；写入成功但回读未生效时会显示兼容性提示，软件调光默认关闭。</p>
           </div>
           <div class="shot"><img src="display.png" alt="显示器控制界面" loading="lazy"></div>
         </article>
@@ -1019,7 +1019,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </a>
         <a class="btn btn-ghost" href="https://github.com/yostyang/mac-optimizer" data-i="fi_gh">在 GitHub 上看源码</a>
       </div>
-      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.5 <i>·</i> 开源免费</div>
+      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.9.1 <i>·</i> 开源免费</div>
     </div>
   </section>
 
@@ -1049,12 +1049,12 @@ document.querySelectorAll("[data-i]").forEach(function(e){ ZH[e.dataset.i] = e.i
 var EN = {
   name:"Mac Optimizer",
   nav_why:"Why", nav_core:"Core", nav_fn:"Features", nav_safe:"Safety", nav_dl:"Download",
-  badge_b:"Open source · Free", badge_a:"v2.5",
+  badge_b:"Open source · Free", badge_a:"v2.9.1",
   h1a:"No restart needed. Make", h1b:"your laggy Mac feel",
   sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
   cta1:'Download for free<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
   cta2:"See what it does",
-  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.5 <i>·</i> Free &amp; open source",
+  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.9.1 <i>·</i> Free &amp; open source",
   scroll:"Scroll",
   chip2:"2 issues fixed",
   w_title:"Mac Optimizer", w_score:"Health", w_found:"3 issues you can fix", w_fix:"Fix selected (2)",
@@ -1100,9 +1100,9 @@ var EN = {
   f2t:"Background resource hogs", f2d:"Two VPNs at once fight over the network, and AI apps like Claude run virtual machines in the background. It finds them, shows what they cost, and leaves the decision to you.",
   f3t:"Ease the load on big displays", f3d:"A 5K ultrawide plus Liquid Glass effects is a lot to render. Based on your macOS version, it opens the exact settings you need.",
   f4t:"Menu bar dashboard", f4d:"CPU/GPU, memory, disk, network, battery and accessories in an adaptive panel, with keep-awake, charge-limit and dock-mode switches.",
-  f5t:"Battery care", f5d:"View health, cycles, voltage, current, charge/discharge power and estimated time to full. Unavailable real-time charger input and system power are labeled clearly.",
-  f6t:"Charge limit", f6d:"Set a 50–100% charge limit with a 0–10% sailing range, or temporarily charge to 100%.",
-  f7t:"Display control", f7d:"With DDC/CI, adjust hardware brightness, contrast and input source directly. Four scenes — Day, Reading, Movie, Night — plus one-click resolution and HiDPI.",
+  f5t:"Battery care", f5d:"View health, cycles, current maximum and design capacity, temperature source and charge/discharge power. Since 2.8, inspect 30-minute and 2-hour power trends; stale or temporarily missing readings are labeled clearly.",
+  f6t:"Charge limit", f6d:"Set a 50–100% charge limit with a 0–10% sailing range, or temporarily charge to 100%. When a Plugable TBT4-UD5 is detected, dock power is preserved even after the charge limit is reached.",
+  f7t:"Display control", f7d:"With DDC/CI, adjust hardware brightness, contrast, color presets, display mode and input source directly. Four scenes switch resolution and HiDPI; writes that succeed but fail readback are explained with a retry option.",
   f8t:"Network diagnostics", f8d:"Check latency, packet loss and DNS, with TCP connectivity context under VPN/TUN. Run download/upload tests and view total traffic history and per-app connection counts.",
   f9t:"Bluetooth battery", f9d:"Battery levels for mice, keyboards, headphones and remotes: system readings, AirPods (left, right, case) and the standard BLE battery service used by Logitech MX and others.",
   mb_eb:"Menu bar", mb_h2:"Always in your menu bar,<br>with handy quick actions",
@@ -1122,9 +1122,9 @@ var EN = {
   st_eb:"The real thing", st_h2:"Here's what it actually looks like",
   st_p:"These are real screenshots from the app, not mockups.",
   s1k:"Battery · Charging", s1t:"A charge limit that protects your battery",
-  s1d:"Authorize the background helper to set a 50–100% charge limit, a 0–10% sailing range, or charge to 100%. Automatic pause detection has limitations with some external displays.",
+  s1d:"Authorize the background helper to set a 50–100% charge limit, a 0–10% sailing range, or charge to 100%. In 2.9.1, Plugable TBT4-UD5 detection pauses power-cut control to keep the dock, display and USB link online.",
   s2k:"Display", s2t:"Brightness, warmth and resolution in one place",
-  s2d:"With DDC/CI, adjust hardware brightness, contrast and input source directly. Four scenes switch automatically by time of day; software dimming stays off by default and gets out of the way of tools like MonitorBar.",
+  s2d:"With DDC/CI, adjust hardware brightness, contrast, color presets, display mode and input source directly. Four scenes can switch automatically by time; writes that succeed but fail readback show a compatibility notice.",
   s3k:"Network", s3t:"Network diagnostics and a one-click DNS fix",
   s3d:"Check latency, packet loss and DNS. ICMP results may be advisory under VPN/TUN. DNS changes save a backup; disconnect the VPN before deciding whether to repair DNS.",
   s4k:"Accessories", s4t:"Bluetooth device battery",
@@ -1146,7 +1146,7 @@ var EN = {
   fi_gh:"Read the source on GitHub",
   f10t:"Dock mode", f10d:"Prevent idle sleep while connected to power and an external display; the screen can still turn off. Manual sleep remains available, and quitting releases the assertion.",
   f11t:"Cleanup preview", f11d:"Scan caches, logs, installers, build outputs and large downloads. Confirm selected items before moving them to Trash; keep a whitelist and operation log.",
-  f12t:"Changes and alerts", f12d:"Optional alerts for sustained CPU load, low disk space and battery health decline are off by default. Review DNS and cleanup records with available recovery options.",
+  f12t:"Visible save failures", f12d:"If cleanup records, traffic history, uninstall history or charge settings fail to save, the app shows the reason and a retry action. A failed charge-settings write stops the current limit instead of reporting success.",
   ft_rel:"Releases", ft_made:"vibe coded with ♥"
 };
 var ROT = { zh:["跟手","流畅","顺手","起飞"], en:["smooth","snappy","fluid","crisp"] };
