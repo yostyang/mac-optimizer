@@ -4,7 +4,7 @@
 
 纯 Swift + SwiftUI/AppKit 菜单栏应用，支持 macOS 13 及以上，提供 Apple 芯片与 Intel 通用版。
 
-当前代码版本为 **2.9.0（28）**「稳定与兼容」：电池容量、健康度、温度、功率与充放电状态明确区分原始值和派生值，过期或缺失读数不再沿用旧值；显示器色彩模式写入后回读不一致时会解释兼容性问题并保留重试入口。2.8.0 完成了菜单面板、统一状态和色彩模式分组的精致化收尾。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
+当前代码版本为 **2.9.1（29）**：识别到 Plugable TBT4-UD5 后保留扩展坞供电保护，充电设置、清理记录、流量历史与卸载记录的保存失败会显示原因和重试入口。2.9.0 完成了电池读数校正与显示器色彩模式兼容反馈。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
 
 范围与验收记录：[第零期](docs/phase-zero-safety.md) · [第一期](docs/phase-one-monitor.md) · [第二期](docs/phase-two-summary.md)。后续体验、电池、显示器、Keychron 与分屏安排见 [待办优先级](docs/BACKLOG.md)。
 

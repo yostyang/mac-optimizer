@@ -111,6 +111,10 @@ struct TrafficTab24: View {
     }
     var historyCard: some View {
         Card(title: "流量历史", icon: "chart.xyaxis.line") {
+            if !h.saveError.isEmpty {
+                StateLine(kind: .failed, text: h.saveError, id: "traffic.save.error")
+                Button("重试保存") { h.save() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("traffic.save.retry")
+            }
             Picker("范围", selection: $range) { ForEach(TrafficRange.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("traffic.range")
             let tot = h.totals(range)
             if range == .minute1 {
@@ -224,6 +228,10 @@ struct UninstallTab: View {
                     Button("选择应用…") { u.choose() }.buttonStyle(PillButton(filled: false)).disabled(u.busy).accessibilityIdentifier("uninstall.choose")
                 }
                 if !u.note.isEmpty { Text(u.note).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("uninstall.note") }
+                if !u.saveError.isEmpty {
+                    StateLine(kind: .failed, text: u.saveError, id: "uninstall.save.error")
+                    Button("重试保存") { u.saveLog() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("uninstall.save.retry")
+                }
                 ForEach(u.items.indices, id: \.self) { i in
                     HStack(spacing: 8) {
                         Toggle("", isOn: $u.items[i].selected).toggleStyle(.switch).controlSize(.mini).labelsHidden().disabled(u.busy)

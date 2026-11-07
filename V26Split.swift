@@ -300,6 +300,11 @@ struct SplitPage: View {
                 .disabled(cur == nil).accessibilityIdentifier("split.off")
             Text(String(format: "可用区域 %.0f×%.0f pt · %.0fx", d.visible.width, d.visible.height, d.scale))
                 .font(.caption).foregroundColor(.secondary)
+            Divider()
+            Text("把窗口放进分区").font(DS.sub(.semibold))
+            Text("选好模板后，切换到要摆放的应用窗口，按 ⌘K，选择目标分区。只移动你选中的窗口，完成后可撤销。")
+                .font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("split.howto")
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     func preview(_ t: SplitTemplate) -> some View {

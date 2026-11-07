@@ -30,7 +30,8 @@ xattr -cr "$A" 2>/dev/null || true
 # 固定自签名证书：登录项、通知授权在更新后保持有效；没有证书时退回临时签名
 KC="$HOME/.filebutler-signing/signing.keychain-db"
 if [ -f "$KC" ] && [ -f "$HOME/.filebutler-signing/pass" ]; then
-  security unlock-keychain -p "$(cat "$HOME/.filebutler-signing/pass")" "$KC"
+  # 证书已可用时，security unlock-keychain 可能返回参数错误；以实际签名结果为准。
+  security unlock-keychain -p "$(cat "$HOME/.filebutler-signing/pass")" "$KC" >/dev/null 2>&1 || true
   # 先单独签助手（自己的标识），再签 App（不用 --deep，避免覆盖助手标识）
   if [ "$HNEW" = 1 ]; then
     codesign --force --options runtime --keychain "$KC" -s "FileButler Local Signing" -i com.yost.macoptimizer.chargehelper "$A/Contents/MacOS/MacOptimizerChargeHelper"

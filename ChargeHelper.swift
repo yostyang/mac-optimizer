@@ -18,12 +18,14 @@ enum HelperMain {
         let saved = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(ChargeSettings.self, from: $0) } ?? ChargeSettings()
         let ctl = ChargeController(io: smc, settings: saved)
         svc = ChargeService(ctl: ctl, reader: BatteryReading.read) { s in
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try? JSONEncoder().encode(s).write(to: file, options: .atomic)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try JSONEncoder().encode(s).write(to: file, options: .atomic)
         }
         svc.display = { DisplayProbe.externalCount() > 0 }
+        svc.dock = DockProbe.plugableTBT4UD5Connected
         svc.dns = DNSFixer(runner: RealRunner(), backupURL: dir.appendingPathComponent("dns-backup.json"))
         watchDisplays()
+        watchDock()
         watchSelf()
         // 已启用不先 release 再切断（会闪断 USB-C 显示器）；未启用则恢复默认
         if saved.enabled { svc.tick() } else { ctl.release(); svc.tick() }   // 未启用时 tick 只读取电量/外接屏，不会切电
@@ -84,6 +86,20 @@ enum HelperMain {
                     displayIters.append(it)
                 }
             }
+        }
+    }
+    static var dockPort: IONotificationPortRef?
+    static var dockIterator: io_iterator_t = 0
+    static func watchDock() {
+        guard let port = IONotificationPortCreate(kIOMainPortDefault) else { return }
+        dockPort = port
+        CFRunLoopAddSource(CFRunLoopGetMain(), IONotificationPortGetRunLoopSource(port).takeUnretainedValue(), .defaultMode)
+        let callback: IOServiceMatchingCallback = { _, iterator in
+            while case let device = IOIteratorNext(iterator), device != 0 { IOObjectRelease(device) }
+            if DockProbe.plugableTBT4UD5Connected() { HelperMain.svc.tick() }
+        }
+        if IOServiceAddMatchingNotification(port, kIOFirstMatchNotification, IOServiceMatching("IOUSBHostDevice"), callback, nil, &dockIterator) == KERN_SUCCESS {
+            while case let device = IOIteratorNext(dockIterator), device != 0 { IOObjectRelease(device) }
         }
     }
     // App 升级替换了助手文件：先恢复默认（接通电源），等新文件就位且稳定后再退出，

@@ -69,6 +69,13 @@ extension MOTests {
         h.save()
         let h2 = TrafficHistory(dir: dir)
         check(h2.minutes == h.minutes && h2.hours == h.hours && h2.minuteApps == h.minuteApps, "写盘后重新读取一致（重启后记录还在）")
+        let blocked = dir.appendingPathComponent("blocked")
+        FileManager.default.createFile(atPath: blocked.path, contents: Data())
+        h.dir = blocked.appendingPathComponent("history")
+        h.dirty = true; h.save()
+        check(h.dirty && !h.saveError.isEmpty, "流量历史写盘失败保留待保存状态并显示原因")
+        h.dir = dir; h.save()
+        check(!h.dirty && h.saveError.isEmpty, "流量历史重试保存后清除错误")
         h2.add(totalIn: 1, totalOut: 1, apps: [], tun: false, at: now.addingTimeInterval(31 * 86400))
         check(h2.hours.count == 1 && h2.minutes.count == 1 && h2.minuteApps.count == 1, "30 天外小时记录、24 小时外分钟记录自动删除")
         var many: [String: [UInt64]] = [:]; for i in 0..<40 { many["app\(i)"] = [UInt64(i), 0] }
@@ -152,6 +159,12 @@ extension MOTests {
         check(waitUntil(3) { done }, "移到废纸篓完成")
         check(!fm.fileExists(atPath: apps + "/DemoApp.app") && fm.fileExists(atPath: items[2].path), "勾选项移走，未勾选项保留")
         check(u.records.count == 1 && u.records[0].entries.count == 5 && u.records[0].entries.allSatisfy { $0.trashed != nil }, "操作记录写下原位置和废纸篓位置")
+        let validLog = u.logURL
+        u.logURL = blocked.appendingPathComponent("uninstall-log.json"); u.saveLog(force: true)
+        check(!u.saveError.isEmpty, "卸载记录写盘失败显示原因")
+        u.logURL = validLog; u.saveLog(force: true)
+        let restoredLog = (try? Data(contentsOf: validLog)).flatMap { try? JSONDecoder().decode([UninstallRecord].self, from: $0) }
+        check(u.saveError.isEmpty && restoredLog?.count == 1, "卸载记录重试成功且重读一致")
         check(((try? fm.contentsOfDirectory(atPath: trash)) ?? []).count == 5, "全部进（模拟）废纸篓，没有直接删除")
         fm.createFile(atPath: items[3].path, contents: Data("new".utf8))
         let res = u.restore(u.records[0])

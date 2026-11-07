@@ -126,6 +126,14 @@ extension MOTests {
         check(CleanLogic.isProtected(NSHomeDirectory() + "/Pictures") && CleanLogic.isProtected(NSHomeDirectory() + "/Library/../Documents/private"), "保护目录本身和含父路径的写法")
         let old = "[{\"id\":\"00000000-0000-0000-0000-000000000001\",\"date\":0,\"path\":\"/tmp/test\",\"size\":1,\"trashed\":true}]"
         check((try? JSONDecoder().decode([CleanRecord].self, from: Data(old.utf8)))?.first?.trashPath == nil, "旧版清理记录可读取")
+        let blockedMeta = tmp.appendingPathComponent("blocked-meta")
+        try! Data().write(to: blockedMeta)
+        store.whitelistURL = blockedMeta.appendingPathComponent("whitelist.json")
+        store.recordsURL = blockedMeta.appendingPathComponent("records.json")
+        check(!store.saveMeta(force: true) && !store.saveError.isEmpty, "清理记录保存失败时显示错误")
+        store.whitelistURL = tmp.appendingPathComponent("whitelist.json")
+        store.recordsURL = tmp.appendingPathComponent("records.json")
+        check(store.saveMeta(force: true) && store.saveError.isEmpty && FileManager.default.fileExists(atPath: store.recordsURL.path), "清理记录重试后写入并清除错误")
 
         sec("2.2 操作结果：请求、确认、未完成")
         var verified: Bool?

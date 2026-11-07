@@ -21,7 +21,7 @@ struct BatteryPage: View {
     var body: some View {
         let s = m.s
         PageScroll {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("电池").font(DS.title())
@@ -36,13 +36,13 @@ struct BatteryPage: View {
                 }
                 if tab == 0 {
                     HStack(alignment: .top, spacing: 14) {
-                        VStack(spacing: 8) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
+                        VStack(spacing: 5) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
                         VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
                     }
                 } else {
                     powerTab(s)
                 }
-            }.padding(18)
+            }.padding(16)
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
     }
 
