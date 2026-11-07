@@ -49,6 +49,20 @@ extension MOTests {
         check(waitUntil(3) { manager.ddc[3]?.colorPreset == 8 && manager.ddcPending.isEmpty }, "点击硬件色彩选项，等待实际回读")
         if let button = find(window.contentView!, id: "disp.color.restore") { button.press() }
         check(waitUntil(3) { manager.ddc[3]?.colorPreset == 5 && manager.ddcPending.isEmpty }, "界面恢复原硬件色彩并回读")
+        let blocked = MockDDC(); blocked.ignoreWrite = true; manager.channels = { _ in blocked }
+        if let button = find(window.contentView!, id: "disp.mode.2") { button.press() }
+        check(waitUntil(3) {
+            guard manager.ddcPending.isEmpty, manager.isIncompatible(manager.displays[0], .displayMode, 2),
+                  let button = find1(window.contentView!, id: "disp.mode.2") else { return false }
+            return axString(button.o, "accessibilityLabel").contains("上次写入未生效")
+        }, "写入未生效时界面与朗读提示兼容性")
+        blocked.ignoreWrite = false
+        if let button = find(window.contentView!, id: "disp.mode.2") { button.press() }
+        check(waitUntil(3) {
+            guard manager.ddcPending.isEmpty, !manager.isIncompatible(manager.displays[0], .displayMode, 2),
+                  let button = find1(window.contentView!, id: "disp.mode.2") else { return false }
+            return !axString(button.o, "accessibilityLabel").contains("上次写入未生效")
+        }, "重试成功后界面移除兼容性提示")
         fits(window.contentView!, "色彩页默认窗口")
     }
     static func v23Snapshots(_ out: String) {
