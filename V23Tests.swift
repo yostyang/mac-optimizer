@@ -15,10 +15,11 @@ final class V23DDC: DDCChannel {
     var failWrite = false
     var ignoreWrite = false
     var readDelay: UInt32 = 0
+    var caps = "(vcp(10 14(05 08) DC(00 02)))"
     var writes: [Int] = []
     func read(_ code: UInt8) -> (value: Int, max: Int)? { if readDelay > 0 { usleep(readDelay) }; return (value, 100) }
     func write(_ code: UInt8, _ value: Int) -> Bool { writes.append(value); if !failWrite && !ignoreWrite { self.value = value }; return !failWrite }
-    func capabilities() -> String { "(vcp(10 14(05 08) DC(00 02)))" }
+    func capabilities() -> String { caps }
 }
 final class V23Profiles: DisplayProfileSystem {
     let a = URL(fileURLWithPath: "/tmp/display-original.icc"), b = URL(fileURLWithPath: "/tmp/display-custom.icc")
@@ -143,6 +144,18 @@ extension MOTests {
         settle(0.9); first.readDelay = 0
         check(!first.writes.contains(55), "读取旧值期间刷新，写入前再次核对连接代次")
         check(DDCCaps.parse("(vcp(14(05\n08) DC(00\t02)))").values[0xdc] == [0, 2], "能力字符串换行和制表符")
+
+        sec("2.9 DDC 声明支持但拒绝写入")
+        first.ignoreWrite = true; manager.setDDC(3, .displayMode, 2)
+        check(waitUntil(3) { manager.ddcPending.isEmpty } && manager.isIncompatible(displays.list[0], .displayMode, 2), "写入后读到原值才标记不兼容")
+        check(!manager.isIncompatible(displays.list[1], .displayMode, 2), "兼容性记录按显示器隔离")
+        first.ignoreWrite = false; manager.setDDC(3, .displayMode, 2)
+        check(waitUntil(3) { manager.ddcPending.isEmpty } && !manager.isIncompatible(displays.list[0], .displayMode, 2), "重试成功后清除不兼容提示")
+        first.ignoreWrite = true; manager.setDDC(3, .displayMode, 0)
+        check(waitUntil(3) { manager.ddcPending.isEmpty } && manager.isIncompatible(displays.list[0], .displayMode, 0), "其他值可单独记录")
+        first.caps = "(vcp(10 14(05 08) DC(00 02 03)))"
+        manager.probeDDC { done = true }
+        check(waitUntil(3) { manager.ddc[3]?.caps.values[0xdc] == [0, 2, 3] } && !manager.isIncompatible(displays.list[0], .displayMode, 0), "能力列表变化后清除旧兼容性记录")
 
         sec("2.3 ICC 操作与恢复")
         let profileName = "mo-profile-" + UUID().uuidString + ".icc"
