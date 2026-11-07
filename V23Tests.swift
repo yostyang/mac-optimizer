@@ -101,7 +101,7 @@ extension MOTests {
         s.batteryCurrentA = nil
         check(PowerFlowCalc.fromSnapshot(s).systemWatts == nil, "没有电池电流时不假定电池功率为0")
         s.batteryPowerUpdated = Date().addingTimeInterval(-60)
-        check(PowerFlowCalc.fromSnapshot(s).inputWatts == nil && PowerFlowCalc.fromSnapshot(s).inputNote.contains("过期"), "过期遥测不展示为实时读数")
+        check(PowerFlowCalc.fromSnapshot(s).inputWatts == nil && PowerFlowCalc.fromSnapshot(s).voltageV == nil && PowerFlowCalc.fromSnapshot(s).inputNote.contains("过期"), "过期遥测不展示为实时读数")
         s.batteryPowerUpdated = Date(); s.batteryCurrentA = 0; s.batteryFullyCharged = true
         check(PowerFlowCalc.fromSnapshot(s).supplyText.contains("已充满"), "系统已充满标志独立于百分比")
 

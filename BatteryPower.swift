@@ -79,7 +79,7 @@ enum PowerFlowCalc {
         }
         let inputNote = !fresh ? "读数已过期，等待刷新" : (!s.onAC ? "电池供电，无外接输入" : (input == nil ? (s.batteryInputSource.isEmpty ? "未取得实时电源遥测" : s.batteryInputSource) : (s.batteryInputSource.isEmpty ? "电源遥测 · DC 输入" : s.batteryInputSource)))
         return PowerFlow(
-            voltageV: s.batteryVoltageV, currentA: current,
+            voltageV: fresh ? s.batteryVoltageV : nil, currentA: current,
             chargeWatts: charge, dischargeWatts: discharge, inputWatts: input,
             systemWatts: system, adapterRatedWatts: s.onAC ? s.batteryAdapterWatts : nil, lowPowerMode: s.lowPowerMode,
             charging: charging, onAC: s.onAC, percent: s.battery, fullMah: s.fullMah,
