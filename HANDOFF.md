@@ -228,3 +228,12 @@
 - 基线（2.7.0 原样）在用户机器上：自检 598 / 界面 137 / 截图 72 全绿。
 - 2.8 结果与真机待办见 PR 描述；`./measure.sh` 的面板打开 CPU/RSS 对比、矮屏面板观感、真实外设（含 Keychron「未取得」）与 Kuycon 显示器的硬件模式命名需在真机核对。
 - Codex 沙盒里可以编译（`SWIFTFLAGS=-disable-sandbox`、`TMPDIR` 指到项目内），但启动不了图形界面；`test.sh` 必须在普通终端跑。
+
+## 2026-11-08 · 2.9.2（30）升级后充电助手自动切换
+
+对应 `docs/BACKLOG.md` 的 B08，验证记录见 `docs/release-validation-v2.9.2.md`。新代码在 `V292.swift`（`HelperCheck` 判断与切换、`SystemHelperProbe` 读进程和文件 ctime、`ChargeSettingsBackup`）与 `V292Tests.swift`（`MockHelperWorld` 模拟完整升级流程）。
+
+- 入口：`ChargeClient.repairAfterUpdate` 在后台队列跑 `HelperCheck.run`，结果写入 `ChargeClient.upgrade`，成功后才记录 `chargeHelperBuild`。`keepSettings` 在状态刷新时调用，每次启动最多补写一次设置。
+- 原则：只改主程序，不碰助手代码，避免用户重新授权。注册后变成需要授权时立即停下提示，不循环注册。
+- 测试拖拽替换升级：退出 App → 把 `/Applications/Mac一键优化.app` 移进废纸篓 → 用 `ditto` 放入新版 → 打开，观察助手进程号是否变化。
+
