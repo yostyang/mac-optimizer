@@ -4,7 +4,7 @@
 
 纯 Swift + SwiftUI/AppKit 菜单栏应用，支持 macOS 13 及以上，提供 Apple 芯片与 Intel 通用版。
 
-当前代码版本为 **2.9.1（29）**：识别到 Plugable TBT4-UD5 后保留扩展坞供电保护，充电设置、清理记录、流量历史与卸载记录的保存失败会显示原因和重试入口。2.9.0 完成了电池读数校正与显示器色彩模式兼容反馈。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
+当前代码版本为 **2.9.2（30）**：升级后会核对实际运行的充电助手，旧助手仍在运行时自动切换到新版，并保留原来的充电设置。2.9.1 保留了扩展坞供电保护和保存失败反馈。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
 
 范围与验收记录：[第零期](docs/phase-zero-safety.md) · [第一期](docs/phase-one-monitor.md) · [第二期](docs/phase-two-summary.md)。后续体验、电池、显示器、Keychron 与分屏安排见 [待办优先级](docs/BACKLOG.md)。
 
@@ -26,7 +26,7 @@
 
 进程处理会等待可观察的退出结果；未确认完成不计入完成统计。DNS 恢复读取状态核对后才结束，失败或超时保留待恢复记录。
 
-基础监控无需安装特权助手；充电控制和 DNS 修改需要授权后台助手。清理项目可从废纸篓手动放回，DNS 有备份时可恢复原设置。
+基础监控无需安装特权助手；充电控制和 DNS 修改需要授权后台助手。2.9.2 会在每次启动时核对助手进程与当前安装文件，原地升级先等待旧助手自行重启，替换 App 时则自动注销并重新注册。清理项目可从废纸篓手动放回，DNS 有备份时可恢复原设置。
 
 ## 安装
 
