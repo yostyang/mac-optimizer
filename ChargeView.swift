@@ -12,6 +12,10 @@ final class ChargeClient: ObservableObject {
     @Published var busy = false
     @Published var note = ""
     @Published var retrySetting: RetrySetting?
+    @Published var upgrade: HelperUpgradeState = .none   // 2.9.2 升级后助手版本核对
+    var helperProbe: HelperProbe = SystemHelperProbe()
+    var helperControl: HelperControl = SystemHelperControl()
+    var backupDefaults: UserDefaults = .standard
     private var requestID = 0
     let localCaps: ChargeCaps
     var offline = false                 // 测试/截图：不连接助手、不注册
@@ -32,7 +36,7 @@ final class ChargeClient: ObservableObject {
             if phase != .ready { phase = .starting }
             proxy { p in p.status { d in
                 let s = try? JSONDecoder().decode(ChargeStatus.self, from: d)
-                DispatchQueue.main.async { if let s { self.st = s; self.phase = .ready } }
+                DispatchQueue.main.async { if let s { self.st = s; self.phase = .ready; self.keepSettings(s.settings) } }
             } }
         @unknown default: phase = .notInstalled
         }
@@ -49,6 +53,7 @@ final class ChargeClient: ObservableObject {
         requestID += 1
         retrySetting = nil
         busy = true
+        ChargeSettingsBackup.clear(defaults: backupDefaults)   // 主动卸载 = 恢复默认，不再按备份补写
         let finish = {
             DispatchQueue.main.async {
                 do { try self.daemon.unregister() } catch { self.note = "卸载失败：\(error.localizedDescription)" }
@@ -62,31 +67,44 @@ final class ChargeClient: ObservableObject {
             } }
         } else { finish() }
     }
-    /// 升级后：助手自己会在文件被替换后退出、由 launchd 拉起新版本。这里只确认能连上；
-    /// 连不上时注销再注册（授权按助手 cdhash 记录，build.sh 保证助手不变时 cdhash 不变）。
+    /// 每次启动核对充电助手：本次安装之前就在运行的旧助手（例如旧 App 被拖进废纸篓后仍在运行）会被切换到新版。
+    /// 助手代码没变时授权保留；变了则明确提示去「登录项与扩展」再允许一次。原设置存在系统目录，不会丢。
     static let buildKey = "chargeHelperBuild"
     func repairAfterUpdate(completion: ((Bool) -> Void)? = nil) {
         guard !offline, localCaps.any else { completion?(false); return }
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-        let d = UserDefaults.standard
-        guard daemon.status == .enabled, d.string(forKey: Self.buildKey) != build else {
-            if daemon.status != .enabled { d.set(build, forKey: Self.buildKey) }
-            completion?(true); return
+        let probe = helperProbe, control = helperControl
+        guard control.status != .notRegistered, control.status != .notFound else {
+            UserDefaults.standard.set(build, forKey: Self.buildKey); completion?(true); return
         }
+        upgrade = .checking
         DispatchQueue.global(qos: .utility).async {
-            var ok = false
-            for _ in 0..<5 where !ok { ok = ChargeClient.ping(); if !ok { Thread.sleep(forTimeInterval: 2) } }
-            // 替换 App 包后 launchd 找不到包内相对路径（EX_CONFIG）：注销再注册一次即可恢复。
-            // 助手 cdhash 不变时用户授权会保留（v1.5 实测）；助手代码变化时才需要重新允许。
-            for _ in 0..<2 where !ok {
-                try? self.daemon.unregister(); Thread.sleep(forTimeInterval: 3)
-                do { try self.daemon.register() } catch { continue }
-                for _ in 0..<6 where !ok { Thread.sleep(forTimeInterval: 2); ok = ChargeClient.ping() }
-            }
+            let outcome = HelperCheck.run(probe: probe, control: control)
             DispatchQueue.main.async {
-                if ok { d.set(build, forKey: Self.buildKey) } else { self.note = "升级后充电助手没有启动，请在「登录项与扩展」里确认已允许" }
+                switch outcome {
+                case .ok, .skipped: self.upgrade = .none
+                case .repaired: self.upgrade = .repaired; self.note = ""
+                case .needsApproval: self.upgrade = .needsApproval
+                case .failed(let m): self.upgrade = .failed(m)
+                }
+                let ok = outcome == .ok || outcome == .repaired
+                if ok { UserDefaults.standard.set(build, forKey: Self.buildKey) }
                 self.drop(); self.refresh(); completion?(ok)
             }
+        }
+    }
+    /// 记住最近一次确认过的设置；新助手若意外读到默认设置，按备份补写一次
+    private var restoredOnce = false
+    func keepSettings(_ s: ChargeSettings) {
+        if !restoredOnce, let restore = ChargeSettingsBackup.restoreNeeded(current: s, backup: ChargeSettingsBackup.load(defaults: backupDefaults)) {
+            restoredOnce = true   // 每次启动最多补写一次，写不进去时不反复重试
+            setLimit(restore.limit, enabled: restore.enabled)
+            if restore.sail != s.sail { setSail(restore.sail) }
+            if restore.autoDischarge != s.autoDischarge { setDischarge(restore.autoDischarge) }
+            if restore.led != s.led, st.caps.led { setLED(restore.led) }
+            note = ""
+        } else if ChargeSettingsBackup.restoreNeeded(current: s, backup: ChargeSettingsBackup.load(defaults: backupDefaults)) == nil {
+            ChargeSettingsBackup.save(s, defaults: backupDefaults)
         }
     }
     /// 独立连接探测助手是否在运行（同证书校验）
@@ -165,6 +183,7 @@ struct ChargeCard: View {
     @ObservedObject var c: ChargeClient
     var body: some View {
         Card(title: "充电控制", icon: "bolt.batteryblock") {
+            upgradeLine
             switch c.phase {
             case .unsupported:
                 small("这台 Mac 的固件没有可用的充电控制键，无法限制充电。可以使用 macOS 自带的「充电上限」（80–100%）：")
@@ -174,6 +193,7 @@ struct ChargeCard: View {
                 small("本机支持：" + capsText(c.localCaps)).accessibilityIdentifier("charge.caps")
                 if c.phase == .needsApproval {
                     small("等待授权：在「系统设置 › 通用 › 登录项与扩展」里打开「Mac一键优化」的后台项目开关，并输入管理员密码。").foregroundColor(.orange)
+                    if c.upgrade == .needsApproval { small("这是升级后的新版助手，需要再允许一次；原来的充电设置会保留，允许之前不会限制充电。").accessibilityIdentifier("charge.upgrade.approval") }
                     HStack {
                         Button { SMAppService.openSystemSettingsLoginItems() } label: { Label("打开登录项设置", systemImage: "gear") }.buttonStyle(PillButton())
                         Button("取消安装") { c.uninstall() }.buttonStyle(PillButton(filled: false))
@@ -190,6 +210,17 @@ struct ChargeCard: View {
             if !c.note.isEmpty {
                 StateLine(kind: .failed, text: c.note, actions: c.retrySetting == nil ? [] : [.retry { c.retrySave() }], id: "charge.save.error")
             }
+        }
+    }
+    @ViewBuilder var upgradeLine: some View {
+        switch c.upgrade {
+        case .checking: StateLine(kind: .loading, text: "正在核对充电助手版本", id: "charge.upgrade")
+        case .repaired: StateLine(kind: .done, text: "已切换到新版充电助手", detail: "原来的充电设置已保留。", id: "charge.upgrade")
+        case .failed(let m):
+            StateLine(kind: .failed, text: m, detail: "旧助手仍按旧版逻辑工作。可以重试；仍不行时到「登录项与扩展」关闭再打开 Mac一键优化 的后台项目。",
+                      actions: [.retry { c.repairAfterUpdate() }, StateAction(title: "登录项设置", symbol: "gear") { SMAppService.openSystemSettingsLoginItems() }],
+                      id: "charge.upgrade")
+        case .none, .needsApproval: EmptyView()
         }
     }
     func small(_ s: String) -> some View { Text(s).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
