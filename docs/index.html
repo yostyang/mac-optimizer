@@ -606,7 +606,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
   <!-- ============ HERO ============ -->
   <section class="hero">
     <div class="hero-inner">
-      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">v2.9.1</span></span></div>
+      <div class="badge rise" style="--d:.05s"><span class="led"></span><span><b data-i="badge_b">开源 · 免费</b> · <span data-i="badge_a">v2.9.2</span></span></div>
       <h1>
         <span class="line rise" style="--d:.12s" data-i="h1a">不用重启，也能让</span>
         <span class="line rise" style="--d:.2s"><span data-i="h1b">卡顿的 Mac 重新</span> <span class="rot" id="rot"><span>跟手</span></span></span>
@@ -619,7 +619,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </a>
         <a class="btn btn-ghost" href="#core" data-i="cta2">看看它能做什么</a>
       </div>
-      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.9.1 <i>·</i> 开源免费</div>
+      <div class="hero-meta rise" style="--d:.46s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.9.2 <i>·</i> 开源免费</div>
     </div>
 
     <!-- app window mockup -->
@@ -891,7 +891,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
           <div class="st">
             <div class="k"><i></i><span data-i="s1k">电池 · 充电</span></div>
             <h3 data-i="s1t">充电上限，养护电池</h3>
-            <p data-i="s1d">装一次后台充电助手，设置 50–100% 的上限和 0–10% 的航行范围，也可临时充到 100%。2.9.1 识别到 Plugable TBT4-UD5 后会暂停断电控制，优先保住扩展坞、外接屏与 USB 链路。</p>
+            <p data-i="s1d">装一次后台充电助手，设置 50–100% 的上限和 0–10% 的航行范围，也可临时充到 100%。识别到 Plugable TBT4-UD5 后会暂停断电控制，优先保住扩展坞、外接屏与 USB 链路；2.9.2 起升级后会自动切换到新版充电助手，设置保留。</p>
           </div>
           <div class="shot"><img src="charge.png" alt="充电控制界面" loading="lazy"></div>
         </article>
@@ -1019,7 +1019,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
         </a>
         <a class="btn btn-ghost" href="https://github.com/yostyang/mac-optimizer" data-i="fi_gh">在 GitHub 上看源码</a>
       </div>
-      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.9.1 <i>·</i> 开源免费</div>
+      <div class="hero-meta rv" style="--d:.2s" data-i="meta">macOS 13 及以上 <i>·</i> Apple 芯片与 Intel 通用 <i>·</i> v2.9.2 <i>·</i> 开源免费</div>
     </div>
   </section>
 
@@ -1049,12 +1049,12 @@ document.querySelectorAll("[data-i]").forEach(function(e){ ZH[e.dataset.i] = e.i
 var EN = {
   name:"Mac Optimizer",
   nav_why:"Why", nav_core:"Core", nav_fn:"Features", nav_safe:"Safety", nav_dl:"Download",
-  badge_b:"Open source · Free", badge_a:"v2.9.1",
+  badge_b:"Open source · Free", badge_a:"v2.9.2",
   h1a:"No restart needed. Make", h1b:"your laggy Mac feel",
   sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
   cta1:'Download for free<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
   cta2:"See what it does",
-  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.9.1 <i>·</i> Free &amp; open source",
+  meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.9.2 <i>·</i> Free &amp; open source",
   scroll:"Scroll",
   chip2:"2 issues fixed",
   w_title:"Mac Optimizer", w_score:"Health", w_found:"3 issues you can fix", w_fix:"Fix selected (2)",
@@ -1122,7 +1122,7 @@ var EN = {
   st_eb:"The real thing", st_h2:"Here's what it actually looks like",
   st_p:"These are real screenshots from the app, not mockups.",
   s1k:"Battery · Charging", s1t:"A charge limit that protects your battery",
-  s1d:"Authorize the background helper to set a 50–100% charge limit, a 0–10% sailing range, or charge to 100%. In 2.9.1, Plugable TBT4-UD5 detection pauses power-cut control to keep the dock, display and USB link online.",
+  s1d:"Authorize the background helper to set a 50–100% charge limit, a 0–10% sailing range, or charge to 100%. Plugable TBT4-UD5 detection pauses power-cut control to keep the dock, display and USB link online; from 2.9.2, upgrades switch to the new helper automatically and keep your settings.",
   s2k:"Display", s2t:"Brightness, warmth and resolution in one place",
   s2d:"With DDC/CI, adjust hardware brightness, contrast, color presets, display mode and input source directly. Four scenes can switch automatically by time; writes that succeed but fail readback show a compatibility notice.",
   s3k:"Network", s3t:"Network diagnostics and a one-click DNS fix",
