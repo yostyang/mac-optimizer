@@ -2,7 +2,7 @@
 
 日期：2026-11-08
 
-状态：本机验证通过，尚未发布。
+状态：本机与发布包检查通过，待 GitHub 发布。
 
 ## 问题
 
@@ -33,3 +33,22 @@
 ## 设置保留
 
 第一次原地升级到 2.9.2 后「启用充电上限」为关闭，用户确认升级前本来就是关闭的，设置没有丢失。
+
+## 发布包
+
+- 文件：`Mac-Optimizer-2.9.2.dmg`
+- 主程序与充电助手均为 `arm64 + x86_64`
+- `hdiutil verify`：校验和有效
+- 当前执行会话无法挂载镜像，因此另外使用 UDIF 解压与 HFS+ 读取工具做包内验收：
+  - 从 DMG 还原出的 HFS+ 分区与打包输入逐字节一致。
+  - 解包后的 `Contents` 与本地构建逐文件一致。
+  - App 通过 `codesign --verify --strict`，解包后的签名结构也通过严格校验。
+  - `Applications` 在 HFS+ 目录中为指向 `/Applications` 的符号链接。
+- SHA-256：`8b9d7eb5cccb59dc00e2065e19be9f8f1327207646b3b6e0ebbf47ee1833c45d`
+
+```text
+App CDHash:    c804d20857abea517aacd368ae798e8fc558e1dd
+Helper CDHash: 72ee36880e757ca414c5cb92777c12231045ed3a
+```
+
+充电助手二进制未变化，正常升级不需要重新授权。发布后还需从 GitHub Release 重新下载安装包，核对文件与资产摘要。
