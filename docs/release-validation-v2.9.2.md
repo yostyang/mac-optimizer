@@ -2,7 +2,9 @@
 
 日期：2026-11-08
 
-状态：本机与发布包检查通过，待 GitHub 发布。
+状态：已发布，并完成 GitHub 下载资产回核。
+
+Release：[v2.9.2](https://github.com/yostyang/mac-optimizer/releases/tag/v2.9.2)
 
 ## 问题
 
@@ -51,4 +53,18 @@ App CDHash:    c804d20857abea517aacd368ae798e8fc558e1dd
 Helper CDHash: 72ee36880e757ca414c5cb92777c12231045ed3a
 ```
 
-充电助手二进制未变化，正常升级不需要重新授权。发布后还需从 GitHub Release 重新下载安装包，核对文件与资产摘要。
+充电助手二进制未变化，正常升级不需要重新授权。
+
+## GitHub 回核
+
+- Release 已发布并设为最新版，包含 `Mac-Optimizer-2.9.2.dmg` 与 `.sha256` 两个资产。
+- 从 Release 实际下载安装包后，文件 SHA-256、发布包 SHA-256 与 `.sha256` 内容三者一致。
+- GitHub API 记录的 DMG 资产摘要与下载文件一致：
+
+```text
+sha256:8b9d7eb5cccb59dc00e2065e19be9f8f1327207646b3b6e0ebbf47ee1833c45d
+```
+
+- 下载后的 DMG 再次通过 `hdiutil verify`。
+- GitHub Pages 已部署成功，页面显示 `v2.9.2`，下载入口指向最新 Release。
+- 本机安装版本为 `2.9.2（30）`，充电助手构建号 30；去除签名包装后的主程序代码与本次发布构建一致，助手 CDHash 仍为 `72ee36880e757ca414c5cb92777c12231045ed3a`。
