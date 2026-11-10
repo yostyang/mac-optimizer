@@ -193,9 +193,10 @@ struct TrioLayout: Equatable {
         var x: CGFloat = 0
         let stacked = c.compact && items.contains(.wifi) && items.contains(.volume)
         if stacked {
-            let half = ((h - 1) / 2).rounded(.down), w = (h * 0.8).rounded()
-            frames[.wifi] = CGRect(x: 0, y: h - half, width: w, height: half)       // y 向上：Wi-Fi 在上
-            frames[.volume] = CGRect(x: 0, y: 0, width: w, height: half)
+            // 叠放时两个符号都很小，用专门画的简化图形：上面是 Wi-Fi 扇形（占大半），下面是一条音量刻度
+            let top = (h * 0.56).rounded(), w = (h * 1.05).rounded()
+            frames[.wifi] = CGRect(x: 0, y: h - top, width: w, height: top)         // y 向上：Wi-Fi 在上
+            frames[.volume] = CGRect(x: 0, y: 0, width: w, height: h - top - 1.5)
             x = w + spacing
         } else {
             for i in items where i != .battery {
@@ -255,10 +256,49 @@ enum TrioIcon {
         if c.percent {
             var attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: (r.height * 0.6).rounded(), weight: .bold), .foregroundColor: c.color ? NSColor.white : ink]
             if c.color { attrs[.strokeColor] = NSColor.black.withAlphaComponent(0.35); attrs[.strokeWidth] = -2 }
-            let t = NSAttributedString(string: (charging ? "⚡︎" : "") + "\(p)", attributes: attrs), sz = t.size()
+            // 彩色模式下电量条太短时，白字会落在空白处看不见：改用墨色
+            if c.color, p < 45 { attrs = [.font: attrs[.font]!, .foregroundColor: ink] }
+            let t = NSAttributedString(string: "\(p)", attributes: attrs), sz = t.size()
             t.draw(at: CGPoint(x: body.midX - sz.width / 2, y: body.midY - sz.height / 2))
         } else if charging {
             draw(symbol(("bolt.fill", nil), point: r.height * 0.6), in: body.insetBy(dx: 2, dy: 1.5), color: c.color ? .white : ink)
+        }
+    }
+    /// 紧凑模式的 Wi-Fi：圆点 + 三道弧，亮几道表示几格信号；关闭时整体变淡并加斜线
+    static func drawCompactWifi(_ w: WifiState, in r: CGRect, ink: NSColor) {
+        let c = CGPoint(x: r.midX, y: r.minY + 1.2), maxR = min(r.height - 1.4, r.width / 2 / 0.72)
+        let on = w.link == .connected, dim = ink.withAlphaComponent(0.28)
+        (on || w.link == .disconnected ? (on ? ink : dim) : dim).setFill()
+        NSBezierPath(ovalIn: CGRect(x: c.x - 1.1, y: c.y - 1.1, width: 2.2, height: 2.2)).fill()
+        for i in 1...3 {
+            let arc = NSBezierPath(); arc.lineWidth = max(1.3, r.height * 0.16); arc.lineCapStyle = .round
+            arc.appendArc(withCenter: c, radius: maxR * CGFloat(i) / 3, startAngle: 46, endAngle: 134)
+            (on && w.bars >= i ? ink : dim).setStroke(); arc.stroke()
+        }
+        if w.link == .off || w.link == .unavailable {
+            let slash = NSBezierPath(); slash.lineWidth = 1.3; slash.lineCapStyle = .round
+            slash.move(to: CGPoint(x: r.midX - maxR * 0.7, y: r.maxY - 0.8)); slash.line(to: CGPoint(x: r.midX + maxR * 0.7, y: r.minY + 0.8))
+            ink.setStroke(); slash.stroke()
+        }
+    }
+    /// 紧凑模式的音量：小喇叭 + 一条刻度，填充长度 = 音量；静音时刻度变淡并画叉
+    static func drawCompactVolume(_ v: VolumeState, in r: CGRect, ink: NSColor) {
+        let dim = ink.withAlphaComponent(0.28), h = min(r.height, 5.5), y = r.midY
+        let cone = NSBezierPath()
+        cone.move(to: CGPoint(x: r.minX, y: y - h * 0.22)); cone.line(to: CGPoint(x: r.minX + h * 0.35, y: y - h * 0.22))
+        cone.line(to: CGPoint(x: r.minX + h * 0.8, y: y - h * 0.5)); cone.line(to: CGPoint(x: r.minX + h * 0.8, y: y + h * 0.5))
+        cone.line(to: CGPoint(x: r.minX + h * 0.35, y: y + h * 0.22)); cone.line(to: CGPoint(x: r.minX, y: y + h * 0.22)); cone.close()
+        ink.setFill(); cone.fill()
+        let track = CGRect(x: r.minX + h * 0.8 + 2, y: y - 1.2, width: r.maxX - (r.minX + h * 0.8 + 2), height: 2.4)
+        dim.setFill(); NSBezierPath(roundedRect: track, xRadius: 1.2, yRadius: 1.2).fill()
+        if let l = v.level, !v.muted, l > 0.001 {
+            ink.setFill(); NSBezierPath(roundedRect: CGRect(x: track.minX, y: track.minY, width: max(2.4, track.width * CGFloat(l)), height: track.height), xRadius: 1.2, yRadius: 1.2).fill()
+        } else if v.level != nil {
+            let x = NSBezierPath(); x.lineWidth = 1.2; x.lineCapStyle = .round
+            let cx = track.midX, d = min(h * 0.42, 2.2)
+            x.move(to: CGPoint(x: cx - d, y: y - d)); x.line(to: CGPoint(x: cx + d, y: y + d))
+            x.move(to: CGPoint(x: cx - d, y: y + d)); x.line(to: CGPoint(x: cx + d, y: y - d))
+            ink.setStroke(); x.stroke()
         }
     }
     /// 单色模式是模板图（跟随菜单栏深浅）；彩色模式按当前外观取墨色
@@ -266,8 +306,9 @@ enum TrioIcon {
         let c = config.sanitized(), layout = TrioLayout.make(c, hasBattery: battery != nil)
         let img = NSImage(size: layout.size, flipped: false) { _ in
             let ink: NSColor = c.color ? .labelColor : .black
-            if let r = layout.frames[.wifi] { draw(symbol(wifiSymbol(wifi), point: r.height), in: r, color: ink) }
-            if let r = layout.frames[.volume] { draw(symbol(volumeSymbol(volume), point: r.height), in: r, color: ink) }
+            let stacked = (layout.frames[.wifi]?.height ?? layout.size.height) < layout.size.height
+            if let r = layout.frames[.wifi] { stacked ? drawCompactWifi(wifi, in: r, ink: ink) : draw(symbol(wifiSymbol(wifi), point: r.height), in: r, color: ink) }
+            if let r = layout.frames[.volume] { stacked ? drawCompactVolume(volume, in: r, ink: ink) : draw(symbol(volumeSymbol(volume), point: r.height), in: r, color: ink) }
             if let r = layout.frames[.battery], let p = battery { drawBattery(in: r, percent: p, charging: charging, config: c, ink: ink) }
             return true
         }
