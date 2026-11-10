@@ -37,11 +37,18 @@ enum BTKind {
 protocol BTSource: AnyObject {
     func paired() -> [BTDevice]                       // system_profiler（含 AirPods 电量）
     func classic() -> [String: Int]
+    func keychron() -> [KeychronReading]
+    func keychronAccess() -> KeychronHID.Access
     func ioreg() -> [String: Int]                     // 名称 → 电量
     func gatt(_ done: @escaping ([String: Int], String?) -> Void)   // CoreBluetooth：名称 → 电量；第二个值 = 不可用原因
 }
 
-extension BTSource { func classic() -> [String: Int] { [:] } }
+extension BTSource {
+    func classic() -> [String: Int] { [:] }
+    // 2.10：Keychron 键盘自报电量；默认不读（测试用模拟源覆盖）
+    func keychron() -> [KeychronReading] { [] }
+    func keychronAccess() -> KeychronHID.Access { .notAsked }
+}
 
 enum BTParse {
     static func address(_ value: String) -> String { value.lowercased().replacingOccurrences(of: "-", with: ":") }
@@ -110,6 +117,8 @@ final class RealBTSource: NSObject, BTSource, CBCentralManagerDelegate, CBPeriph
         guard process.terminationStatus == 0 else { return [:] }
         return (try? JSONDecoder().decode([String: Int].self, from: data)) ?? [:]
     }
+    func keychron() -> [KeychronReading] { KeychronHID.read() }
+    func keychronAccess() -> KeychronHID.Access { KeychronHID.access() }
     static func printClassicSnapshot() {
         var values: [String: Int] = [:]
         let selector = "batteryPercentSingle"
@@ -212,7 +221,12 @@ final class BTBattery: ObservableObject {
             let paired = src.paired(), io = src.ioreg(), classic = src.classic()
             let needGatt = paired.contains { $0.connected && $0.ble && $0.percent == nil && io[$0.name] == nil }
             let finish: ([String: Int], String?) -> Void = { g, issue in
-                let list = BTParse.merge(paired: paired, ioreg: io, gatt: g, gattIssue: issue, classic: classic)
+                var list = BTParse.merge(paired: paired, ioreg: io, gatt: g, gattIssue: issue, classic: classic)
+                // 只有存在读不到电量的 Keychron 键盘、且用户已授权时才去读 HID
+                if list.contains(where: KeychronHID.candidate) {
+                    let access = src.keychronAccess()
+                    list = BTParse.apply(hid: access == .granted ? src.keychron() : [], to: list, access: access)
+                }
                 DispatchQueue.main.async { self.devices = list; self.updated = Date(); self.loading = false; self.checkAlerts(); done?() }
             }
             if needGatt { src.gatt(finish) } else { finish([:], nil) }

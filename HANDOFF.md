@@ -258,6 +258,11 @@
 ### 清理记录恢复
 - `CleanRestore.status / restore / freePath` 是纯逻辑；`CleanStore.restore` 更新记录的 `restored`（可选字段，旧记录可读）并写改动记录。
 
+### Keychron 键盘电量（K02）
+- `V210HID.swift`：`KeychronHID.parse` 解析 3 号报告，`read` 用 IOHIDManager 找蓝牙连接、产品名含 Keychron 的设备，依次试输入报告和特性报告。需要「输入监控」权限（`IOHIDCheckAccess` / `IOHIDRequestAccess`），没有权限时不碰 HID。
+- `BTParse.apply(hid:to:access:)` 只把地址对得上的读数并进列表；对不上、没权限都写明原因。做法参考开源的 Keychron K3 Battery Sync。
+- 排查：`Mac一键优化.app/Contents/MacOS/MacOptimizer --read-keychron-battery`。
+
 ### 其他
 - `HelperCheck.autoRepairAllowed(bundlePath:)`：从 `/Volumes` 或 AppTranslocation 运行时不自动重新注册充电助手。
 - 截图测试里「改动与提醒」「清理」「桌面分区」都用固定样例，不读本机真实数据。

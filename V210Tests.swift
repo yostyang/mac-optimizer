@@ -234,6 +234,29 @@ enum V210 {
         T.check((try? JSONDecoder().decode([CleanRecord].self, from: Data(oldJSON.utf8)))?.first?.restored == nil, "2.9 的清理记录可读取")
         try? fm.removeItem(atPath: root)
 
+        T.sec("2.10 Keychron 键盘自报电量")
+        let rep: [UInt8] = [3, 76, 0xDC, 0x2C, 0x26, 0x0A, 0x1B, 0x7F]
+        T.check(KeychronHID.parse(rep) == KeychronReading(percent: 76, addresses: ["dc:2c:26:0a:1b:7f", "7f:1b:0a:26:2c:dc"]), "解析 3 号报告：电量和蓝牙地址（正倒两种字节序）")
+        T.check(KeychronHID.parse([3, 76, 1, 2, 3]) == nil && KeychronHID.parse([2] + rep.dropFirst()) == nil, "长度不够或报告号不对：不采用")
+        T.check(KeychronHID.parse([3, 0] + rep.dropFirst(2)) == nil && KeychronHID.parse([3, 130] + rep.dropFirst(2)) == nil, "电量不在 1–100：不采用")
+        T.check(KeychronHID.parse([3, 76, 0, 0, 0, 0, 0, 0]) == nil && KeychronHID.parse([3, 76, 255, 255, 255, 255, 255, 255]) == nil, "地址全 0 或全 FF：不采用")
+        func kb(_ name: String, _ addr: String, connected: Bool = true, percent: Int? = nil) -> BTDevice {
+            BTDevice(name: name, address: addr, kind: "keyboard", connected: connected, ble: false, percent: percent, reason: connected ? "未取得经典蓝牙电量，可能与型号或固件有关" : "未连接")
+        }
+        let k3 = kb("Keychron K3 Pro", "DC-2C-26-0A-1B-7F"), mouse = kb("MX Master 2S", "AA-BB-CC-00-11-22", percent: 90)
+        let reading = KeychronHID.parse(rep)!
+        var merged = BTParse.apply(hid: [reading], to: [k3, mouse], access: .granted)
+        T.check(merged.first { $0.name == "Keychron K3 Pro" }?.percent == 76 && merged.first { $0.name == "Keychron K3 Pro" }?.source == "键盘自报电量（HID）", "地址对得上：显示键盘自报的电量并注明来源")
+        T.check(merged.first { $0.name == "MX Master 2S" }?.percent == 90, "其他设备的读数不受影响")
+        let rev = KeychronHID.parse([3, 41, 0x7F, 0x1B, 0x0A, 0x26, 0x2C, 0xDC])!
+        T.check(BTParse.apply(hid: [rev], to: [k3], access: .granted)[0].percent == 41, "地址字节序相反的固件也能对上")
+        let other = KeychronHID.parse([3, 55, 1, 2, 3, 4, 5, 6])!
+        merged = BTParse.apply(hid: [other], to: [k3], access: .granted)
+        T.check(merged[0].percent == nil && merged[0].reason.contains("没有返回可核对的电量"), "地址对不上：不显示，说明原因")
+        T.check(BTParse.apply(hid: [], to: [k3], access: .notAsked)[0].reason.contains("读取 Keychron 电量") && BTParse.apply(hid: [], to: [k3], access: .denied)[0].reason.contains("系统设置"), "没有权限时说明怎么开启")
+        T.check(BTParse.apply(hid: [reading], to: [kb("Keychron K3 Pro", "DC-2C-26-0A-1B-7F", connected: false)], access: .granted)[0].percent == nil, "未连接的键盘不采用读数")
+        T.check(!KeychronHID.candidate(mouse) && !KeychronHID.candidate(kb("Keychron K3 Pro", "x", percent: 80)) && KeychronHID.candidate(k3), "只对读不到电量的 Keychron 键盘去读")
+
         T.sec("2.10 充电助手只在已安装的位置自动核对")
         T.check(HelperCheck.autoRepairAllowed(bundlePath: "/Applications/Mac一键优化.app") && HelperCheck.autoRepairAllowed(bundlePath: "/Users/a/Applications/Mac一键优化.app"), "应用程序文件夹：照常核对")
         T.check(!HelperCheck.autoRepairAllowed(bundlePath: "/Volumes/Mac一键优化/Mac一键优化.app"), "直接从安装包里运行：不重新注册助手")
