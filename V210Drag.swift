@@ -27,6 +27,18 @@ struct DragGesture {
     static let startDistance: CGFloat = 6      // 鼠标至少移动这么远才开始判断
     static let maxTravel: CGFloat = 200        // 鼠标走了这么远窗口还没动：拖的不是窗口，放弃
     static let maxQueries = 20                 // 一次手势最多查询这么多次
+    static let shiftGrace: TimeInterval = 0.3  // ⇧ 松开后这么久之内松鼠标仍算数（两只手很难严格同时松开）
+    static let retryTolerance: CGFloat = 4     // 归位后窗口位置偏离落区超过这么多：被应用自己改回去了，再放一次
+
+    /// 松手时 ⇧ 是否算按着：正按着，或刚松开不超过 shiftGrace
+    static func shiftCounts(held: Bool, lastHeld: TimeInterval?, now: TimeInterval) -> Bool {
+        held || lastHeld.map { now - $0 >= 0 && now - $0 <= shiftGrace } ?? false
+    }
+    /// 归位后复查：位置没到落区就需要再放一次（尺寸受应用限制不算）
+    static func needsRetry(target: CGRect, actual: CGRect?) -> Bool {
+        guard let a = actual else { return false }
+        return abs(a.minX - target.minX) > retryTolerance || abs(a.minY - target.minY) > retryTolerance
+    }
 
     private(set) var phase: Phase = .idle
     private(set) var window: DragWindow?
@@ -183,6 +195,7 @@ final class DragZones {
     private var monitor: Any?
     private let overlay = DragOverlay()
     private var lastSample: TimeInterval = 0
+    private var lastShift: TimeInterval?          // 本次手势里最后一次看到按着 ⇧ 的时间（事件时间）
     var log: ((String) -> Void)?
     private(set) var handlerSeconds: Double = 0   // 累计处理耗时（验证性能用）
     private(set) var events = 0
@@ -220,10 +233,12 @@ final class DragZones {
         let shift = NSEvent.modifierFlags.contains(.shift)
         switch e.type {
         case .leftMouseDown:
+            lastShift = nil
             gesture.mouseDown(axPoint())
         case .leftMouseDragged:
             // 没按 ⇧ 且没有进行中的窗口拖动：直接返回，不做任何查询
             guard shift || gesture.phase == .dragging else { return }
+            if shift { lastShift = e.timestamp }
             guard e.timestamp - lastSample >= 1.0 / 30 else { return }   // 最多每秒 30 次
             lastSample = e.timestamp
             let before = gesture.phase
@@ -233,9 +248,10 @@ final class DragZones {
             overlay.show(zones: gesture.zones.map { SplitLayout.fromAX($0, primaryHeight: h) }, active: gesture.active)
         case .leftMouseUp:
             let q = gesture.queries
-            let drop = gesture.mouseUp(axPoint(), shift: shift, zonesAt: zones(at:))
+            let counted = DragGesture.shiftCounts(held: shift, lastHeld: lastShift, now: e.timestamp)
+            let drop = gesture.mouseUp(axPoint(), shift: counted, zonesAt: zones(at:))
             overlay.hide()
-            guard let d = drop else { if q > 0 { log?("松手：没有落区（查询 \(q) 次）") }; return }
+            guard let d = drop else { if q > 0 { log?("松手：没有落区（查询 \(q) 次，⇧ \(shift ? "按着" : counted ? "刚松开" : "已松开")）") }; return }
             // 等应用自己处理完松手，再移动窗口
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
                 var d = d
@@ -243,6 +259,12 @@ final class DragZones {
                 let msg = SplitController.shared.placeDragged(d)
                 self?.log?("松手：\(d.window.name) → 第 \(d.zone + 1) 区，结果「\(msg)」，撤销位置 \(Int(d.original.minX)),\(Int(d.original.minY))（查询 \(q) 次）")
                 SplitHUD.show(msg)
+                // 有的应用（如微信）松手后会自己再调一次窗口位置，把刚放好的位置盖掉：稍后复查，偏了就再放一次
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    guard let self, DragGesture.needsRetry(target: d.target, actual: self.source.frame(of: d.window.handle)) else { return }
+                    let again = SplitController.shared.replaceDragged(d)
+                    self.log?("复查：\(d.window.name) 的位置被改回，已再放一次（\(again ? "成功" : "仍未到位")）")
+                }
             }
         default: break
         }
@@ -250,6 +272,11 @@ final class DragZones {
 }
 
 extension SplitController {
+    /// 复查后再放一次：不改撤销位置。返回是否到位
+    func replaceDragged(_ d: DragGesture.Drop) -> Bool {
+        guard driver.trusted(), driver.arm(d.window.handle) != nil else { return false }
+        return !DragGesture.needsRetry(target: d.target, actual: driver.setFocused(d.target))
+    }
     /// 把拖动中的窗口放进落区；撤销回到拖动前的位置
     func placeDragged(_ d: DragGesture.Drop) -> String {
         guard driver.trusted() else { return "需要先授予“辅助功能”权限" }
@@ -260,7 +287,7 @@ extension SplitController {
         let zone = "第 \(d.zone + 1) 区"
         switch o {
         case .ok: return "已把 \(d.window.name) 放到\(zone)"
-        case .sizeLimited: return "已把 \(d.window.name) 放到\(zone)（尺寸受应用限制）"
+        case .sizeLimited: return "已把 \(d.window.name) 放到\(zone)，但它的窗口不能缩到这个区这么小（尺寸受应用限制）"
         case .notMovable: return "「\(d.window.name)」的窗口不可移动"
         }
     }

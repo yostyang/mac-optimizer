@@ -91,6 +91,7 @@ struct PanelContent: View {
     @ObservedObject var ka = KeepAwake.shared
     @ObservedObject var cc = ChargeClient.shared
     @ObservedObject var dock = DockMode.shared
+    @ObservedObject var trio = TrioModel.shared
     @State private var sel = 0
     @State private var more: ProcInfo?
     @State private var showApps = false
@@ -106,6 +107,7 @@ struct PanelContent: View {
                 GridRow { networkTile(s); fanTile(s) }
             }.accessibilityElement(children: .contain).accessibilityIdentifier("panel.metrics")
             if s.battery != nil || !peripherals.isEmpty { batteryCard(s) }
+            if alerts.settings.menuIndicator == "trio" && trio.config.panel { TrioPanelCard() }
             processCard
             actionsCard
         }
@@ -161,6 +163,7 @@ struct PanelContent: View {
                 Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) {
                     Text("CPU 占用").tag("cpu"); Text("健康分").tag("score")
                     Text("电池图标").tag("battery"); Text("网速").tag("net")
+                    Text("合并状态").tag("trio")
                 }
                 Toggle("登录时启动", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
                 Divider()

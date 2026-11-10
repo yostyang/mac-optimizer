@@ -654,7 +654,11 @@ struct SettingsPage: View {
                         Picker("", selection: $alerts.settings.menuIndicator) {
                             Text("CPU 占用").tag("cpu"); Text("健康分").tag("score")
                             Text("电池图标").tag("battery"); Text("网速").tag("net")
-                        }.labelsHidden().frame(width: 120)
+                            Text("合并状态").tag("trio")
+                        }.labelsHidden().frame(width: 120).accessibilityIdentifier("set.indicator")
+                    }
+                    if alerts.settings.menuIndicator == "trio" {
+                        TrioSettings().padding(.leading, 38).padding(.trailing, 12).padding(.vertical, 8)
                     }
                     Hairline().padding(.leading, 38)
                     row("启动", "power", "登录时自动启动", "默认关闭") {

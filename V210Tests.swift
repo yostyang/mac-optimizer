@@ -106,6 +106,17 @@ enum V210 {
         g.mouseDragged(CGPoint(x: 500, y: 500), shift: true, source: s, zonesAt: zonesAt)
         T.check(g.phase == .idle && g.mouseUp(CGPoint(x: 500, y: 500), shift: true, zonesAt: zonesAt) == nil, "没有按下就收到拖动事件：忽略")
 
+        T.sec("2.10.1 拖动到分区：松手更宽容")
+        T.check(DragGesture.shiftCounts(held: true, lastHeld: nil, now: 10), "松手时按着 ⇧：算数")
+        T.check(DragGesture.shiftCounts(held: false, lastHeld: 9.8, now: 10) && DragGesture.shiftCounts(held: false, lastHeld: 9.75, now: 10), "⇧ 比鼠标早松开 0.3 秒以内：仍算数")
+        T.check(!DragGesture.shiftCounts(held: false, lastHeld: 9.5, now: 10) && !DragGesture.shiftCounts(held: false, lastHeld: nil, now: 10), "⇧ 松开超过 0.3 秒或从没按过：取消")
+        s = FakeDragSource()
+        r = drag(s, from: CGPoint(x: 300, y: 110), to: CGPoint(x: 800, y: 400), shift: { $0 < 8 }, shiftUp: DragGesture.shiftCounts(held: false, lastHeld: 1.0, now: 1.1))
+        T.check(r.0?.zone == 1, "最后一刻先松了 ⇧：高亮虽然消失，松手仍放进所在的区")
+        let tz = CGRect(x: 416, y: 33, width: 800, height: 800)
+        T.check(!DragGesture.needsRetry(target: tz, actual: tz) && !DragGesture.needsRetry(target: tz, actual: CGRect(x: 416, y: 33, width: 1000, height: 800)) && !DragGesture.needsRetry(target: tz, actual: nil), "位置到位（哪怕尺寸受限）或窗口已关：不重放")
+        T.check(DragGesture.needsRetry(target: tz, actual: CGRect(x: 600, y: 390, width: 800, height: 600)), "位置被应用改回：需要再放一次")
+
         T.sec("2.10 拖动到分区：归位与撤销")
         let c = SplitController()
         let drv = FakeDriver(); c.driver = drv
@@ -115,8 +126,12 @@ enum V210 {
         let drop = DragGesture.Drop(window: DragWindow(handle: win, pid: 4242, name: "Chrome", frame: win.frame!), original: CGRect(x: 100, y: 100, width: 800, height: 600), target: zones[1], zone: 1, down: .zero, up: .zero)
         T.check(c.placeDragged(drop) == "已把 Chrome 放到第 2 区" && win.frame == zones[1], "松手后窗口放进落区", "\(String(describing: win.frame))")
         T.check(c.undoLast() == "已把 Chrome 撤销归位" && win.frame == CGRect(x: 100, y: 100, width: 800, height: 600), "撤销回到拖动前的位置，而不是松手时的位置")
+        _ = c.placeDragged(drop)
+        win.frame = CGRect(x: 600, y: 390, width: 800, height: 600)   // 应用自己把窗口改回了松手时的位置
+        T.check(c.replaceDragged(drop) && win.frame == zones[1] && c.undoLast() == "已把 Chrome 撤销归位" && win.frame == CGRect(x: 100, y: 100, width: 800, height: 600), "再放一次后到位，撤销位置不变")
         drv.minW = 1000
-        T.check(c.placeDragged(drop).hasSuffix("（尺寸受应用限制）"), "应用有最小宽度：照常提示尺寸受限")
+        let limited = c.placeDragged(drop)
+        T.check(limited.hasSuffix("（尺寸受应用限制）") && limited.contains("不能缩到这个区这么小"), "应用有最小宽度：说明是窗口缩不到这么小", limited)
         win.frame = nil
         T.check(c.placeDragged(drop) == "「Chrome」的窗口已关闭", "窗口在松手前关闭：给出说明")
         drv.ok = false

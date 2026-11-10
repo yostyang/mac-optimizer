@@ -267,3 +267,27 @@
 - `HelperCheck.autoRepairAllowed(bundlePath:)`：从 `/Volumes` 或 AppTranslocation 运行时不自动重新注册充电助手。
 - 截图测试里「改动与提醒」「清理」「桌面分区」都用固定样例，不读本机真实数据。
 
+## 2026-11-10 · 2.10.1（33）拖动到分区更可靠
+
+用户反馈微信主窗口按住 ⇧ 拖动时有高亮，但松手后有时不归位。改动都在 `V210Drag.swift`：
+
+- `DragGesture.shiftCounts`：松手时 ⇧ 正按着，或松开不超过 `shiftGrace`（0.3 秒）都算数。`DragZones` 用事件时间记录 `lastShift`。
+- 归位 0.25 秒后复查：`DragGesture.needsRetry` 判断位置是否偏离落区超过 4 pt，偏了就 `SplitController.replaceDragged` 再放一次（不改撤销位置）。尺寸受限不算偏离。
+- 尺寸受限的提示改为「…但它的窗口不能缩到这个区这么小（尺寸受应用限制）」。
+- 三种原因是推断，真机上哪一种在起作用还没有确认；`--dragspike <日志>` 的日志会写明松手时 ⇧ 的状态和是否触发了复查。
+
+排查 Keychron：从终端直接运行二进制时，输入监控权限算在终端头上；要用 `open -n -W --stdout <文件> <App> --args --read-keychron-battery` 才按应用自己的权限判断。
+
+## 2026-11-10 · 2.11.0（34）菜单栏合并状态图标（M01）
+
+代码在 `V211Trio.swift`、`V211Tests.swift`；基于 `fix/2.10.1-drag-reliability`。
+
+- 菜单栏显示内容新增 `trio`（`BatteryAlerts.settings.menuIndicator`）。`StatusBar.render` 在该模式下用 `TrioIcon.image` 画图标；`TrioModel` 变化（配置、音量、Wi-Fi）会触发重画。
+- `TrioConfig`（`menubar.trio`，JSON）：显示哪几项、紧凑/并排、大小、百分比、着色、面板控制、Wi-Fi 名称。`sanitized()` 保证至少一项、顺序固定。
+- `TrioLayout.make` 是纯计算，决定各项在图标里的位置；紧凑模式下 Wi-Fi 与音量上下叠放。没有电池的 Mac 自动不画电池。
+- 单色模式输出模板图（跟随菜单栏深浅）；着色模式是非模板图，墨色取 `labelColor`。
+- 数据：Wi-Fi 用 CoreWLAN（`rssiValue`、`powerOn`，名称需要定位权限且默认不读）；音量用 CoreAudio 的虚拟主音量和静音属性，变化靠属性监听，不轮询。Wi-Fi 跟随现有的低频采样刷新。
+- 面板：`TrioPanelCard` 只在该模式且 `config.panel` 为真时出现。
+- 设置：`TrioSettings` 嵌在设置页「菜单栏显示内容」下方，只在选了「合并状态」时出现。
+- 截图测试新增 `trio-gallery`（各种设置下的图标）、`trio-settings`、`trio-panel`，供人工查看。
+
