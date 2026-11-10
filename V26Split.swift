@@ -204,6 +204,7 @@ final class SplitController: ObservableObject {
         tracker.reactivate(tg)
         return report("已把 \(tg.name) 撤销归位")
     }
+    func rememberUndo(frame: CGRect, target: SplitTarget, window: AnyObject?) { undo = frame; undoTarget = target; undoWindow = window }
     private func report(_ s: String) -> String { DispatchQueue.main.async { self.last = s }; return s }
 
     static func openAXSettings() {

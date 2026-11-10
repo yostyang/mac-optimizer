@@ -628,7 +628,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if !args.contains("--selftest") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
         if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
-        if !args.contains("--snapshot") && !args.contains("--uitest") && !args.contains("--measure-hold-panel") { ChargeClient.shared.repairAfterUpdate() }
+        // 拖拽落区实验：从测试副本直接运行，不能触碰充电助手的注册
+        let dragSpike = args.firstIndex(of: "--dragspike")
+        if !args.contains("--snapshot") && !args.contains("--uitest") && !args.contains("--measure-hold-panel") && dragSpike == nil { ChargeClient.shared.repairAfterUpdate() }
+        if let i = dragSpike {
+            let path = args.count > i + 1 ? args[i + 1] : NSTemporaryDirectory() + "mo-dragspike.log"
+            FileManager.default.createFile(atPath: path, contents: nil)
+            let fh = FileHandle(forWritingAtPath: path)
+            DragZones.shared.log = { line in
+                let f = DateFormatter(); f.dateFormat = "HH:mm:ss.SSS"
+                fh?.seekToEndOfFile(); fh?.write((f.string(from: Date()) + " " + line + "\n").data(using: .utf8)!)
+            }
+            DragZones.shared.start()
+        } else if UserDefaults.standard.bool(forKey: DragZones.prefKey) && !args.contains("--snapshot") && !args.contains("--uitest") { DragZones.shared.start() }
         let size = Layout.defaultSize(for: NSScreen.main)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         w.contentMinSize = NSSize(width: min(Layout.minSize.width, size.width), height: min(Layout.minSize.height, size.height))
@@ -685,7 +697,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { showMain(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !UIState.shared.menuBar }
-    func applicationWillTerminate(_ n: Notification) { AppTraffic.shared.flush(); EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DockMode.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
+    func applicationWillTerminate(_ n: Notification) { DragZones.shared.stop(); AppTraffic.shared.flush(); EnergyTracker.shared.stop(); KeepAwake.shared.stop(); DockMode.shared.stop(); DisplayManager.shared.shutdown(); ScreenTime.shared.stop() }
 }
 
 @main
