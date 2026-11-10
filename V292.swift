@@ -33,6 +33,8 @@ protocol HelperControl {
 
 enum HelperCheck {
     static let graceSeconds: TimeInterval = 12
+    /// 直接从安装包（/Volumes）或系统隔离的临时位置运行时，不自动重新注册助手：否则助手会被注册到一个随时消失的位置
+    static func autoRepairAllowed(bundlePath p: String) -> Bool { !p.hasPrefix("/Volumes/") && !p.contains("/AppTranslocation/") }
     /// 2 秒容差：避免文件系统时间精度造成误判
     static func judge(_ running: [HelperProcess], installed: Date?) -> HelperFreshness {
         guard let p = running.max(by: { $0.started < $1.started }) else { return .notRunning }

@@ -237,3 +237,33 @@
 - 原则：只改主程序，不碰助手代码，避免用户重新授权。注册后变成需要授权时立即停下提示，不循环注册。
 - 测试拖拽替换升级：退出 App → 把 `/Applications/Mac一键优化.app` 移进废纸篓 → 用 `ditto` 放入新版 → 打开，观察助手进程号是否变化。
 
+## 2026-11-10 · 2.10.0（31）自定义分区、拖动到分区、清理记录恢复
+
+对应 `docs/BACKLOG.md` 的 S02、C01，验证记录见 `docs/release-validation-v2.10.0.md`。新代码在 `V210.swift`（自定义比例、开关、清理恢复）、`V210Drag.swift`（拖动到分区）、`V210Tests.swift`。
+
+### 自定义比例
+- `SplitPrefs.weights(uuid)` 是唯一的取值入口：固定模板（`split.templates`）或自定义（`split.custom`，`[uuid: [Int]]`），二选一，互相清除。`SplitLayout.rects(weights:in:)` 负责布局。
+- `SplitController.place(_ zone:)` 仍按左/中/右；`place(index:)` 按序号。四栏时没有唯一的中区，命令面板额外给出第 2、3 区。
+- 上下平分：`split.customRows`（`[uuid: [Int]]`，每栏 1 或 2），只对自定义比例有效。`SplitPrefs.zones(uuid, in:)` 是取全部区的唯一入口（比例 + 上下平分 + 间距），归位、拖动高亮都走它；区的顺序是从左到右、每栏从上到下，`SplitLayout.firstZone(ofColumn:rows:)` 把栏换成序号。预览图是 y 向下的坐标，要传 `flipped: true`。
+- 间距：`split.gap`（0–24，默认 `SplitLayout.gap` = 8），所有屏幕共用。
+
+### 拖动到分区
+- `DragGesture` 是纯逻辑状态机：按下 → 候选（按住 ⇧ 且移动 ≥ 6 pt 时取鼠标下的窗口）→ 拖动中（窗口尺寸不变、位置变化且方向与鼠标一致）→ 松手给出落点。坐标一律用辅助功能坐标。
+- 不要把跟随判断改回「位移相等」：真机上窗口位置读数比鼠标慢，严格比较会大量误拒。
+- 撤销位置在松手后用 `DragGesture.originalFrame` 反推（鼠标在窗口里的相对位置不变），不受读数延迟影响。
+- `AXDragSource.window(at:)` 先按坐标取元素，取不到再查窗口列表按位置匹配；排除本应用、非标准窗口和全屏窗口。
+- `DragZones` 负责全局监听（每秒最多 30 次采样）、高亮浮层和落点；只在偏好 `split.dragZones` 打开时启动，测试里不启动。
+- 调试：`--dragspike <日志路径>` 强制启用并写日志，同时跳过充电助手核对（供从测试副本直接运行）。
+
+### 清理记录恢复
+- `CleanRestore.status / restore / freePath` 是纯逻辑；`CleanStore.restore` 更新记录的 `restored`（可选字段，旧记录可读）并写改动记录。
+
+### Keychron 键盘电量（K02）
+- `V210HID.swift`：`KeychronHID.parse` 解析 3 号报告，`read` 用 IOHIDManager 找蓝牙连接、产品名含 Keychron 的设备，依次试输入报告和特性报告。需要「输入监控」权限（`IOHIDCheckAccess` / `IOHIDRequestAccess`），没有权限时不碰 HID。
+- `BTParse.apply(hid:to:access:)` 只把地址对得上的读数并进列表；对不上、没权限都写明原因。做法参考开源的 Keychron K3 Battery Sync。
+- 排查：`Mac一键优化.app/Contents/MacOS/MacOptimizer --read-keychron-battery`。
+
+### 其他
+- `HelperCheck.autoRepairAllowed(bundlePath:)`：从 `/Volumes` 或 AppTranslocation 运行时不自动重新注册充电助手。
+- 截图测试里「改动与提醒」「清理」「桌面分区」都用固定样例，不读本机真实数据。
+

@@ -4,7 +4,7 @@
 
 纯 Swift + SwiftUI/AppKit 菜单栏应用，支持 macOS 13 及以上，提供 Apple 芯片与 Intel 通用版。
 
-当前代码版本为 **2.9.2（30）**：升级后会核对实际运行的充电助手，旧助手仍在运行时自动切换到新版，并保留原来的充电设置。2.9.1 保留了扩展坞供电保护和保存失败反馈。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
+当前代码版本为 **2.10.0（32，待发布）**：桌面分区支持自定义比例和按住 ⇧ 拖动窗口到分区，清理记录可一键恢复。2.9.2 升级后会核对实际运行的充电助手，旧助手仍在运行时自动切换到新版，并保留原来的充电设置。2.9.1 保留了扩展坞供电保护和保存失败反馈。安装包见 [最新 Release](https://github.com/yostyang/mac-optimizer/releases/latest)。
 
 范围与验收记录：[第零期](docs/phase-zero-safety.md) · [第一期](docs/phase-one-monitor.md) · [第二期](docs/phase-two-summary.md)。后续体验、电池、显示器、Keychron 与分屏安排见 [待办优先级](docs/BACKLOG.md)。
 

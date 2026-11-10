@@ -159,6 +159,17 @@ struct BTCard: View {
                     Text("电量未知：" + unknown.map(\.name).joined(separator: "、")).font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                         .help(unknown.map { $0.name + "：" + $0.reason }.joined(separator: "\n"))
                 }
+                if unknown.contains(where: KeychronHID.candidate), KeychronHID.access() != .granted {
+                    // 文字链接样式：和旁边的说明同高，不把最小窗口下的卡片撑高
+                    Button(action: {
+                        if MOTests.active { return }
+                        // 第一次弹系统授权；已拒绝过就直接打开设置页
+                        if KeychronHID.access() == .denied || !KeychronHID.request() { KeychronHID.openSettings() }
+                        bt.refresh()
+                    }) { Text("读取 Keychron 电量").font(.system(size: 10, weight: .medium)).foregroundColor(accent) }
+                    .buttonStyle(.plain).accessibilityIdentifier("bt.keychron.read")
+                    .help("Keychron 键盘会自己上报电量，但系统不显示。读取它需要「输入监控」权限；本应用只取电量这一项，不记录任何按键。授权后如仍未显示，请退出并重新打开应用。")
+                }
                 Spacer(minLength: 4)
                 if let updated = bt.updated { Text("更新 " + updated.formatted(date: .omitted, time: .shortened)).font(.system(size: 10)).foregroundColor(.secondary) }
             }

@@ -23,6 +23,7 @@ struct CleanRecord: Identifiable, Codable, Equatable {
     var size: Int64
     var trashed: Bool
     var trashPath: String? = nil
+    var restored: Bool? = nil
 }
 enum CleanLogic {
     static let maxFilesPerRoot = 5000
@@ -108,6 +109,7 @@ final class CleanStore: ObservableObject {
     @Published var saveError = ""
     @Published var trashing = false
     @Published var failures: [String: String] = [:]
+    @Published var restoreNote = ""
     var moveToTrash: (URL) throws -> URL? = { url in
         var result: NSURL?
         try FileManager.default.trashItem(at: url, resultingItemURL: &result)
@@ -236,8 +238,8 @@ final class CleanStore: ObservableObject {
                 self.failures = errors; self.records += completed
                 for record in completed {
                     ChangeLog.shared.add(kind: .clean, title: "清理到废纸篓：" + (record.path as NSString).lastPathComponent,
-                                         detail: record.path + "（" + CleanLogic.fmtSize(record.size) + "）", reversible: false,
-                                         restoreNote: "从废纸篓手动放回原位置")
+                                         detail: record.path + "（" + CleanLogic.fmtSize(record.size) + "）", reversible: record.trashPath != nil,
+                                         restoreNote: record.trashPath != nil ? "在「清理预览」的操作记录里点恢复" : "从废纸篓手动放回原位置")
                 }
                 self.note = "已移到废纸篓 \(completed.count) 项" + (errors.isEmpty ? "，可从废纸篓放回" : "；\(errors.count) 项未完成，已保留，可检查后重试")
                 self.trashing = false; self.saveRecords()
@@ -325,10 +327,9 @@ struct CleanPage: View {
                     ForEach(store.whitelist, id: \.self) { w in Text(w).font(.system(size: 11)).lineLimit(1) }
                     if !store.records.isEmpty {
                         Divider()
-                        ForEach(store.records.suffix(10)) { r in
-                            HStack { Text((r.path as NSString).lastPathComponent).font(.system(size: 11)).lineLimit(1); Spacer(); Text(CleanLogic.fmtSize(r.size)).font(.system(size: 11)).foregroundColor(.secondary) }
-                        }
-                        Text("恢复办法：打开废纸篓，把对应项放回原位置").font(.system(size: 10)).foregroundColor(.secondary)
+                        ForEach(store.records.suffix(10)) { r in CleanRecordRow(record: r, store: store) }
+                        if !store.restoreNote.isEmpty { StateLine(kind: store.restoreNote.hasPrefix("已") ? .done : .failed, text: store.restoreNote, id: "clean.restore.state") }
+                        Text("只有还在废纸篓里的项可以恢复；原位置已有同名文件时不覆盖，会改名放回。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 }

@@ -160,6 +160,7 @@ enum MOTests {
         PhaseTwo.tests()
         V28.tests()
         V292.tests()
+        V210.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -507,11 +508,31 @@ enum MOTests {
         V25.snapshots(out)
         V28.snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
+        // 改动记录用固定样例：不随本机真实记录的多少而变（记录多了页面本来就该滚动）
+        let realChanges = ChangeLog.shared.records
+        ChangeLog.shared.records = [
+            ChangeRecord(kind: .clean, title: "清理到废纸篓：旧安装包.dmg", detail: "~/Downloads/旧安装包.dmg（1.2 GB）", reversible: true, restoreNote: "在「清理预览」的操作记录里点恢复"),
+            ChangeRecord(kind: .clean, title: "从废纸篓恢复：旧安装包.dmg", detail: "已恢复到原位置：旧安装包.dmg", reversible: false, restoreNote: "需要的话可重新清理"),
+        ]
+        defer { ChangeLog.shared.records = realChanges }
+        // 2.10：清理记录的三种状态（可恢复 / 已恢复 / 废纸篓里已不在）和自定义分区比例
+        let realClean = CleanStore.shared.records
+        CleanStore.shared.records = [
+            CleanRecord(date: Date(), path: "/Users/me/Downloads/旧安装包.dmg", size: 1_288_490_188, trashed: true, trashPath: "/bin/ls"),
+            CleanRecord(date: Date(), path: "/Users/me/Library/Caches/示例缓存", size: 52_428_800, trashed: true, trashPath: "/bin/ls", restored: true),
+            CleanRecord(date: Date(), path: "/Users/me/Downloads/录屏.mov", size: 734_003_200, trashed: true, trashPath: "/不存在/录屏.mov"),
+        ]
+        let sc = SplitController.shared, realPrefs = sc.prefs, realScreens = sc.screens, realDriver = sc.driver
+        let splitSuite = "mo.snapshot.split.\(getpid())"
+        let splitUD = UserDefaults(suiteName: splitSuite)!; splitUD.removePersistentDomain(forName: splitSuite)
+        sc.prefs = SplitPrefs(splitUD); sc.prefs.setCustom([1, 1, 1, 1], for: "S1"); sc.prefs.setRows([1, 2, 2, 1], for: "S1"); sc.driver = FakeDriver()
+        sc.screens = FakeScreens([SplitDisplay(uuid: "S1", name: "内建显示器", visible: CGRect(x: 0, y: 0, width: 1728, height: 1079), scale: 2)], 1117)
+        defer { CleanStore.shared.records = realClean; sc.prefs = realPrefs; sc.screens = realScreens; sc.driver = realDriver; splitUD.removePersistentDomain(forName: splitSuite) }
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
             var powerSnapshot = fixture(); powerSnapshot.charging = false; powerSnapshot.onAC = true
             powerSnapshot.batteryVoltageV = 12.8; powerSnapshot.batteryCurrentA = 0
-            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes"), (AnyView(BatteryPage(m: mon).powerTab(powerSnapshot)), "power-paused")] {
+            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes"), (AnyView(SplitPage()), "split-custom"), (AnyView(BatteryPage(m: mon).powerTab(powerSnapshot)), "power-paused")] {
                 let host = NSHostingView(rootView: view.frame(width: Layout.idealSize.width - 212, height: Layout.idealSize.height).background(pageBG))
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
@@ -730,7 +751,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")
