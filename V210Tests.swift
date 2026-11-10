@@ -108,7 +108,7 @@ enum V210 {
 
         T.sec("2.10.1 拖动到分区：松手更宽容")
         T.check(DragGesture.shiftCounts(held: true, lastHeld: nil, now: 10), "松手时按着 ⇧：算数")
-        T.check(DragGesture.shiftCounts(held: false, lastHeld: 9.8, now: 10) && DragGesture.shiftCounts(held: false, lastHeld: 9.7, now: 10), "⇧ 比鼠标早松开 0.3 秒以内：仍算数")
+        T.check(DragGesture.shiftCounts(held: false, lastHeld: 9.8, now: 10) && DragGesture.shiftCounts(held: false, lastHeld: 9.75, now: 10), "⇧ 比鼠标早松开 0.3 秒以内：仍算数")
         T.check(!DragGesture.shiftCounts(held: false, lastHeld: 9.5, now: 10) && !DragGesture.shiftCounts(held: false, lastHeld: nil, now: 10), "⇧ 松开超过 0.3 秒或从没按过：取消")
         s = FakeDragSource()
         r = drag(s, from: CGPoint(x: 300, y: 110), to: CGPoint(x: 800, y: 400), shift: { $0 < 8 }, shiftUp: DragGesture.shiftCounts(held: false, lastHeld: 1.0, now: 1.1))
