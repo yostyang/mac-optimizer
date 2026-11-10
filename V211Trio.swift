@@ -256,8 +256,8 @@ enum TrioIcon {
         if c.percent {
             var attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: (r.height * 0.6).rounded(), weight: .bold), .foregroundColor: c.color ? NSColor.white : ink]
             if c.color { attrs[.strokeColor] = NSColor.black.withAlphaComponent(0.35); attrs[.strokeWidth] = -2 }
-            // 彩色模式下电量条太短时，白字会落在空白处看不见：改用墨色
-            if c.color, p < 45 { attrs = [.font: attrs[.font]!, .foregroundColor: ink] }
+            // 彩色模式下电量条不够长（低于 70%）时，白字会有一部分落在空白处看不见：改用墨色
+            if c.color, p < 70 { attrs = [.font: attrs[.font]!, .foregroundColor: ink] }
             let t = NSAttributedString(string: "\(p)", attributes: attrs), sz = t.size()
             t.draw(at: CGPoint(x: body.midX - sz.width / 2, y: body.midY - sz.height / 2))
         } else if charging {
