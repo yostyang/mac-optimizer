@@ -525,7 +525,7 @@ enum MOTests {
         let sc = SplitController.shared, realPrefs = sc.prefs, realScreens = sc.screens, realDriver = sc.driver
         let splitSuite = "mo.snapshot.split.\(getpid())"
         let splitUD = UserDefaults(suiteName: splitSuite)!; splitUD.removePersistentDomain(forName: splitSuite)
-        sc.prefs = SplitPrefs(splitUD); sc.prefs.setCustom([1, 3, 1], for: "S1"); sc.driver = FakeDriver()
+        sc.prefs = SplitPrefs(splitUD); sc.prefs.setCustom([1, 1, 1, 1], for: "S1"); sc.prefs.setRows([1, 2, 2, 1], for: "S1"); sc.driver = FakeDriver()
         sc.screens = FakeScreens([SplitDisplay(uuid: "S1", name: "内建显示器", visible: CGRect(x: 0, y: 0, width: 1728, height: 1079), scale: 2)], 1117)
         defer { CleanStore.shared.records = realClean; sc.prefs = realPrefs; sc.screens = realScreens; sc.driver = realDriver; splitUD.removePersistentDomain(forName: splitSuite) }
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {

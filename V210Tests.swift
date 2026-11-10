@@ -153,7 +153,44 @@ enum V210 {
         T.check(SplitController.commands("放到").count == 5, "有四栏模板时命令面板多出第 2、3 区", "\(SplitController.commands("放到").map(\.title))")
         p.setCustom([1, 2, 1], for: "A")
         T.check(SplitController.commands("放到").count == 3, "三栏及以下只有左中右")
+        // 上下平分：四栏里中间两栏各分成上下两个区（共 6 个区）
+        let area = CGRect(x: 0, y: 0, width: 1632, height: 875)
+        let z6 = SplitLayout.rects(weights: [1, 1, 1, 1], rows: [1, 2, 2, 1], in: area)
+        T.check(z6.count == 6 && z6[0].height == 859 && z6[5].height == 859, "两侧的栏保持整栏高", "\(z6.map { Int($0.height) })")
+        T.check(z6[1].minX == z6[2].minX && z6[1].width == z6[2].width && z6[1].minY > z6[2].maxY && abs(z6[1].height - z6[2].height) <= 1, "上下平分的栏：上区在前、下区在后，高度相等")
+        T.check(abs(z6[1].minY - z6[2].maxY - 8) < 0.01 && z6[1].maxY == area.maxY - 8 && z6[2].minY == 8, "上下两区之间和屏幕边缘都留间距")
+        T.check(SplitLayout.rects(weights: [1, 2], rows: [1, 1], in: area) == SplitLayout.rects(weights: [1, 2], in: area) && SplitLayout.rects(weights: [1, 2], rows: [], in: area).count == 2, "没有上下平分时与原来的布局一致")
+        let fl = SplitLayout.rects(weights: [1, 1], rows: [2, 1], in: CGRect(x: 0, y: 0, width: 96, height: 40), gap: 3, flipped: true)
+        T.check(fl.count == 3 && fl[0].minY < fl[1].minY, "预览图（y 向下）里上区画在上面")
+        T.check(SplitLayout.firstZone(ofColumn: 0, rows: [1, 2, 2, 1]) == 0 && SplitLayout.firstZone(ofColumn: 2, rows: [1, 2, 2, 1]) == 3 && SplitLayout.firstZone(ofColumn: 3, rows: [1, 2, 2, 1]) == 5, "按栏找到它的第一个区")
+        p.setCustom([1, 1, 1, 1], for: "A"); p.setRows([1, 2, 2, 1], for: "A")
+        T.check(p.rows("A") == [1, 2, 2, 1] && p.zones("A", in: area)?.count == 6, "上下平分的设置可保存读取")
+        p.setRows([1, 2], for: "A"); T.check(p.rows("A") == [1, 1, 1, 1], "栏数对不上的设置按不分处理")
+        p.setRows([1, 2, 2, 1], for: "A")
+        shared.prefs = p; shared.screens = c.screens
+        T.check(SplitController.commands("放到").count == 7, "有上下平分时命令面板按序号列出其余的区", "\(SplitController.commands("放到").map(\.title))")
         shared.prefs = keepPrefs; shared.screens = keepScreens
+        let w6 = FakeWin(CGRect(x: 100, y: 100, width: 500, height: 400)); drv.focusedWin = w6
+        let ax6 = z6.map { SplitLayout.toAX($0, primaryHeight: 900) }
+        T.check(c.place(index: 2) == "已把 Chrome 放到第 3 区" && w6.frame == ax6[2] && ax6[2].minY > ax6[1].minY, "按序号放到第二栏的下半区", "\(String(describing: w6.frame))")
+        T.check(c.place(.right).hasPrefix("已把 Chrome 放到右区") && w6.frame == ax6[5] && c.place(.left).hasPrefix("已把") && w6.frame == ax6[0], "左区、右区仍指最左和最右的栏")
+        p.setCustom([1, 2, 1], for: "A"); p.setRows([1, 2, 1], for: "A")
+        let z4 = p.zones("A", in: area)!.map { SplitLayout.toAX($0, primaryHeight: 900) }
+        T.check(c.place(.center).hasPrefix("已把 Chrome 放到中区") && w6.frame == z4[1] && c.place(.right).hasPrefix("已把") && w6.frame == z4[3], "中间栏上下平分时：中区指它的上半区，右区序号顺延")
+        p.set(.threeCol, for: "A")
+        T.check(p.rows("A") == [1, 1, 1] && p.zones("A", in: area)?.count == 3, "固定模板不受上下平分设置影响")
+
+        T.sec("2.10 分区间距")
+        T.check(p.gap == 8, "默认间距 8 pt")
+        p.setGap(0)
+        let g0 = p.zones("A", in: area)!
+        T.check(p.gap == 0 && g0[0].minX == 0 && g0[2].maxX == 1632 && g0[0].maxX == g0[1].minX && g0[0].height == 875, "间距为 0：窗口紧贴屏幕边缘和彼此")
+        p.setGap(20)
+        let g20 = p.zones("A", in: area)!
+        T.check(g20[0].minX == 20 && abs(g20[1].minX - g20[0].maxX - 20) < 0.01 && g20[0].minY == 20, "间距 20：边缘和栏间都是 20 pt")
+        p.setGap(99); T.check(p.gap == 24, "间距上限 24 pt"); p.setGap(-5); T.check(p.gap == 0, "间距下限 0")
+        p.setGap(12); _ = c.place(.left)
+        T.check(w6.frame?.minX == 12 && w6.frame?.minY == 900 - 875 + 12, "归位时使用设置的间距", "\(String(describing: w6.frame))")
         ud.removePersistentDomain(forName: suite)
 
         T.sec("2.10 清理记录恢复")
@@ -227,6 +264,16 @@ enum V210 {
         T.check(c.prefs.custom("T1") == [1, 3, 1, 1], "最多四栏：再点不会继续增加")
         T.find(pv, id: "split.custom.remove")?.press()
         T.check(T.waitUntil(2) { c.prefs.custom("T1") == [1, 3, 1] }, "减一栏")
+        T.find(pv, id: "split.custom.rows.1")?.press()
+        T.check(T.waitUntil(2) { c.prefs.rows("T1") == [1, 2, 1] }, "点图标把中间一栏上下平分")
+        T.find(pv, id: "split.custom.add")?.press()
+        T.check(T.waitUntil(2) { c.prefs.custom("T1")?.count == 4 && c.prefs.rows("T1") == [1, 2, 1, 1] }, "加栏时保留已有的上下平分")
+        T.find(pv, id: "split.custom.rows.1")?.press()
+        T.check(T.waitUntil(2) { c.prefs.rows("T1") == [1, 1, 1, 1] }, "再点一次取消上下平分")
+        T.find(pv, id: "split.gap.plus")?.press()
+        T.check(T.waitUntil(2) { c.prefs.gap == 10 }, "间距加 2 pt")
+        T.find(pv, id: "split.gap.minus")?.press(); T.settle(0.3); T.find(pv, id: "split.gap.minus")?.press()
+        T.check(T.waitUntil(2) { c.prefs.gap == 6 }, "间距可减小")
         T.find(pv, id: "split.off")?.press()
         T.check(T.waitUntil(2) { c.prefs.weights("T1") == nil }, "关闭分区同时清掉自定义")
         T.check(T.find1(pv, id: "split.drag") != nil, "有「按住 ⇧ 拖动窗口时显示分区」开关")

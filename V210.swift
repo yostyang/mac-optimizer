@@ -23,9 +23,10 @@ enum SplitCustom {
 
 struct SplitPreview: View {
     let weights: [CGFloat]
+    var rows: [Int] = []
     var body: some View {
         GeometryReader { g in
-            ForEach(Array(SplitLayout.rects(weights: weights, in: CGRect(origin: .zero, size: g.size), gap: 3).enumerated()), id: \.offset) { _, r in
+            ForEach(Array(SplitLayout.rects(weights: weights, rows: rows, in: CGRect(origin: .zero, size: g.size), gap: 3, flipped: true).enumerated()), id: \.offset) { _, r in
                 RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.35)).frame(width: r.width, height: r.height).position(x: r.midX, y: r.midY)
             }
         }.background(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
@@ -41,8 +42,8 @@ struct SplitCustomEditor: View {
         VStack(alignment: .leading, spacing: 6) {
             Button(action: { if cur == nil { apply(SplitCustom.seed(from: prefs.weights(uuid))) } }) {
                 HStack {
-                    SplitPreview(weights: (cur ?? SplitCustom.seed(from: prefs.weights(uuid))).map { CGFloat($0) }).frame(width: 96, height: 40)
-                    Text(cur.map { "自定义 " + SplitCustom.title($0) } ?? "自定义比例"); Spacer()
+                    SplitPreview(weights: (cur ?? SplitCustom.seed(from: prefs.weights(uuid))).map { CGFloat($0) }, rows: cur == nil ? [] : prefs.rows(uuid)).frame(width: 96, height: 40)
+                    Text(cur.map { "自定义 " + SplitCustom.title($0) + (prefs.rows(uuid).contains(2) ? "（含上下平分）" : "") } ?? "自定义比例"); Spacer()
                     if cur != nil { Image(systemName: "checkmark").foregroundColor(accent) }
                 }
             }.buttonStyle(.plain).accessibilityIdentifier("split.custom")
@@ -55,17 +56,50 @@ struct SplitCustomEditor: View {
                             Text("\(v)").font(DS.sub(.semibold)).monospacedDigit().frame(minWidth: 14)
                             Button(action: { apply(SplitCustom.adjust(w, column: i, by: 1)) }) { Image(systemName: "plus") }
                                 .disabled(v >= SplitCustom.weight.upperBound).accessibilityIdentifier("split.custom.plus.\(i)").accessibilityLabel("第 \(i + 1) 栏变宽")
+                            let stacked = prefs.rows(uuid)[safe: i] == 2
+                            Button(action: { toggleRows(i) }) { Image(systemName: stacked ? "rectangle.split.1x2.fill" : "rectangle.split.1x2") }
+                                .help(stacked ? "取消上下平分" : "这一栏上下平分").accessibilityIdentifier("split.custom.rows.\(i)")
+                                .accessibilityLabel("第 \(i + 1) 栏" + (stacked ? "取消上下平分" : "上下平分"))
                         }
                     }
                     Spacer()
                     Button("减一栏") { apply(SplitCustom.removeColumn(w)) }.disabled(w.count <= SplitCustom.columns.lowerBound).accessibilityIdentifier("split.custom.remove")
                     Button("加一栏") { apply(SplitCustom.addColumn(w)) }.disabled(w.count >= SplitCustom.columns.upperBound).accessibilityIdentifier("split.custom.add")
                 }.controlSize(.small)
-                Text("数字是各栏的宽度比例，可设 2 到 4 栏。").font(.caption).foregroundColor(.secondary)
+                Text("数字是各栏的宽度比例，可设 2 到 4 栏；点每栏右边的图标，可以把这一栏再上下平分。").font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
-    private func apply(_ w: [Int]) { prefs.setCustom(w, for: uuid); changed() }
+    private func apply(_ w: [Int]) {
+        // 加减栏时保留已有各栏的上下平分设置
+        let old = prefs.custom(uuid) == nil ? [] : prefs.rows(uuid)
+        prefs.setCustom(w, for: uuid)
+        prefs.setRows(w.indices.map { old.indices.contains($0) ? old[$0] : 1 }, for: uuid)
+        changed()
+    }
+    private func toggleRows(_ i: Int) {
+        var r = prefs.rows(uuid); guard r.indices.contains(i) else { return }
+        r[i] = r[i] == 2 ? 1 : 2; prefs.setRows(r, for: uuid); changed()
+    }
+}
+private extension Array { subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil } }
+
+/// 分区间距：窗口之间和屏幕边缘留多少空
+struct SplitGapEditor: View {
+    let prefs: SplitPrefs
+    let changed: () -> Void
+    var body: some View {
+        let g = Int(prefs.gap)
+        HStack(spacing: 6) {
+            Text("间距").font(DS.sub())
+            Button(action: { prefs.setGap(g - 2); changed() }) { Image(systemName: "minus") }
+                .disabled(g <= SplitPrefs.gapRange.lowerBound).accessibilityIdentifier("split.gap.minus").accessibilityLabel("减小间距")
+            Text("\(g) pt").font(DS.sub(.semibold)).monospacedDigit().frame(minWidth: 34).accessibilityIdentifier("split.gap.value")
+            Button(action: { prefs.setGap(g + 2); changed() }) { Image(systemName: "plus") }
+                .disabled(g >= SplitPrefs.gapRange.upperBound).accessibilityIdentifier("split.gap.plus").accessibilityLabel("增大间距")
+            Text("窗口之间和屏幕边缘的留空，所有屏幕共用；0 为紧贴。").font(.caption).foregroundColor(.secondary)
+        }.controlSize(.small)
+    }
 }
 
 /// 拖动到分区的开关（默认关闭）

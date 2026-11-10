@@ -244,6 +244,8 @@
 ### 自定义比例
 - `SplitPrefs.weights(uuid)` 是唯一的取值入口：固定模板（`split.templates`）或自定义（`split.custom`，`[uuid: [Int]]`），二选一，互相清除。`SplitLayout.rects(weights:in:)` 负责布局。
 - `SplitController.place(_ zone:)` 仍按左/中/右；`place(index:)` 按序号。四栏时没有唯一的中区，命令面板额外给出第 2、3 区。
+- 上下平分：`split.customRows`（`[uuid: [Int]]`，每栏 1 或 2），只对自定义比例有效。`SplitPrefs.zones(uuid, in:)` 是取全部区的唯一入口（比例 + 上下平分 + 间距），归位、拖动高亮都走它；区的顺序是从左到右、每栏从上到下，`SplitLayout.firstZone(ofColumn:rows:)` 把栏换成序号。预览图是 y 向下的坐标，要传 `flipped: true`。
+- 间距：`split.gap`（0–24，默认 `SplitLayout.gap` = 8），所有屏幕共用。
 
 ### 拖动到分区
 - `DragGesture` 是纯逻辑状态机：按下 → 候选（按住 ⇧ 且移动 ≥ 6 pt 时取鼠标下的窗口）→ 拖动中（窗口尺寸不变、位置变化且方向与鼠标一致）→ 松手给出落点。坐标一律用辅助功能坐标。
