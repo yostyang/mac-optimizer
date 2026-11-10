@@ -161,6 +161,7 @@ enum MOTests {
         V28.tests()
         V292.tests()
         V210.tests()
+        V211.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -532,7 +533,7 @@ enum MOTests {
             NSApp.appearance = NSAppearance(named: ap)
             var powerSnapshot = fixture(); powerSnapshot.charging = false; powerSnapshot.onAC = true
             powerSnapshot.batteryVoltageV = 12.8; powerSnapshot.batteryCurrentA = 0
-            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes"), (AnyView(SplitPage()), "split-custom"), (AnyView(BatteryPage(m: mon).powerTab(powerSnapshot)), "power-paused")] {
+            for (view, name) in [(AnyView(CleanPage()), "clean"), (AnyView(ChangesPage()), "changes"), (AnyView(SplitPage()), "split-custom"), (AnyView(TrioGallery()), "trio-gallery"), (AnyView(TrioSettings().padding(16).frame(width: 640)), "trio-settings"), (AnyView(TrioPanelCard().padding(10).frame(width: PanelLayout.width)), "trio-panel"), (AnyView(BatteryPage(m: mon).powerTab(powerSnapshot)), "power-paused")] {
                 let host = NSHostingView(rootView: view.frame(width: Layout.idealSize.width - 212, height: Layout.idealSize.height).background(pageBG))
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
@@ -751,7 +752,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

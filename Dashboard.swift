@@ -695,6 +695,8 @@ final class StatusBar: NSObject, NSPopoverDelegate {
         popover.behavior = .transient; popover.animates = false; popover.delegate = self
         Monitor.shared.$s.receive(on: RunLoop.main).sink { [weak self] _ in self?.render() }.store(in: &subs)
         BatteryAlerts.shared.$settings.receive(on: RunLoop.main).sink { [weak self] _ in DispatchQueue.main.async { self?.render() } }.store(in: &subs)
+        // 2.11 合并状态图标：配置、音量、Wi-Fi 变化时重画
+        TrioModel.shared.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in DispatchQueue.main.async { self?.render() } }.store(in: &subs)
         apply()
     }
     func apply() {
@@ -713,6 +715,17 @@ final class StatusBar: NSObject, NSPopoverDelegate {
         let mode = BatteryAlerts.shared.settings.menuIndicator
         defer { lastMode = mode }
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        if mode == "trio" {
+            let t = TrioModel.shared
+            if lastMode != mode { t.startListening() }
+            t.refresh()   // Wi-Fi 跟随现有的低频采样；音量另有系统事件通知
+            let charging = s.charging || s.onAC
+            b.image = TrioIcon.image(config: t.config, battery: s.battery, charging: charging, wifi: t.wifi, volume: t.volume)
+            b.title = ""; b.imagePosition = .imageOnly
+            b.toolTip = TrioIcon.describe(battery: s.battery, charging: charging, wifi: t.wifi, volume: t.volume)
+            return
+        }
+        if lastMode == "trio" { b.toolTip = nil }
         if mode == "net" {
             if lastMode != mode { let img = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: nil); img?.isTemplate = true; b.image = img; b.imagePosition = .imageLeading }
             let str = " ↓" + StatusBar.short(s.downBps) + " ↑" + StatusBar.short(s.upBps)
