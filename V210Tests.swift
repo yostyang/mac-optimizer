@@ -67,7 +67,23 @@ enum V210 {
         s = FakeDragSource(); s.follow = false
         seen = nil
         r = drag(s, from: CGPoint(x: 300, y: 300), to: CGPoint(x: 800, y: 400), inspect: { seen = $0 })
-        T.check(r.0 == nil && seen?.phase == .rejected && s.frameCalls <= DragGesture.maxMisses, "窗口没跟着动（在选文字或拖文件）：放弃，不再查询", "查询 \(s.frameCalls) 次")
+        T.check(r.0 == nil && seen?.phase == .rejected && s.frameCalls <= DragGesture.maxQueries, "窗口没跟着动（在选文字或拖文件）：鼠标走远后放弃，不再查询", "查询 \(s.frameCalls) 次")
+
+        // 真机上窗口位置的读数比鼠标慢：只跟上一半也要认出来
+        final class Laggy: DragWindowSource {
+            let inner: FakeDragSource; var stale: CGRect?
+            init(_ s: FakeDragSource) { inner = s }
+            func trusted() -> Bool { true }
+            func window(at p: CGPoint) -> DragWindow? { inner.window(at: p) }
+            func frame(of h: AnyObject) -> CGRect? { let now = inner.frame(of: h); defer { stale = now }; return stale ?? now }
+        }
+        s = FakeDragSource()
+        do {
+            let lag = Laggy(s); var g = DragGesture(); let from = CGPoint(x: 300, y: 110); g.mouseDown(from); s.begin(at: from)
+            for i in 1...10 { let p = CGPoint(x: 300 + CGFloat(i) * 40, y: 110 + CGFloat(i) * 20); s.move(to: p); g.mouseDragged(p, shift: true, source: lag, zonesAt: zonesAt) }
+            T.check(g.phase == .dragging, "窗口位置读数慢一拍：仍能认出是在拖窗口", "\(g.phase)，查询 \(g.queries) 次")
+        }
+        T.check(DragGesture.originalFrame(down: CGPoint(x: 300, y: 110), up: CGPoint(x: 800, y: 400), frameAtUp: CGRect(x: 600, y: 390, width: 800, height: 600)) == CGRect(x: 100, y: 100, width: 800, height: 600), "撤销位置按松手后的窗口位置反推")
 
         s = FakeDragSource(); s.resizing = true
         seen = nil
@@ -96,7 +112,7 @@ enum V210 {
         c.screens = FakeScreens([SplitDisplay(uuid: "A", name: "内建", visible: CGRect(x: 0, y: 0, width: 1632, height: 875), scale: 2)], 900)
         c.tracker = FakeTracker(SplitTarget(pid: 4242, name: "Chrome"))
         let win = FakeWin(CGRect(x: 600, y: 390, width: 800, height: 600))
-        let drop = DragGesture.Drop(window: DragWindow(handle: win, pid: 4242, name: "Chrome", frame: win.frame!), original: CGRect(x: 100, y: 100, width: 800, height: 600), target: zones[1], zone: 1)
+        let drop = DragGesture.Drop(window: DragWindow(handle: win, pid: 4242, name: "Chrome", frame: win.frame!), original: CGRect(x: 100, y: 100, width: 800, height: 600), target: zones[1], zone: 1, down: .zero, up: .zero)
         T.check(c.placeDragged(drop) == "已把 Chrome 放到第 2 区" && win.frame == zones[1], "松手后窗口放进落区", "\(String(describing: win.frame))")
         T.check(c.undoLast() == "已把 Chrome 撤销归位" && win.frame == CGRect(x: 100, y: 100, width: 800, height: 600), "撤销回到拖动前的位置，而不是松手时的位置")
         drv.minW = 1000

@@ -18,11 +18,15 @@ protocol DragWindowSource {
 /// 一次拖动手势的判断（纯逻辑，坐标一律用辅助功能坐标：主屏左上为原点）
 struct DragGesture {
     enum Phase: Equatable { case idle, pressed, candidate, dragging, rejected }
-    struct Drop { let window: DragWindow; let original: CGRect; let target: CGRect; let zone: Int }
+    struct Drop { let window: DragWindow; var original: CGRect; let target: CGRect; let zone: Int; let down: CGPoint; let up: CGPoint }
+    /// 拖动时鼠标在窗口里的相对位置不变：用松手后读到的窗口位置反推拖动前的位置（不受读数延迟影响）
+    static func originalFrame(down: CGPoint, up: CGPoint, frameAtUp f: CGRect) -> CGRect {
+        CGRect(x: down.x - (up.x - f.minX), y: down.y - (up.y - f.minY), width: f.width, height: f.height)
+    }
 
     static let startDistance: CGFloat = 6      // 鼠标至少移动这么远才开始判断
-    static let followTolerance: CGFloat = 12   // 窗口位移与鼠标位移允许的误差
-    static let maxMisses = 4                   // 连续几次窗口没跟着动就放弃本次手势
+    static let maxTravel: CGFloat = 200        // 鼠标走了这么远窗口还没动：拖的不是窗口，放弃
+    static let maxQueries = 20                 // 一次手势最多查询这么多次
 
     private(set) var phase: Phase = .idle
     private(set) var window: DragWindow?
@@ -32,7 +36,6 @@ struct DragGesture {
     private var down = CGPoint.zero
     private var seenAt = CGPoint.zero          // 取到候选窗口时的鼠标位置
     private var original: CGRect?              // 推算出的拖动前位置（撤销用）
-    private var misses = 0
 
     mutating func mouseDown(_ p: CGPoint) { self = DragGesture(); phase = .pressed; down = p }
 
@@ -53,14 +56,15 @@ struct DragGesture {
             guard let f = source.frame(of: w.handle) else { phase = .rejected; return }
             let sameSize = abs(f.width - w.frame.width) <= 1 && abs(f.height - w.frame.height) <= 1
             let dw = CGPoint(x: f.minX - w.frame.minX, y: f.minY - w.frame.minY)
-            let follows = abs(dw.x - dm.x) <= Self.followTolerance && abs(dw.y - dm.y) <= Self.followTolerance
-            if sameSize && follows && hypot(dw.x, dw.y) >= 2 {
+            // 窗口位置的读数会比鼠标慢一拍（实测 Chrome、Edge、Electron 都如此），所以只要求「动了、且方向与鼠标一致」
+            let follows = hypot(dw.x, dw.y) >= 3 && dw.x * dm.x + dw.y * dm.y > 0
+            if sameSize && follows {
                 // 拖动前的位置 = 取样时的位置 − 取样前鼠标已经走过的距离
                 original = w.frame.offsetBy(dx: -(seenAt.x - down.x), dy: -(seenAt.y - down.y))
                 phase = .dragging; update(p, shift: shift, zonesAt: zonesAt)
             } else {
-                misses += 1
-                if !sameSize || misses >= Self.maxMisses { phase = .rejected }   // 尺寸在变 = 在调整大小；一直不动 = 拖的不是窗口
+                // 尺寸在变 = 在调整大小；鼠标走远了窗口还不动 = 拖的不是窗口
+                if !sameSize || hypot(dm.x, dm.y) >= Self.maxTravel || queries >= Self.maxQueries { phase = .rejected }
             }
         case .dragging:
             update(p, shift: shift, zonesAt: zonesAt)
@@ -77,7 +81,7 @@ struct DragGesture {
         guard phase == .dragging, let w = window, let o = original else { return nil }
         update(p, shift: shift, zonesAt: zonesAt)
         guard let i = active else { return nil }
-        return Drop(window: w, original: o, target: zones[i], zone: i)
+        return Drop(window: w, original: o, target: zones[i], zone: i, down: down, up: p)
     }
 }
 
@@ -87,14 +91,17 @@ struct AXDragSource: DragWindowSource {
     func window(at p: CGPoint) -> DragWindow? {
         guard trusted() else { return nil }
         var el: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &el) == .success, let e = el else { return nil }
         var win: AXUIElement? = nil
-        var role: CFTypeRef?
-        if AXUIElementCopyAttributeValue(e, kAXRoleAttribute as CFString, &role) == .success, (role as? String) == (kAXWindowRole as String) { win = e }
-        else {
-            var w: CFTypeRef?
-            if AXUIElementCopyAttributeValue(e, kAXWindowAttribute as CFString, &w) == .success, let w, CFGetTypeID(w) == AXUIElementGetTypeID() { win = (w as! AXUIElement) }
+        if AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &el) == .success, let e = el {
+            var role: CFTypeRef?
+            if AXUIElementCopyAttributeValue(e, kAXRoleAttribute as CFString, &role) == .success, (role as? String) == (kAXWindowRole as String) { win = e }
+            else {
+                var w: CFTypeRef?
+                if AXUIElementCopyAttributeValue(e, kAXWindowAttribute as CFString, &w) == .success, let w, CFGetTypeID(w) == AXUIElementGetTypeID() { win = (w as! AXUIElement) }
+            }
         }
+        // 有些应用（如微信）按坐标取不到元素：改用窗口列表找到鼠标下最上层的窗口，再到该应用里按位置匹配
+        if win == nil { win = Self.windowByList(at: p) }
         guard let win, let f = Self.frame(win) else { return nil }
         var pid: pid_t = 0; AXUIElementGetPid(win, &pid)
         guard pid != getpid() else { return nil }
@@ -103,6 +110,20 @@ struct AXDragSource: DragWindowSource {
         var fs: CFTypeRef?
         if AXUIElementCopyAttributeValue(win, "AXFullScreen" as CFString, &fs) == .success, (fs as? Bool) == true { return nil }
         return DragWindow(handle: win, pid: pid, name: NSRunningApplication(processIdentifier: pid)?.localizedName ?? "窗口", frame: f)
+    }
+    static func windowByList(at p: CGPoint) -> AXUIElement? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+        for info in list {
+            guard (info[kCGWindowLayer as String] as? Int) == 0, let b = info[kCGWindowBounds as String] as? [String: CGFloat],
+                  let pid = info[kCGWindowOwnerPID as String] as? pid_t else { continue }
+            let r = CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0)
+            guard r.contains(p) else { continue }
+            var ws: CFTypeRef?
+            guard pid != getpid(), AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &ws) == .success,
+                  let arr = ws as? [AXUIElement] else { return nil }
+            return arr.first { w in frame(w).map { abs($0.minX - r.minX) <= 2 && abs($0.minY - r.minY) <= 2 && abs($0.width - r.width) <= 2 } ?? false }
+        }
+        return nil
     }
     func frame(of handle: AnyObject) -> CGRect? {
         guard CFGetTypeID(handle) == AXUIElementGetTypeID() else { return nil }
@@ -207,7 +228,7 @@ final class DragZones {
             lastSample = e.timestamp
             let before = gesture.phase
             gesture.mouseDragged(axPoint(), shift: shift, source: source, zonesAt: zones(at:))
-            if before != gesture.phase { log?("手势：\(before) → \(gesture.phase)\(gesture.window.map { "（\($0.name)）" } ?? "")") }
+            if before != gesture.phase { log?("手势：\(before) → \(gesture.phase)\(gesture.window.map { "（\($0.name)）" } ?? "")，查询 \(gesture.queries) 次") }
             let h = SplitController.shared.screens.primaryHeight
             overlay.show(zones: gesture.zones.map { SplitLayout.fromAX($0, primaryHeight: h) }, active: gesture.active)
         case .leftMouseUp:
@@ -217,8 +238,10 @@ final class DragZones {
             guard let d = drop else { if q > 0 { log?("松手：没有落区（查询 \(q) 次）") }; return }
             // 等应用自己处理完松手，再移动窗口
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                var d = d
+                if let f = self?.source.frame(of: d.window.handle) { d.original = DragGesture.originalFrame(down: d.down, up: d.up, frameAtUp: f) }
                 let msg = SplitController.shared.placeDragged(d)
-                self?.log?("松手：\(d.window.name) → 第 \(d.zone + 1) 区，结果「\(msg)」（查询 \(q) 次）")
+                self?.log?("松手：\(d.window.name) → 第 \(d.zone + 1) 区，结果「\(msg)」，撤销位置 \(Int(d.original.minX)),\(Int(d.original.minY))（查询 \(q) 次）")
                 SplitHUD.show(msg)
             }
         default: break
