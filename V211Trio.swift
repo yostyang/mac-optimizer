@@ -17,9 +17,9 @@ enum TrioItem: String, Codable, CaseIterable {
 
 struct TrioConfig: Codable, Equatable {
     var items: [TrioItem] = TrioItem.allCases   // 显示哪几项（顺序固定：Wi-Fi、音量、电池）
-    var compact = true                          // 紧凑：Wi-Fi 与音量上下叠放；否则并排
+    var compact = false                         // 紧凑：Wi-Fi 与音量上下叠放；默认并排
     var percent = true                          // 电池里显示百分比数字
-    var color = false                           // 电池按电量着色；否则整体单色、跟随菜单栏
+    var color = true                            // 电池按电量着色（默认）；关闭后整体单色、跟随菜单栏
     var size = 1                                // 0 小 / 1 中 / 2 大
     var panel = true                            // 面板里显示音量和 Wi-Fi 控制
     var wifiName = false                        // 面板里显示 Wi-Fi 名称（需要定位权限）

@@ -17,17 +17,19 @@ struct TrioGallery: View {
     static let wifi = WifiState(link: .connected, rssi: -64, name: nil), vol = VolumeState(level: 0.6, muted: false, settable: true)
     static func cfg(_ f: (inout TrioConfig) -> Void) -> TrioConfig { var c = TrioConfig(); f(&c); return c }
     static let rows: [(String, TrioConfig, Int, Bool, WifiState, VolumeState)] = [
-        ("默认：紧凑 · 中 · 单色", TrioConfig(), 84, false, wifi, vol),
-        ("并排", cfg { $0.compact = false }, 84, false, wifi, vol),
-        ("彩色电池", cfg { $0.color = true }, 84, true, wifi, vol),
-        ("彩色 · 低电量 · 并排", cfg { $0.color = true; $0.compact = false }, 12, false, WifiState(link: .connected, rssi: -88), VolumeState(level: 0.2, muted: false, settable: true)),
+        ("默认：并排 · 中 · 彩色", TrioConfig(), 84, false, wifi, vol),
+        ("默认 · 充电中", TrioConfig(), 84, true, wifi, vol),
+        ("默认 · 低电量 · 信号弱 · 音量小", TrioConfig(), 12, false, WifiState(link: .connected, rssi: -88), VolumeState(level: 0.2, muted: false, settable: true)),
+        ("单色", cfg { $0.color = false }, 84, false, wifi, vol),
+        ("紧凑 · 彩色", cfg { $0.compact = true }, 84, false, wifi, vol),
+        ("紧凑 · 单色", cfg { $0.compact = true; $0.color = false }, 84, false, wifi, vol),
         ("不显示百分比 · 充电中", cfg { $0.percent = false }, 55, true, wifi, vol),
         ("小", cfg { $0.size = 0 }, 84, false, wifi, vol),
         ("大", cfg { $0.size = 2 }, 100, false, wifi, vol),
         ("只有 Wi-Fi 和电池", cfg { $0.items = [.wifi, .battery] }, 84, false, wifi, vol),
         ("只有音量和电池", cfg { $0.items = [.volume, .battery] }, 84, false, wifi, vol),
-        ("Wi-Fi 关闭 · 静音", TrioConfig(), 47, false, WifiState(link: .off), VolumeState(level: 0.5, muted: true, settable: true)),
-        ("未连接 · 输出设备不能调音量", cfg { $0.compact = false }, 47, false, WifiState(link: .disconnected), VolumeState()),
+        ("紧凑 · Wi-Fi 关闭 · 静音", cfg { $0.compact = true }, 47, false, WifiState(link: .off), VolumeState(level: 0.5, muted: true, settable: true)),
+        ("未连接 · 输出设备不能调音量", TrioConfig(), 47, false, WifiState(link: .disconnected), VolumeState()),
     ]
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -49,7 +51,7 @@ enum V211 {
     static func tests() {
         T.sec("2.11 合并状态图标：设置")
         var c = TrioConfig()
-        T.check(c.items == [.wifi, .volume, .battery] && c.compact && c.percent && !c.color && c.size == 1 && c.panel && !c.wifiName, "默认：三项都显示、紧凑、中号、单色，不读 Wi-Fi 名称")
+        T.check(c.items == [.wifi, .volume, .battery] && !c.compact && c.percent && c.color && c.size == 1 && c.panel && !c.wifiName, "默认：三项都显示、并排、中号、彩色电池，不读 Wi-Fi 名称")
         c = c.toggled(.volume); T.check(c.items == [.wifi, .battery], "可以关掉其中一项")
         c = c.toggled(.wifi).toggled(.battery); T.check(c.items == [.battery], "至少保留一项")
         c = c.toggled(.wifi); T.check(c.items == [.wifi, .battery], "重新打开后顺序固定为 Wi-Fi、音量、电池")
@@ -57,7 +59,7 @@ enum V211 {
         T.check(odd.sanitized().items == [.battery] && odd.sanitized().size == 2, "异常设置会被修正")
         let suite = "mo.test.trio.\(getpid())", ud = UserDefaults(suiteName: suite)!; ud.removePersistentDomain(forName: suite)
         T.check(TrioConfig.load(ud) == TrioConfig(), "没有保存过时用默认设置")
-        var saved = TrioConfig(); saved.compact = false; saved.color = true; saved.size = 2; saved.items = [.volume, .battery]; saved.save(ud)
+        var saved = TrioConfig(); saved.compact = true; saved.color = false; saved.size = 2; saved.items = [.volume, .battery]; saved.save(ud)
         T.check(TrioConfig.load(ud) == saved, "设置可保存读取")
         ud.removePersistentDomain(forName: suite)
 
@@ -78,23 +80,24 @@ enum V211 {
             for i in rs.indices { if !bounds.insetBy(dx: -0.01, dy: -0.01).contains(rs[i]) { return false }; for j in rs.indices where j > i { if rs[i].intersects(rs[j]) { return false } } }
             return true
         }
-        let compact = TrioLayout.make(TrioConfig(), hasBattery: true)
+        var compactCfg = TrioConfig(); compactCfg.compact = true
+        let compact = TrioLayout.make(compactCfg, hasBattery: true)
         T.check(compact.size.height == 16 && compact.frames.count == 3 && noOverlap(compact), "紧凑：三项互不重叠且不超出图标", "\(compact.size)")
         T.check(compact.frames[.wifi]!.minX == compact.frames[.volume]!.minX && compact.frames[.wifi]!.minY > compact.frames[.volume]!.maxY - 0.01 && compact.frames[.battery]!.minX > compact.frames[.wifi]!.maxX, "紧凑：Wi-Fi 在上、音量在下，电池在右")
         var rowCfg = TrioConfig(); rowCfg.compact = false
         let row = TrioLayout.make(rowCfg, hasBattery: true)
         T.check(noOverlap(row) && row.size.width > compact.size.width && row.frames[.wifi]!.maxX < row.frames[.volume]!.minX && row.frames[.volume]!.maxX < row.frames[.battery]!.minX, "并排：从左到右 Wi-Fi、音量、电池，比紧凑宽", "\(Int(row.size.width)) 对 \(Int(compact.size.width))")
-        for s in 0...2 { var x = TrioConfig(); x.size = s; let l = TrioLayout.make(x, hasBattery: true); T.check(l.size.height == TrioLayout.heights[s] && l.size.height <= 18 && noOverlap(l), "大小 \(["小", "中", "大"][s])：高 \(Int(l.size.height)) pt，放得进菜单栏") }
-        var two = TrioConfig(); two.items = [.wifi, .battery]
+        for s in 0...2 { var x = TrioConfig(); x.size = s; x.compact = true; let l = TrioLayout.make(x, hasBattery: true); T.check(l.size.height == TrioLayout.heights[s] && l.size.height <= 18 && noOverlap(l), "大小 \(["小", "中", "大"][s])：高 \(Int(l.size.height)) pt，放得进菜单栏") }
+        var two = TrioConfig(); two.compact = true; two.items = [.wifi, .battery]
         let l2 = TrioLayout.make(two, hasBattery: true)
         T.check(l2.frames[.volume] == nil && l2.frames[.wifi]!.height == 16 && l2.size.width < row.size.width, "关掉音量后 Wi-Fi 用整格高度，图标变窄")
-        let desktop = TrioLayout.make(TrioConfig(), hasBattery: false)
+        let desktop = TrioLayout.make(compactCfg, hasBattery: false)
         T.check(desktop.frames[.battery] == nil && desktop.frames.count == 2 && noOverlap(desktop), "没有电池的 Mac：只画 Wi-Fi 和音量")
         var only = TrioConfig(); only.items = [.battery]
         T.check(TrioLayout.make(only, hasBattery: false).frames.count == 1, "只选了电池但机器没有电池：退回显示音量，不出现空图标")
-        let img = TrioIcon.image(config: TrioConfig(), battery: 84, charging: false, wifi: WifiState(link: .connected, rssi: -60), volume: VolumeState(level: 0.5))
-        var colored = TrioConfig(); colored.color = true
-        T.check(img.size == compact.size && img.isTemplate && !TrioIcon.image(config: colored, battery: 84, charging: false, wifi: WifiState(), volume: VolumeState()).isTemplate, "单色图标是模板图（跟随菜单栏深浅），彩色不是")
+        var mono = compactCfg; mono.color = false
+        let img = TrioIcon.image(config: mono, battery: 84, charging: false, wifi: WifiState(link: .connected, rssi: -60), volume: VolumeState(level: 0.5))
+        T.check(img.size == compact.size && img.isTemplate && !TrioIcon.image(config: TrioConfig(), battery: 84, charging: false, wifi: WifiState(), volume: VolumeState()).isTemplate, "单色图标是模板图（跟随菜单栏深浅），彩色不是")
 
         T.sec("2.11 合并状态图标：音量与 Wi-Fi 控制")
         let m = TrioModel(); m.persist = false
@@ -124,7 +127,7 @@ enum V211 {
         T.find(pv, id: "trio.item.volume")?.press()
         T.check(T.waitUntil(2) { model.config.items == [.wifi, .battery] }, "取消勾选「音量」后图标只剩 Wi-Fi 和电池", "\(model.config.items)")
         T.find(pv, id: "trio.color")?.press()
-        T.check(T.waitUntil(2) { model.config.color }, "勾选「电池按电量着色」")
+        T.check(T.waitUntil(2) { !model.config.color }, "取消「电池按电量着色」后变为单色")
         T.find(pv, id: "trio.panel")?.press()
         T.check(T.waitUntil(2) { !model.config.panel }, "可关闭面板里的音量和 Wi-Fi 控制")
     }
