@@ -16,8 +16,9 @@ enum SplitZone: Int { case left = 0, center = 1, right = 2
 enum SplitLayout {
     static let gap: CGFloat = 8
     /// 在 visibleFrame（任意坐标系）内按权重切分，外边与区间都留 gap
-    static func rects(_ t: SplitTemplate, in r: CGRect, gap g: CGFloat = gap) -> [CGRect] {
-        let w = t.weights, n = CGFloat(w.count)
+    static func rects(_ t: SplitTemplate, in r: CGRect, gap g: CGFloat = gap) -> [CGRect] { rects(weights: t.weights, in: r, gap: g) }
+    static func rects(weights w: [CGFloat], in r: CGRect, gap g: CGFloat = gap) -> [CGRect] {
+        let n = CGFloat(w.count)
         let avail = r.width - g * (n + 1); let total = w.reduce(0, +)
         var x = r.minX + g; var out: [CGRect] = []
         for (i, wi) in w.enumerated() {
@@ -145,7 +146,24 @@ struct SplitPrefs {
     func set(_ t: SplitTemplate?, for uuid: String) {
         var m = (d.dictionary(forKey: key) as? [String: String]) ?? [:]
         m[uuid] = t?.rawValue; d.set(m, forKey: key)
+        var c = (d.dictionary(forKey: customKey) as? [String: [Int]]) ?? [:]
+        if c.removeValue(forKey: uuid) != nil { d.set(c, forKey: customKey) }
     }
+    // 2.10 自定义比例：每块屏幕 2–4 栏，每栏权重 1–9；与固定模板二选一
+    private let customKey = "split.custom"
+    func custom(_ uuid: String) -> [Int]? {
+        (d.dictionary(forKey: customKey) as? [String: [Int]])?[uuid].flatMap { SplitCustom.valid($0) ? $0 : nil }
+    }
+    func setCustom(_ w: [Int], for uuid: String) {
+        guard SplitCustom.valid(w) else { return }
+        var m = (d.dictionary(forKey: key) as? [String: String]) ?? [:]
+        m[uuid] = nil; d.set(m, forKey: key)
+        var c = (d.dictionary(forKey: customKey) as? [String: [Int]]) ?? [:]
+        c[uuid] = w; d.set(c, forKey: customKey)
+    }
+    /// 这块屏幕当前生效的各栏权重（固定模板或自定义）；未启用返回 nil
+    func weights(_ uuid: String) -> [CGFloat]? { template(uuid)?.weights ?? custom(uuid)?.map { CGFloat($0) } }
+    func title(_ uuid: String) -> String? { template(uuid)?.title ?? custom(uuid).map { "自定义 " + SplitCustom.title($0) } }
 }
 
 // MARK: - 控制器
@@ -170,23 +188,31 @@ final class SplitController: ObservableObject {
     }
 
     @discardableResult
-    func place(_ z: SplitZone) -> String {
+    func place(_ z: SplitZone) -> String { place(zone: z, index: nil) }
+    /// 按序号放（从 0 起）：四栏时中间两栏用这个
+    @discardableResult
+    func place(index: Int) -> String { place(zone: nil, index: index) }
+    private func place(zone: SplitZone?, index: Int?) -> String {
         guard driver.trusted() else { return report("需要先授予“辅助功能”权限") }
         guard let tg = captured ?? tracker.lastExternal else { return report("没有找到要移动的应用窗口") }
         captured = nil
         guard let cur = driver.focusedFrame(pid: tg.pid) else { return report("「\(tg.name)」没有可移动的窗口") }
         let win = driver.armedWindow
         guard let disp = display(for: cur) else { return report("没有检测到显示器") }
-        guard let t = prefs.template(disp.uuid) else { return report("这块屏幕还没选分区模板") }
-        guard let r = SplitLayout.rect(t, z, in: disp.visible) else { return report("当前模板没有\(z.title)") }
+        guard let ws = prefs.weights(disp.uuid) else { return report("这块屏幕还没选分区模板") }
+        let rs = SplitLayout.rects(weights: ws, in: disp.visible)
+        let label = zone?.title ?? "第 \((index ?? 0) + 1) 区"
+        let i: Int? = { switch zone { case .left: return 0; case .right: return rs.count - 1; case .center: return rs.count == 3 ? 1 : nil; case nil: return index } }()
+        guard let i, rs.indices.contains(i) else { return report("当前模板没有\(label)") }
+        let r = rs[i]
         let target = SplitLayout.toAX(r, primaryHeight: screens.primaryHeight)
         let got = driver.setFocused(target)
         let o = SplitLayout.classify(target: target, actual: got)
         if o != .notMovable { undo = cur; undoTarget = tg; undoWindow = win }
         tracker.reactivate(tg)
         switch o {
-        case .ok: return report("已把 \(tg.name) 放到\(z.title)")
-        case .sizeLimited: return report("已把 \(tg.name) 放到\(z.title)（尺寸受应用限制）")
+        case .ok: return report("已把 \(tg.name) 放到\(label)")
+        case .sizeLimited: return report("已把 \(tg.name) 放到\(label)（尺寸受应用限制）")
         case .notMovable: return report("「\(tg.name)」的窗口不可移动")
         }
     }
@@ -218,6 +244,16 @@ final class SplitController: ObservableObject {
                                symbol: "rectangle.split.3x1", actions: [CmdAction(title: "放到\(z.title)", hint: "↵", run: {
                                    StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(z))
                                })]))
+        }
+        // 四栏自定义模板：中间两栏按序号放
+        let sc = SplitController.shared
+        if sc.screens.displays.contains(where: { sc.prefs.custom($0.uuid)?.count == 4 }) {
+            for i in [1, 2] where CmdIndex.matches(q, "放到第 \(i + 1) 区 第\(i + 1)区 分区 分屏 窗口 split") {
+                out.append(CmdItem(id: "split.n\(i)", kind: .action, title: "放到第 \(i + 1) 区", subtitle: "四栏模板从左数第 \(i + 1) 栏",
+                                   symbol: "rectangle.split.3x1", actions: [CmdAction(title: "放到第 \(i + 1) 区", hint: "↵", run: {
+                                       StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(index: i))
+                                   })]))
+            }
         }
         if CmdIndex.matches(q, "撤销归位 撤销 分区 分屏 undo") {
             out.append(CmdItem(id: "split.undo", kind: .action, title: "撤销归位", subtitle: "把上次移动的窗口放回原处",
@@ -273,7 +309,7 @@ struct SplitPage: View {
                 VStack(spacing: 2) {
                     ForEach(ds, id: \.uuid) { d in
                         ListRow(icon: nil, symbol: "display", title: d.name,
-                                subtitle: c.prefs.template(d.uuid)?.title ?? "未启用",
+                                subtitle: c.prefs.title(d.uuid) ?? "未启用",
                                 selected: (sel ?? ds.first?.uuid) == d.uuid, action: { sel = d.uuid }) { EmptyView() }.accessibilityIdentifier("split.row.\(d.uuid)")
                     }
                 }.frame(width: 220).accessibilityElement(children: .contain).accessibilityIdentifier("split.list")
@@ -297,8 +333,9 @@ struct SplitPage: View {
                     }
                 }.buttonStyle(.plain).accessibilityIdentifier("split.tpl.\(t.rawValue)")
             }
+            SplitCustomEditor(uuid: d.uuid, prefs: c.prefs, changed: { tick += 1 })
             Button("关闭分区") { c.prefs.set(nil, for: d.uuid); tick += 1 }
-                .disabled(cur == nil).accessibilityIdentifier("split.off")
+                .disabled(c.prefs.weights(d.uuid) == nil).accessibilityIdentifier("split.off")
             Text(String(format: "可用区域 %.0f×%.0f pt · %.0fx", d.visible.width, d.visible.height, d.scale))
                 .font(.caption).foregroundColor(.secondary)
             Divider()
@@ -306,13 +343,8 @@ struct SplitPage: View {
             Text("选好模板后，切换到要摆放的应用窗口，按 ⌘K，选择目标分区。只移动你选中的窗口，完成后可撤销。")
                 .font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("split.howto")
+            SplitDragToggle()
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
-    func preview(_ t: SplitTemplate) -> some View {
-        GeometryReader { g in
-            ForEach(Array(SplitLayout.rects(t, in: CGRect(origin: .zero, size: g.size), gap: 3).enumerated()), id: \.offset) { _, r in
-                RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.35)).frame(width: r.width, height: r.height).position(x: r.midX, y: r.midY)
-            }
-        }.background(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
-    }
+    func preview(_ t: SplitTemplate) -> some View { SplitPreview(weights: t.weights) }
 }

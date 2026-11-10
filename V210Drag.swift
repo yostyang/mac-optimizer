@@ -211,8 +211,8 @@ final class DragZones {
     private func zones(at p: CGPoint) -> [CGRect] {
         let c = SplitController.shared, h = c.screens.primaryHeight
         guard let d = c.screens.displays.first(where: { SplitLayout.toAX($0.visible, primaryHeight: h).contains(p) }),
-              let t = c.prefs.template(d.uuid) else { return [] }
-        return SplitLayout.rects(t, in: d.visible).map { SplitLayout.toAX($0, primaryHeight: h) }
+              let ws = c.prefs.weights(d.uuid) else { return [] }
+        return SplitLayout.rects(weights: ws, in: d.visible).map { SplitLayout.toAX($0, primaryHeight: h) }
     }
 
     private func handle(_ e: NSEvent) {

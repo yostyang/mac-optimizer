@@ -113,6 +113,8 @@ enum V26 {
         drv.focusedWin = w1; _ = c.place(.right); w1.frame = nil   // 窗口被关闭
         T.check(c.undoLast().contains("已关闭") && w2.frame == CGRect(x: 900, y: 60, width: 700, height: 500), "原窗口已关闭→明确提示且不误移")
         T.check(c.undoLast() == "没有可撤销的归位", "关闭后撤销记录被清掉")
+        let realPrefs = SplitController.shared.prefs; SplitController.shared.prefs = p   // 不受本机真实分区设置影响
+        defer { SplitController.shared.prefs = realPrefs }
         T.check(Shell.contextItem(page: .split)?.actions.count == 4, "分区页空 ⌘K：左/中/右/撤销四个操作")
         T.check(Shell.contextItem(page: .monitor) == nil, "其它页没有分区操作")
         var hints: [String] = []; SplitHUD.sink = { hints.append($0) }

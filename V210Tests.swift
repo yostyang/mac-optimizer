@@ -122,6 +122,114 @@ enum V210 {
         drv.ok = false
         T.check(c.placeDragged(drop) == "需要先授予“辅助功能”权限", "没有辅助功能权限：给出说明")
         T.check(!DragZones.shared.running, "自检时不启动全局鼠标监听")
+
+        T.sec("2.10 自定义分区比例")
+        T.check(SplitCustom.valid([1, 2]) && SplitCustom.valid([3, 5, 2, 1]) && !SplitCustom.valid([1]) && !SplitCustom.valid([1, 1, 1, 1, 1]) && !SplitCustom.valid([0, 2]) && !SplitCustom.valid([1, 10]), "2 到 4 栏、每栏 1 到 9")
+        T.check(SplitCustom.seed(from: [1, 2, 1]) == [1, 2, 1] && SplitCustom.seed(from: nil) == [1, 1], "从当前模板的比例开始调整")
+        T.check(SplitCustom.adjust([1, 2, 1], column: 1, by: 1) == [1, 3, 1] && SplitCustom.adjust([1, 2], column: 0, by: -1) == [1, 2] && SplitCustom.adjust([9, 2], column: 0, by: 1) == [9, 2], "每栏加减且不越界")
+        T.check(SplitCustom.addColumn([1, 2]) == [1, 2, 1] && SplitCustom.addColumn([1, 1, 1, 1]).count == 4 && SplitCustom.removeColumn([1, 2, 1]) == [1, 2] && SplitCustom.removeColumn([1, 2]) == [1, 2], "加栏减栏有上下限")
+        let vf = CGRect(x: 0, y: 0, width: 1608, height: 1000)
+        let r4 = SplitLayout.rects(weights: [1, 3, 3, 1], in: vf)
+        T.check(r4.count == 4 && r4[0].minX == 8 && r4[3].maxX == 1600 && abs(r4[1].width - 3 * r4[0].width) <= 2, "四栏 1:3:3:1 的布局", "\(r4.map { Int($0.width) })")
+        T.check(SplitLayout.rects(.threeCol, in: vf) == SplitLayout.rects(weights: [1, 2, 1], in: vf), "固定模板与同比例的自定义结果一致")
+        let suite = "mo.test.split210.\(getpid())"
+        let ud = UserDefaults(suiteName: suite)!; ud.removePersistentDomain(forName: suite)
+        let p = SplitPrefs(ud)
+        p.set(.halves, for: "A")
+        T.check(p.weights("A") == [1, 1] && p.custom("A") == nil && p.title("A") == "左右平分", "老用户已选的固定模板照常生效")
+        p.setCustom([2, 3, 1], for: "A")
+        T.check(p.template("A") == nil && p.custom("A") == [2, 3, 1] && p.weights("A") == [2, 3, 1] && p.title("A") == "自定义 2 : 3 : 1", "改用自定义后替换固定模板")
+        p.setCustom([1], for: "A"); T.check(p.custom("A") == [2, 3, 1], "不合法的比例不保存")
+        p.set(.twoThirds, for: "A"); T.check(p.custom("A") == nil && p.weights("A") == [2, 1], "选回固定模板后清掉自定义")
+        p.setCustom([1, 2, 2, 1], for: "B"); p.set(nil, for: "B"); T.check(p.weights("B") == nil, "关闭分区同时清掉自定义")
+        p.setCustom([1, 3, 3, 1], for: "A")
+        c.prefs = p; drv.ok = true; drv.minW = 0
+        let w4 = FakeWin(CGRect(x: 100, y: 100, width: 500, height: 400)); drv.focusedWin = w4
+        T.check(c.place(index: 1) == "已把 Chrome 放到第 2 区" && abs(w4.frame!.minX - SplitLayout.rects(weights: [1, 3, 3, 1], in: CGRect(x: 0, y: 0, width: 1632, height: 875))[1].minX) <= 1, "四栏：按序号放到第 2 区")
+        T.check(c.place(.right).hasPrefix("已把 Chrome 放到右区") && c.place(.left).hasPrefix("已把 Chrome 放到左区"), "四栏：左区 = 第一栏，右区 = 最后一栏")
+        T.check(c.place(.center) == "当前模板没有中区" && c.place(index: 4) == "当前模板没有第 5 区", "四栏没有唯一的中区：给出说明")
+        let shared = SplitController.shared, keepPrefs = shared.prefs, keepScreens = shared.screens
+        shared.prefs = p; shared.screens = c.screens
+        T.check(SplitController.commands("放到").count == 5, "有四栏模板时命令面板多出第 2、3 区", "\(SplitController.commands("放到").map(\.title))")
+        p.setCustom([1, 2, 1], for: "A")
+        T.check(SplitController.commands("放到").count == 3, "三栏及以下只有左中右")
+        shared.prefs = keepPrefs; shared.screens = keepScreens
+        ud.removePersistentDomain(forName: suite)
+
+        T.sec("2.10 清理记录恢复")
+        let fm = FileManager.default
+        let root = NSTemporaryDirectory() + "mo-restore-\(getpid())"
+        try? fm.removeItem(atPath: root)
+        let home = root + "/原目录", trash = root + "/废纸篓"
+        try? fm.createDirectory(atPath: home, withIntermediateDirectories: true); try? fm.createDirectory(atPath: trash, withIntermediateDirectories: true)
+        func rec(_ name: String, trashed: Bool = true) -> CleanRecord {
+            if trashed { fm.createFile(atPath: trash + "/" + name, contents: Data(name.utf8)) }
+            return CleanRecord(date: Date(), path: home + "/" + name, size: 3, trashed: true, trashPath: trash + "/" + name)
+        }
+        var r1 = rec("报告.pdf")
+        T.check(CleanRestore.status(r1) == .available, "还在废纸篓里：可以恢复")
+        T.check(CleanRestore.restore(r1) == .restored(home + "/报告.pdf") && fm.fileExists(atPath: home + "/报告.pdf") && !fm.fileExists(atPath: trash + "/报告.pdf"), "恢复到原位置")
+        T.check(CleanRestore.status(r1) == .trashGone, "恢复后废纸篓里已不在")
+        r1.restored = true; T.check(CleanRestore.status(r1) == .restored && CleanRestore.restore(r1) == .failed("这一项已经恢复过了"), "已恢复的记录不能重复恢复")
+        let r2 = rec("报告.pdf")
+        T.check(CleanRestore.restore(r2) == .renamed(home + "/报告（恢复）.pdf") && (try? String(contentsOfFile: home + "/报告.pdf")) == "报告.pdf", "原位置已有同名文件：不覆盖，改名放回")
+        let r3 = rec("报告.pdf")
+        T.check(CleanRestore.restore(r3) == .renamed(home + "/报告（恢复 2）.pdf"), "再次冲突：继续换名")
+        let r4f = rec("缓存目录")
+        T.check(CleanRestore.restore(r4f) == .restored(home + "/缓存目录"), "没有扩展名的项也能恢复")
+        try? fm.removeItem(atPath: home)
+        let r5 = rec("日志.log")
+        T.check(CleanRestore.restore(r5) == .restored(home + "/日志.log") && fm.fileExists(atPath: home + "/日志.log"), "原目录已不存在：重新创建后恢复")
+        let r6 = rec("已清倒.zip", trashed: false)
+        T.check(CleanRestore.status(r6) == .trashGone && CleanRestore.restore(r6).message.contains("废纸篓里已经找不到"), "废纸篓已清倒：明确说明无法恢复")
+        let old = CleanRecord(date: Date(), path: home + "/旧.txt", size: 1, trashed: true)
+        T.check(CleanRestore.status(old) == .untracked && CleanRestore.restore(old).message.contains("手动放回"), "旧版记录没有废纸篓位置：提示手动放回")
+        let store = CleanStore(); store.recordsURL = URL(fileURLWithPath: root + "/records.json")
+        let r7 = rec("安装包.dmg"); store.records = [r7]
+        let n0 = ChangeLog.shared.records.count
+        T.check(store.restore(r7) == .restored(home + "/安装包.dmg") && store.records[0].restored == true && store.restoreNote.hasPrefix("已恢复"), "清理页恢复后记录标为已恢复并显示结果")
+        T.check(ChangeLog.shared.records.count == n0 + 1 && ChangeLog.shared.records.last?.title == "从废纸篓恢复：安装包.dmg", "恢复写入改动记录")
+        store.records = [r6]
+        _ = store.restore(r6)
+        T.check(store.records[0].restored != true && store.restoreNote.contains("无法恢复"), "恢复失败时记录不变并显示原因")
+        if ChangeLog.shared.records.count > n0 { ChangeLog.shared.records.removeLast(ChangeLog.shared.records.count - n0) }
+        let oldJSON = #"[{"id":"00000000-0000-0000-0000-000000000001","date":0,"path":"/tmp/a","size":1,"trashed":true,"trashPath":"/tmp/t"}]"#
+        T.check((try? JSONDecoder().decode([CleanRecord].self, from: Data(oldJSON.utf8)))?.first?.restored == nil, "2.9 的清理记录可读取")
+        try? fm.removeItem(atPath: root)
+
+        T.sec("2.10 充电助手只在已安装的位置自动核对")
+        T.check(HelperCheck.autoRepairAllowed(bundlePath: "/Applications/Mac一键优化.app") && HelperCheck.autoRepairAllowed(bundlePath: "/Users/a/Applications/Mac一键优化.app"), "应用程序文件夹：照常核对")
+        T.check(!HelperCheck.autoRepairAllowed(bundlePath: "/Volumes/Mac一键优化/Mac一键优化.app"), "直接从安装包里运行：不重新注册助手")
+        T.check(!HelperCheck.autoRepairAllowed(bundlePath: "/private/var/folders/x/T/AppTranslocation/ABC/d/Mac一键优化.app"), "系统隔离的临时位置：不重新注册助手")
+    }
+
+    static func ui(_ w: NSWindow) {
+        T.sec("2.10 桌面分区页：自定义比例")
+        let c = SplitController.shared
+        let suite = "mo.uitest.split210.\(getpid())"
+        let ud = UserDefaults(suiteName: suite)!; ud.removePersistentDomain(forName: suite)
+        let keepPrefs = c.prefs, keepDriver = c.driver, keepScreens = c.screens
+        c.prefs = SplitPrefs(ud); c.driver = FakeDriver()
+        c.screens = FakeScreens([SplitDisplay(uuid: "T1", name: "测试屏", visible: CGRect(x: 0, y: 0, width: 1440, height: 875), scale: 2)], 900)
+        defer { c.prefs = keepPrefs; c.driver = keepDriver; c.screens = keepScreens; ud.removePersistentDomain(forName: suite); Nav.shared.sel = .monitor }
+        let pv = w.contentView!
+        Nav.shared.sel = .monitor; T.settle(0.3); Nav.shared.sel = .split
+        T.check(T.waitUntil(2) { T.find(pv, id: "split.custom") != nil }, "模板列表里有「自定义比例」")
+        T.find(pv, id: "split.tpl.121")?.press(); T.settle(0.3)
+        T.find(pv, id: "split.custom")?.press()
+        T.check(T.waitUntil(2) { c.prefs.custom("T1") == [1, 2, 1] }, "从当前模板的比例进入自定义", "\(String(describing: c.prefs.custom("T1")))")
+        T.check(T.waitUntil(2) { T.find(pv, id: "split.custom.plus.1") != nil }, "出现每栏的加减按钮")
+        T.find(pv, id: "split.custom.plus.1")?.press()
+        T.check(T.waitUntil(2) { c.prefs.custom("T1") == [1, 3, 1] }, "点加号后比例立即保存")
+        T.find(pv, id: "split.custom.add")?.press()
+        T.check(T.waitUntil(2) { c.prefs.custom("T1") == [1, 3, 1, 1] }, "加一栏")
+        T.find(pv, id: "split.custom.add")?.press(); T.settle(0.3)
+        T.check(c.prefs.custom("T1") == [1, 3, 1, 1], "最多四栏：再点不会继续增加")
+        T.find(pv, id: "split.custom.remove")?.press()
+        T.check(T.waitUntil(2) { c.prefs.custom("T1") == [1, 3, 1] }, "减一栏")
+        T.find(pv, id: "split.off")?.press()
+        T.check(T.waitUntil(2) { c.prefs.weights("T1") == nil }, "关闭分区同时清掉自定义")
+        T.check(T.find1(pv, id: "split.drag") != nil, "有「按住 ⇧ 拖动窗口时显示分区」开关")
     }
 }
 extension DragGesture.Drop: Equatable {

@@ -630,7 +630,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
         // 拖拽落区实验：从测试副本直接运行，不能触碰充电助手的注册
         let dragSpike = args.firstIndex(of: "--dragspike")
-        if !args.contains("--snapshot") && !args.contains("--uitest") && !args.contains("--measure-hold-panel") && dragSpike == nil { ChargeClient.shared.repairAfterUpdate() }
+        if !args.contains("--snapshot") && !args.contains("--uitest") && !args.contains("--measure-hold-panel") && dragSpike == nil && HelperCheck.autoRepairAllowed(bundlePath: Bundle.main.bundlePath) { ChargeClient.shared.repairAfterUpdate() }
         if let i = dragSpike {
             let path = args.count > i + 1 ? args[i + 1] : NSTemporaryDirectory() + "mo-dragspike.log"
             FileManager.default.createFile(atPath: path, contents: nil)

@@ -731,7 +731,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")
