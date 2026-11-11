@@ -7,7 +7,7 @@ struct Card<C: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) { if !icon.isEmpty { Image(systemName: icon).foregroundColor(accentText) }; Text(title).font(DS.body(.semibold)) }
             content
-        }.padding(DS.cardPadding).frame(maxWidth: .infinity, alignment: .topLeading).card()   // 2.12：与主窗口卡片令牌统一为 16（原 12）
+        }.padding(DS.titledCardPadding).frame(maxWidth: .infinity, alignment: .topLeading).card()   // 2.12：改用令牌，取值仍为 12（16 会让电池页最小窗口超出 28 pt，等 2.13 改「详情局部滚动」后再统一）
     }
 }
 

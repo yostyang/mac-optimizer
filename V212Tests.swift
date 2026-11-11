@@ -77,7 +77,7 @@ enum V212 {
         T.check(good != DS.text.good && warn != DS.text.warn, "图形用的 good / warn 保留原值（图标、圆环、曲线不变）")
 
         T.sec("2.12 卡片内边距令牌")
-        T.check(DS.cardPadding == 16 && DS.tilePadding == 10, "主窗口卡片 16、面板指标卡 / 电池宽卡 / Tile 10")
+        T.check(DS.cardPadding == 16 && DS.titledCardPadding == 12 && DS.tilePadding == 10, "指标卡 16、带标题 Card 12（2.13 再统一）、面板指标卡 / 电池宽卡 / Tile 10")
 
         T.sec("2.12 菜单栏电池：充电符号")
         var mono = TrioConfig(); mono.color = false; mono.percent = true

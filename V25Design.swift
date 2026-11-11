@@ -30,6 +30,9 @@ enum DS {
     static let cardGap: CGFloat = 12
     /// 菜单栏面板里的指标卡、电池宽卡和主窗口紧凑 Tile 的内边距（更紧凑的一档）
     static let tilePadding: CGFloat = 10
+    /// 带标题的 `Card`（电池、显示器、网络等详情页）。2.12 仍为 12：改成 16 时电池页在最小窗口（1080×720）超出 28 pt，
+    /// 违反「不滚动」测试；2.13 把规则改成「摘要不滚、详情局部滚动」后再统一到 cardPadding
+    static let titledCardPadding: CGFloat = 12
 
     // 2.12 文字承载色：只给文字用，和品牌色、状态图形色、指标色分开。
     // 图标、圆环、曲线、进度条继续用 accent / good / warn / bad；小字一律用这里的令牌。

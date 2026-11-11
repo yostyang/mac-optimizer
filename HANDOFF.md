@@ -300,5 +300,5 @@
 - `DS.selectionFill` #5846D6：承载白字的填充（列表/操作面板/进程选中行、主按钮）。品牌紫 `accent` 只做图形、焦点和开关。
 - 全部 `.foregroundColor(.secondary)` 已换成 `DS.text.secondary`（旧的是半透明黑，浅色约 3.9:1）。`Color.secondary` 只剩描边等图形用途；`tempTint(nil)` 仍返回 `.secondary`（V28 测试约定），标签文字经 `tone()` 转成 `DS.text.secondary`。
 - 菜单栏电池：`TrioIcon.batteryMarks` 决定画数字/闪电；显示百分比时充电也画闪电，放在数字左边，放不下就缩小字号。
-- 内边距：`Card` → `DS.cardPadding`（16），面板卡与 `Tile` → `DS.tilePadding`（10）。离屏布局测量（未上屏窗口，实时数据）：最紧的是 1180×780 下的显示器页，内容 687 / 可见 694 pt；最小窗口下显示器页 604 / 634 pt、电池页 536 / 634 pt。最终以 `./test.sh` 的 `fits` 为准。
+- 内边距：令牌化。指标卡 `DS.cardPadding`（16），带标题的 `Card` → `DS.titledCardPadding`（仍为 12），面板卡与 `Tile` → `DS.tilePadding`（10）。曾把 `Card` 改成 16，`./test.sh` 的 `fits` 报电池页最小窗口（浅/深）超出 28 pt，所以退回 12；统一到 16 放到 2.13（先改「摘要不滚、详情局部滚动」规则）。
 - 颜色变化会让黄金图比对失败，属于预期：用户放行后 `./test.sh --approve` 重拍，再跑一次 `./test.sh` 确认。

@@ -15,7 +15,7 @@
 | 文字承载色 | 已开发，自检通过 | `DS.text.secondary/good/warn/bad/onSelection/onSelectionSecondary` 与 `DS.selectionFill`；`V212Tests` 用实际取值计算 58 组前景/背景，全部 ≥ 4.5:1。图形仍用 `good/warn/bad`。 |
 | 选中行与主按钮 | 已开发 | 列表、操作面板、进程选中行和主按钮底色改为 `#5846D6`，副字 `#EEECFB`。 |
 | 菜单栏电池充电符号 | 已开发，自检通过 | 显示百分比时充电也画闪电（单色、彩色都画），数字放不下时自动缩小；静音斜杠回归通过。 |
-| 卡片内边距 | 已开发 | 带标题的 `Card` 从 12 改为 `DS.cardPadding`（16）；面板指标卡、电池宽卡、合并状态卡、Tile 统一用 `DS.tilePadding`（10）。 |
+| 卡片内边距 | 已开发，部分 | 面板指标卡、电池宽卡、合并状态卡、Tile 统一用 `DS.tilePadding`（10）；带标题的 `Card` 改用 `DS.titledCardPadding`，取值仍为 12。改 16 时电池页最小窗口超出 28 pt（`fits` 失败），统一到 16 并入 2.13。 |
 | 待验收 | 未做 | 需要用户放行后跑完整 `./test.sh`：截图对比度、`fits`、黄金图（颜色变了，需 `--approve` 重拍后再跑一次）；真机看毛玻璃上的次级字、失焦窗口、增强对比度。 |
 
 ## 2.9 之后的执行顺序
