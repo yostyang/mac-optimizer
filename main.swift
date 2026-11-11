@@ -287,7 +287,7 @@ struct PillButton: ButtonStyle {
             .foregroundColor(filled ? .white : .primary)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-                .fill(filled ? AnyShapeStyle(accent) : AnyShapeStyle(Color.primary.opacity(0.06))))
+                .fill(filled ? AnyShapeStyle(DS.selectionFill) : AnyShapeStyle(Color.primary.opacity(0.06))))
             .overlay(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
                 .strokeBorder(filled ? Color.clear : DS.border, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.78 : 1)
@@ -301,12 +301,12 @@ struct MetricCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 IconBadge(symbol: icon, tint: color, size: 18)
-                Text(title).font(DS.sub()).foregroundColor(.secondary)
+                Text(title).font(DS.sub()).foregroundColor(DS.text.secondary)
                 Spacer()
             }
             Text(value).font(DS.num(17, .semibold))
             Bar(frac: frac, color: color, height: 3)
-            Text(note).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+            Text(note).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1)
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading).card()
     }
 }
@@ -348,7 +348,7 @@ struct CheckupCard: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline).font(DS.title()).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("verdict.title")
-                    Text(sub).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
                 if let t = fix.title {
@@ -369,7 +369,7 @@ struct CheckupCard: View {
                                       tint: i.action != nil ? warn : Color(nsColor: .tertiaryLabelColor), size: 18)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(i.title).font(DS.body(.medium))
-                                Text(i.detail).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                                Text(i.detail).font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 8)
                             if i.action != nil {
@@ -456,7 +456,7 @@ struct ToolPage: View {
                                 ListRow(icon: r.icon, symbol: feature.icon, title: r.title, subtitle: r.subtitle,
                                         selected: sel == idx, action: { sel = idx }) {
                                     if let t = r.actionTitle {
-                                        Text(t).font(DS.cap()).foregroundColor(sel == idx ? Color.white.opacity(0.85) : .secondary)
+                                        Text(t).font(DS.cap()).foregroundColor(sel == idx ? DS.text.onSelectionSecondary : DS.text.secondary)
                                     }
                                 }
                             }
@@ -489,21 +489,21 @@ struct ToolPage: View {
                     RowIcon(icon: r.icon, symbol: feature.icon, size: 26)
                     Text(r.title).font(DS.body(.semibold)).lineLimit(2)
                 }
-                Text(r.subtitle).font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(r.subtitle).font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 Hairline()
                 if let t = r.actionTitle, r.action != nil {
                     Button(operation.busy ? "正在核对…" : t) { run(r) }.buttonStyle(PillButton()).frame(maxWidth: .infinity)
                         .disabled(operation.busy)
-                    HStack(spacing: 6) { Kbd(text: "↵"); Text("主操作").font(DS.cap()).foregroundColor(.secondary) }
+                    HStack(spacing: 6) { Kbd(text: "↵"); Text("主操作").font(DS.cap()).foregroundColor(DS.text.secondary) }
                 } else {
-                    Text("这项不需要处理").font(DS.sub()).foregroundColor(.secondary)
+                    Text("这项不需要处理").font(DS.sub()).foregroundColor(DS.text.secondary)
                 }
                 Spacer(minLength: 0)
                 if !operation.note.isEmpty {
-                    Text(operation.note).font(DS.sub()).foregroundColor(.secondary)
+                    Text(operation.note).font(DS.sub()).foregroundColor(DS.text.secondary)
                         .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("tool.operation.status")
                 }
-                Text("列表共 \(rows.count) 项 · ↑↓ 选择").font(DS.cap()).foregroundColor(.secondary)
+                Text("列表共 \(rows.count) 项 · ↑↓ 选择").font(DS.cap()).foregroundColor(DS.text.secondary)
             } else {
                 EmptyState(symbol: feature.icon, title: "选择一项")
             }

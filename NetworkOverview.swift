@@ -96,7 +96,7 @@ enum NetworkSummary {
                 InlineSegment(items: [("24 小时", TrafficRange.day1), ("30 天", .day30)], selection: $range)
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                if totals.buckets > 0 { Text(size.value).font(DS.hero()); Text(size.unit).font(DS.unit()).foregroundColor(.secondary) }
+                if totals.buckets > 0 { Text(size.value).font(DS.hero()); Text(size.unit).font(DS.unit()).foregroundColor(DS.text.secondary) }
                 else { Unavailable(reason: "此时段尚无流量记录").font(DS.hero()) }
             }
             SubStats(items: [MetricStat("下行", totals.buckets > 0 ? NetworkSummary.size(totals.inB) : "—"),
@@ -111,10 +111,10 @@ enum NetworkSummary {
             HStack {
                 Text("按应用").font(DS.label()).foregroundColor(DS.metric.network)
                 Spacer()
-                Text(range.title + " · 小时记录").font(DS.cap()).foregroundColor(.secondary)
+                Text(range.title + " · 小时记录").font(DS.cap()).foregroundColor(DS.text.secondary)
             }
             if apps.isEmpty {
-                Text("暂无应用流量记录").font(DS.body()).foregroundColor(.secondary)
+                Text("暂无应用流量记录").font(DS.body()).foregroundColor(DS.text.secondary)
                 Footnote(text: "有采样记录后显示；未记录的应用不记为 0。")
             } else {
                 BarList(items: apps.map { BarListItem(name: $0.name, value: NetworkSummary.size($0.total), fraction: highest > 0 ? Double($0.total) / Double(highest) : 0) })

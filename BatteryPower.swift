@@ -116,18 +116,18 @@ struct BatteryCompactBar: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text("电池").font(.system(size: 11, weight: .medium))
-                if let p = s.battery { Text("\(p)%").font(.system(size: 13, weight: .semibold)).monospacedDigit() } else { Text("不可读").font(.system(size: 11)).foregroundColor(.secondary) }
+                if let p = s.battery { Text("\(p)%").font(.system(size: 13, weight: .semibold)).monospacedDigit() } else { Text("不可读").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
                 Spacer()
-                if flow.charging, let m = minutes { Text("预计 \(fmtMinutes(m)) 充满（估算，会变）").font(.system(size: 11)).foregroundColor(.secondary) }
-                else if flow.charging { Text("正在充电，充满时间不可读").font(.system(size: 11)).foregroundColor(.secondary) }
-                else { Text(flow.supplyText).font(.system(size: 11)).foregroundColor(.secondary).accessibilityIdentifier("v22.batterySupply") }
+                if flow.charging, let m = minutes { Text("预计 \(fmtMinutes(m)) 充满（估算，会变）").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
+                else if flow.charging { Text("正在充电，充满时间不可读").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
+                else { Text(flow.supplyText).font(.system(size: 11)).foregroundColor(DS.text.secondary).accessibilityIdentifier("v22.batterySupply") }
             }
             HStack(spacing: 16) {
-                Text("输入 " + (flow.onAC ? fmtW(flow.inputWatts) : "—")).font(.system(size: 11)).foregroundColor(.secondary)
-                Text(flow.charging ? "电池充电 \(fmtW(flow.chargeWatts))" : "电池未充电").font(.system(size: 11)).foregroundColor(.secondary)
-                Text("系统功耗 \(fmtW(flow.systemWatts))").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("输入 " + (flow.onAC ? fmtW(flow.inputWatts) : "—")).font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text(flow.charging ? "电池充电 \(fmtW(flow.chargeWatts))" : "电池未充电").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text("系统功耗 \(fmtW(flow.systemWatts))").font(.system(size: 11)).foregroundColor(DS.text.secondary)
             }
-            Text(flow.inputNote + "；" + flow.systemNote).font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(flow.inputNote + "；" + flow.systemNote).font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

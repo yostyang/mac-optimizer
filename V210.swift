@@ -66,7 +66,7 @@ struct SplitCustomEditor: View {
                     Button("减一栏") { apply(SplitCustom.removeColumn(w)) }.disabled(w.count <= SplitCustom.columns.lowerBound).accessibilityIdentifier("split.custom.remove")
                     Button("加一栏") { apply(SplitCustom.addColumn(w)) }.disabled(w.count >= SplitCustom.columns.upperBound).accessibilityIdentifier("split.custom.add")
                 }.controlSize(.small)
-                Text("数字是各栏的宽度比例，可设 2 到 4 栏；点每栏右边的图标，可以把这一栏再上下平分。").font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("数字是各栏的宽度比例，可设 2 到 4 栏；点每栏右边的图标，可以把这一栏再上下平分。").font(.caption).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -97,7 +97,7 @@ struct SplitGapEditor: View {
             Text("\(g) pt").font(DS.sub(.semibold)).monospacedDigit().frame(minWidth: 34).accessibilityIdentifier("split.gap.value")
             Button(action: { prefs.setGap(g + 2); changed() }) { Image(systemName: "plus") }
                 .disabled(g >= SplitPrefs.gapRange.upperBound).accessibilityIdentifier("split.gap.plus").accessibilityLabel("增大间距")
-            Text("窗口之间和屏幕边缘的留空，所有屏幕共用；0 为紧贴。").font(.caption).foregroundColor(.secondary)
+            Text("窗口之间和屏幕边缘的留空，所有屏幕共用；0 为紧贴。").font(.caption).foregroundColor(DS.text.secondary)
         }.controlSize(.small)
     }
 }
@@ -113,7 +113,7 @@ struct SplitDragToggle: View {
                 if v { DragZones.shared.start() } else { DragZones.shared.stop() }
             })).accessibilityIdentifier("split.drag")
             Text("按住 ⇧ 拖窗口的标题栏，屏幕上会出现分区；在某个区里松手，窗口就放进去。不按 ⇧ 时没有任何影响，归位后可用 ⌘K 撤销。")
-                .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.caption).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -186,14 +186,14 @@ struct CleanRecordRow: View {
         HStack(spacing: 8) {
             Text((record.path as NSString).lastPathComponent).font(.system(size: 11)).lineLimit(1)
             Spacer()
-            Text(CleanLogic.fmtSize(record.size)).font(.system(size: 11)).foregroundColor(.secondary)
+            Text(CleanLogic.fmtSize(record.size)).font(.system(size: 11)).foregroundColor(DS.text.secondary)
             switch CleanRestore.status(record) {
             case .available:
                 Button("恢复") { store.restore(record) }.controlSize(.small).disabled(store.trashing)
                     .accessibilityIdentifier("clean.restore." + record.id.uuidString).accessibilityLabel("恢复 " + (record.path as NSString).lastPathComponent)
-            case .restored: Text("已恢复").font(.system(size: 10)).foregroundColor(.secondary)
-            case .trashGone: Text("废纸篓里已不在").font(.system(size: 10)).foregroundColor(.secondary)
-            case .untracked: Text("需手动放回").font(.system(size: 10)).foregroundColor(.secondary)
+            case .restored: Text("已恢复").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+            case .trashGone: Text("废纸篓里已不在").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+            case .untracked: Text("需手动放回").font(.system(size: 10)).foregroundColor(DS.text.secondary)
             }
         }
     }

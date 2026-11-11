@@ -54,7 +54,7 @@ struct DisplayPage: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("显示器").font(DS.title())
                         Button("桌面分区") { Nav.shared.sel = .split }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.split")
-                        Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 11)).foregroundColor(.secondary)
+                        Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 11)).foregroundColor(DS.text.secondary)
                     }
                     Spacer()
                     SegmentedTrack {
@@ -95,7 +95,7 @@ struct DisplayPage: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(d.name).font(.system(size: 13, weight: .semibold))
-                        Text("\(d.current.label) · \(d.current.refreshLabel)" + (d.current.hidpi ? " · HiDPI" : "") + "  （实际像素 \(d.current.pixelWidth)×\(d.current.pixelHeight)）").font(.system(size: 11)).foregroundColor(.secondary).monospacedDigit()
+                        Text("\(d.current.label) · \(d.current.refreshLabel)" + (d.current.hidpi ? " · HiDPI" : "") + "  （实际像素 \(d.current.pixelWidth)×\(d.current.pixelHeight)）").font(.system(size: 11)).foregroundColor(DS.text.secondary).monospacedDigit()
                     }
                     Spacer()
                     if d.hasHiDPIChoice { Toggle("HiDPI", isOn: $hidpi).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("disp.hidpi") }
@@ -109,7 +109,7 @@ struct DisplayPage: View {
                         Button("保留") { dm.keep() }.buttonStyle(PillButton()).accessibilityIdentifier("disp.keep")
                     }.padding(8).background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
                 }
-                Text("分辨率").font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary)
+                Text("分辨率").font(.system(size: 10, weight: .semibold)).foregroundColor(DS.text.secondary)
                 FlowRow(spacing: 6) {
                     ForEach(d.resolutions(hidpi: hidpi), id: \.self) { m in
                         ChoiceChip(text: m.label, on: m.label == d.current.label && m.hidpi == d.current.hidpi) {
@@ -121,7 +121,7 @@ struct DisplayPage: View {
                 }
                 let rates = d.refreshRates(for: d.current)
                 if rates.count > 1 {
-                    Text("刷新率").font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary)
+                    Text("刷新率").font(.system(size: 10, weight: .semibold)).foregroundColor(DS.text.secondary)
                     HStack(spacing: 6) {
                         ForEach(rates, id: \.self) { r in
                             ChoiceChip(text: "\(Int(r)) Hz", on: abs(d.current.refresh.rounded() - r) < 1) {
@@ -130,7 +130,7 @@ struct DisplayPage: View {
                         }
                     }
                 }
-            } else { Text("没有检测到显示器").foregroundColor(.secondary) }
+            } else { Text("没有检测到显示器").foregroundColor(DS.text.secondary) }
         }
     }
 
@@ -145,7 +145,7 @@ struct DisplayPage: View {
     var ddcCard: some View {
         Card(title: "硬件调节（DDC/CI）", icon: "slider.horizontal.3") {
             if let d = cur, d.builtin {
-                Text("内建屏幕请用键盘亮度键调节；硬件调节只适用于外接显示器。").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("内建屏幕请用键盘亮度键调节；硬件调节只适用于外接显示器。").font(.system(size: 11)).foregroundColor(DS.text.secondary)
             } else if let d = cur, let s = dm.ddc[d.id], s.available {
                 if s.brightness != nil { slider("亮度", "sun.max", value: dm.displayedValue(d.id, .brightness), max: s.brightnessMax, id: "ddc.brightness") { dm.setDDC(d.id, .brightness, $0) } }
                 if s.contrast != nil { slider("对比度", "circle.lefthalf.filled", value: dm.displayedValue(d.id, .contrast), max: s.contrastMax, id: "ddc.contrast") { dm.setDDC(d.id, .contrast, $0) } }
@@ -158,22 +158,22 @@ struct DisplayPage: View {
                             ChoiceChip(text: DDCCaps.inputName(v), on: s.input == v) { if s.input != v { confirmInput(d.id, v) } }
                         }
                     }
-                    Text("切到其他输入源后，这台 Mac 的画面会从该显示器上消失，需要用显示器按键切回。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("切到其他输入源后，这台 Mac 的画面会从该显示器上消失，需要用显示器按键切回。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                if let note = dm.ddcNotes[d.id] { Text(note).font(.system(size: 11)).foregroundColor(.secondary) }
+                if let note = dm.ddcNotes[d.id] { Text(note).font(.system(size: 11)).foregroundColor(DS.text.secondary) }
                 let miss = [s.volume == nil ? "音量" : nil, s.caps.inputs.count > 1 ? nil : "输入源"].compactMap { $0 }
-                if !miss.isEmpty { Text("这台显示器不支持通过 DDC 调" + miss.joined(separator: "、") + "，已隐藏。").font(.system(size: 10)).foregroundColor(.secondary) }
+                if !miss.isEmpty { Text("这台显示器不支持通过 DDC 调" + miss.joined(separator: "、") + "，已隐藏。").font(.system(size: 10)).foregroundColor(DS.text.secondary) }
             } else if dm.probing {
-                HStack { ProgressView().controlSize(.small); Text("正在读取显示器…").font(.system(size: 11)).foregroundColor(.secondary) }
+                HStack { ProgressView().controlSize(.small); Text("正在读取显示器…").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
             } else {
-                Text("未匹配到明确的 DDC/CI 通道或显示器未响应。请开启显示器的 DDC/CI 后刷新；同型号多屏身份不明确时不猜测控制目标。").font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("未匹配到明确的 DDC/CI 通道或显示器未响应。请开启显示器的 DDC/CI 后刷新；同型号多屏身份不明确时不猜测控制目标。").font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
     var colorCard: some View {
         Card(title: "色彩模式", icon: "paintpalette") {
             if let display = cur {
-                Text("仅控制 " + display.name + "，其他显示器不受影响").font(DS.sub()).foregroundColor(.secondary)
+                Text("仅控制 " + display.name + "，其他显示器不受影响").font(DS.sub()).foregroundColor(DS.text.secondary)
                 // ① 系统 ICC
                 group("1", "系统色彩描述文件（ICC）", "只改这台 Mac 输出时的颜色换算，显示器本身的设置不变。")
                 let profile = dm.profileStates[display.id]
@@ -239,7 +239,7 @@ struct DisplayPage: View {
                     .background(Circle().fill(accent)).accessibilityHidden(true)
                 Text(title).font(DS.sub(.semibold))
             }
-            Text(note).font(DS.cap(.regular)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(note).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }.accessibilityElement(children: .combine)
     }
     func hwRow(_ title: String, code: VCP, values: [UInt8], current: Int?, display: DisplayInfo) -> some View {
@@ -247,7 +247,7 @@ struct DisplayPage: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title).font(DS.sub(.medium))
-                Text(String(format: "VCP 0x%02X", code.rawValue)).font(DS.cap(.regular)).foregroundColor(.secondary)
+                Text(String(format: "VCP 0x%02X", code.rawValue)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
                 Spacer()
                 if let cur = current, values.contains(UInt8(clamping: cur)) {
                     Button("命名当前…") {
@@ -257,7 +257,7 @@ struct DisplayPage: View {
                         }
                     }.buttonStyle(.plain).font(DS.cap(.medium)).foregroundColor(accentText).accessibilityIdentifier("disp.name.\(code.rawValue)")
                 } else if current == nil {
-                    Text("当前值读不到").font(DS.cap(.regular)).foregroundColor(.secondary)
+                    Text("当前值读不到").font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
                 }
             }
             FlowRow(spacing: 6) { ForEach(values, id: \.self) { value in
@@ -291,10 +291,10 @@ struct DisplayPage: View {
             if !dm.conflict.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-                    Text("检测到 \(dm.conflict) 正在运行，它也会调整屏幕色彩。为避免互相覆盖，软件调光默认不开；场景只调硬件亮度。").font(.system(size: 10)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("检测到 \(dm.conflict) 正在运行，它也会调整屏幕色彩。为避免互相覆盖，软件调光默认不开；场景只调硬件亮度。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let id = cur?.id, let note = dm.gammaNotes[id] { Text(note).font(.system(size: 10)).foregroundColor(.secondary) }
+            if let id = cur?.id, let note = dm.gammaNotes[id] { Text(note).font(.system(size: 10)).foregroundColor(DS.text.secondary) }
             Toggle("软件调光与色温（关闭恢复原曲线）", isOn: Binding(get: { dm.settings.gammaOn }, set: { dm.setGamma(on: $0) })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.gamma")
             HStack(spacing: 8) {
                 Image(systemName: "sun.min").frame(width: 16).foregroundColor(accent); Text("调暗").font(.system(size: 11)).frame(width: 40, alignment: .leading)
@@ -309,7 +309,7 @@ struct DisplayPage: View {
             HStack(spacing: 8) {
                 Toggle("按时间自动切换", isOn: Binding(get: { dm.settings.autoSwitch }, set: { dm.settings.autoSwitch = $0; dm.scheduleAuto() })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.auto")
                 Spacer()
-                Text("日间 \(hm(dm.settings.dayStart))  ·  夜间 \(hm(dm.settings.nightStart))").font(.system(size: 11)).foregroundColor(.secondary).monospacedDigit()
+                Text("日间 \(hm(dm.settings.dayStart))  ·  夜间 \(hm(dm.settings.nightStart))").font(.system(size: 11)).foregroundColor(DS.text.secondary).monospacedDigit()
                 Stepper("", onIncrement: { dm.settings.nightStart = (dm.settings.nightStart + 30) % 1440; dm.scheduleAuto() }, onDecrement: { dm.settings.nightStart = (dm.settings.nightStart + 1410) % 1440; dm.scheduleAuto() }).labelsHidden().controlSize(.small).help("调整夜间开始时间")
             }
         }
@@ -321,21 +321,21 @@ struct DisplayPage: View {
         return Card(title: "亮屏时间", icon: "hourglass") {
             HStack(alignment: .firstTextBaseline) {
                 Text(fmtDuration(st.today)).font(.system(size: 17, weight: .bold, design: .rounded)).monospacedDigit()
-                Text("今天").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("今天").font(.system(size: 11)).foregroundColor(DS.text.secondary)
                 Spacer()
-                Text("7 天平均 " + fmtDuration(w.map(\.1).reduce(0, +) / 7)).font(.system(size: 11)).foregroundColor(.secondary)
+                Text("7 天平均 " + fmtDuration(w.map(\.1).reduce(0, +) / 7)).font(.system(size: 11)).foregroundColor(DS.text.secondary)
             }
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(Array(w.enumerated()), id: \.offset) { i, e in
                     VStack(spacing: 4) {
-                        Text(e.1 >= 3600 ? String(format: "%.1fh", e.1 / 3600) : "\(Int(e.1 / 60))m").font(.system(size: 10)).foregroundColor(.secondary).monospacedDigit()
+                        Text(e.1 >= 3600 ? String(format: "%.1fh", e.1 / 3600) : "\(Int(e.1 / 60))m").font(.system(size: 10)).foregroundColor(DS.text.secondary).monospacedDigit()
                         RoundedRectangle(cornerRadius: 4, style: .continuous).fill(i == 6 ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(accent.opacity(0.35)))
                             .frame(height: max(3, 64 * CGFloat(e.1 / mx)))
-                        Text(e.0).font(.system(size: 10)).foregroundColor(.secondary)
+                        Text(e.0).font(.system(size: 10)).foregroundColor(DS.text.secondary)
                     }.frame(maxWidth: .infinity)
                 }
             }.frame(height: 96, alignment: .bottom)
-            Text("屏幕亮着且已解锁的时间；按屏幕睡眠/锁屏事件记账，不轮询。").font(.system(size: 10)).foregroundColor(.secondary)
+            Text("屏幕亮着且已解锁的时间；按屏幕睡眠/锁屏事件记账，不轮询。").font(.system(size: 10)).foregroundColor(DS.text.secondary)
         }
     }
 }

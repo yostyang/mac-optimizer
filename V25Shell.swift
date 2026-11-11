@@ -342,10 +342,10 @@ struct Sidebar: View {
             HStack(spacing: 8) {
                 Image(systemName: p.icon)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(on ? accentText : .secondary)
+                    .foregroundColor(on ? accentText : DS.text.secondary)
                     .frame(width: 16)
                 Text(p.title).font(DS.body(on ? .medium : .regular))
-                    .foregroundColor(on ? .primary : .secondary)
+                    .foregroundColor(on ? .primary : DS.text.secondary)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8).frame(height: 30)
@@ -360,7 +360,7 @@ struct Sidebar: View {
                 IconBadge(symbol: "speedometer", tint: accent, size: 26)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Mac 一键优化").font(DS.body(.semibold))
-                    Text("让 Mac 重新轻快").font(DS.cap()).foregroundColor(.secondary)
+                    Text("让 Mac 重新轻快").font(DS.cap()).foregroundColor(DS.text.secondary)
                 }
             }.padding(.horizontal, 10).padding(.top, 46).padding(.bottom, 14)
             ScrollView(showsIndicators: false) {
@@ -375,7 +375,7 @@ struct Sidebar: View {
             HStack(spacing: 5) {
                 Image(systemName: "lock.shield").font(DS.cap())
                 Text("清理先进废纸篓").font(DS.cap())
-            }.foregroundColor(.secondary).padding(.horizontal, 16).padding(.bottom, 12)
+            }.foregroundColor(DS.text.secondary).padding(.horizontal, 16).padding(.bottom, 12)
         }
         .frame(width: 208).frame(maxHeight: .infinity, alignment: .top)
         .background(Vibrancy(material: .sidebar, solid: DS.sidebar))
@@ -410,7 +410,7 @@ struct BottomBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Circle().fill(shell.searching ? accent : good).frame(width: 6, height: 6)
-            Text(status).font(DS.sub()).foregroundColor(.secondary).lineLimit(1)
+            Text(status).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1)
             Spacer(minLength: 8)
             hint("主操作", "↵")
             hint("操作", "⌘K")
@@ -426,7 +426,7 @@ struct BottomBar: View {
         return "\(pageTitle(nav.sel)) · \(h.status) · 健康分 \(h.score)"
     }
     func hint(_ t: String, _ k: String) -> some View {
-        HStack(spacing: 4) { Text(t).font(DS.cap()).foregroundColor(.secondary); Kbd(text: k) }
+        HStack(spacing: 4) { Text(t).font(DS.cap()).foregroundColor(DS.text.secondary); Kbd(text: k) }
     }
 }
 
@@ -447,7 +447,7 @@ struct SearchResults: View {
                             HStack(spacing: 6) {
                                 if let s = p.short {
                                     Text(s).font(DS.sub()).lineLimit(1)
-                                        .foregroundColor(shell.sel == i ? Color.white.opacity(0.85) : .secondary)
+                                        .foregroundColor(shell.sel == i ? DS.text.onSelectionSecondary : DS.text.secondary)
                                 }
                                 Kbd(text: "↵", on: shell.sel == i)
                             }
@@ -485,13 +485,13 @@ struct ActionPanel: View {
                         ForEach(Array(shell.filteredActions.enumerated()), id: \.element.id) { i, a in
                             HStack(spacing: 8) {
                                 Text(a.title).font(DS.body(a.destructive ? .medium : .regular))
-                                    .foregroundColor(a.destructive ? bad : .primary).lineLimit(1)
+                                    .foregroundColor(a.destructive && shell.actionSel != i ? DS.text.bad : (shell.actionSel == i ? DS.text.onSelection : .primary)).lineLimit(1)
                                 Spacer()
                                 if let h = a.hint { Kbd(text: h) }
                             }
                             .padding(.horizontal, 8).frame(height: 32)
                             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-                                .fill(shell.actionSel == i ? AnyShapeStyle(accent) : AnyShapeStyle(Color.clear)))
+                                .fill(shell.actionSel == i ? AnyShapeStyle(DS.selectionFill) : AnyShapeStyle(Color.clear)))
                             .foregroundColor(shell.actionSel == i ? .white : .primary)
                             .contentShape(Rectangle())
                             .onTapGesture { shell.runAction(i) }
@@ -519,11 +519,11 @@ struct CommandPaletteView: View {
             SearchResults(shell: shell)
             Hairline()
             HStack(spacing: 10) {
-                Text("全局命令").font(DS.cap()).foregroundColor(.secondary)
+                Text("全局命令").font(DS.cap()).foregroundColor(DS.text.secondary)
                 Spacer()
-                Kbd(text: "↵"); Text("执行").font(DS.cap()).foregroundColor(.secondary)
-                Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(.secondary)
-                Kbd(text: "esc"); Text("关闭").font(DS.cap()).foregroundColor(.secondary)
+                Kbd(text: "↵"); Text("执行").font(DS.cap()).foregroundColor(DS.text.secondary)
+                Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(DS.text.secondary)
+                Kbd(text: "esc"); Text("关闭").font(DS.cap()).foregroundColor(DS.text.secondary)
             }.padding(.horizontal, 12).frame(height: 30)
         }
         .frame(width: 620, height: 440)
@@ -693,7 +693,7 @@ struct SettingsPage: View {
                         .buttonStyle(PillButton(filled: false))
                     Button("退出 Mac 一键优化") { NSApp.terminate(nil) }.buttonStyle(PillButton(filled: false))
                     Spacer()
-                    Text("品牌紫取自 App 图标；渐变只留在健康分圆环").font(DS.cap()).foregroundColor(.secondary)
+                    Text("品牌紫取自 App 图标；渐变只留在健康分圆环").font(DS.cap()).foregroundColor(DS.text.secondary)
                 }.padding(.top, 2)
             }.padding(20)
         }
@@ -705,7 +705,7 @@ struct SettingsPage: View {
             IconBadge(symbol: symbol, size: 20)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(DS.body())
-                if !sub.isEmpty { Text(sub).font(DS.cap()).foregroundColor(.secondary) }
+                if !sub.isEmpty { Text(sub).font(DS.cap()).foregroundColor(DS.text.secondary) }
             }
             Spacer(minLength: 8)
             trailing()

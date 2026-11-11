@@ -62,12 +62,12 @@ struct Tile<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 IconBadge(symbol: icon, tint: tint, size: 18)
-                Text(title).font(DS.sub()).foregroundColor(.secondary)
+                Text(title).font(DS.sub()).foregroundColor(DS.text.secondary)
                 Spacer(minLength: 2)
-                if !trailing.isEmpty { Text(trailing).font(DS.cap()).foregroundColor(.secondary).lineLimit(1) }
+                if !trailing.isEmpty { Text(trailing).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1) }
             }
             content
-        }.padding(10).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).card()
+        }.padding(DS.tilePadding).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).card()
     }
 }
 
@@ -76,7 +76,7 @@ struct BigValue: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(value).font(DS.hero())
-            if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(.secondary) }
+            if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(DS.text.secondary) }
         }
     }
 }
@@ -87,7 +87,7 @@ struct Chip: View {
         HStack(spacing: 4) { Image(systemName: icon).font(DS.cap()); Text(text).font(DS.cap()).lineLimit(1) }
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill(Color.primary.opacity(0.05)))
-            .foregroundColor(.secondary)
+            .foregroundColor(DS.text.secondary)
     }
 }
 
@@ -259,14 +259,14 @@ struct BatteryTile: View {
                     BigValue(value: "\(b)", unit: "%")
                     Bar(frac: Double(b) / 100, color: batteryColor(b), height: 8)
                 }
-                Text(stateText).font(.system(size: 10)).foregroundColor(.secondary)
+                Text(stateText).font(.system(size: 10)).foregroundColor(DS.text.secondary)
                 // 面板紧凑条（单行版，与电池页功率标签同一口径，面板高度检查上限 1000pt，单行更安全）
                 HStack(spacing: 8) {
-                    if s.charging, let mm = mins { Text("预计 \(fmtMinutes(mm)) 充满（估算）").font(.system(size: 10)).foregroundColor(.secondary) }
-                    Text("充电 \(fmtW(flow.chargeWatts))").font(.system(size: 10)).foregroundColor(.secondary)
-                    Text("系统 \(fmtW(flow.systemWatts))").font(.system(size: 10)).foregroundColor(.secondary)
+                    if s.charging, let mm = mins { Text("预计 \(fmtMinutes(mm)) 充满（估算）").font(.system(size: 10)).foregroundColor(DS.text.secondary) }
+                    Text("充电 \(fmtW(flow.chargeWatts))").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+                    Text("系统 \(fmtW(flow.systemWatts))").font(.system(size: 10)).foregroundColor(DS.text.secondary)
                 }.accessibilityIdentifier("panel.battery.compact")
-            } else { Text("没有内置电池").font(.system(size: 11)).foregroundColor(.secondary) }
+            } else { Text("没有内置电池").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
             let devs = BTBattery.shared.withBattery.isEmpty ? s.devices : BTBattery.shared.withBattery.map { DeviceBattery(name: $0.name, percent: $0.percent ?? 0, kind: $0.kind) }
             if !devs.isEmpty {
                 HStack(spacing: 10) {
@@ -320,10 +320,10 @@ struct ProcList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Text("高占用进程").font(DS.cap(.semibold)).foregroundColor(.secondary)
+                Text("高占用进程").font(DS.cap(.semibold)).foregroundColor(DS.text.secondary)
                 Spacer()
-                Text("CPU").font(DS.cap()).foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
-                Text("内存").font(DS.cap()).foregroundColor(.secondary).frame(width: 54, alignment: .trailing)
+                Text("CPU").font(DS.cap()).foregroundColor(DS.text.secondary).frame(width: 40, alignment: .trailing)
+                Text("内存").font(DS.cap()).foregroundColor(DS.text.secondary).frame(width: 54, alignment: .trailing)
                 Color.clear.frame(width: ProcList.actionWidth, height: 1)
             }.padding(.horizontal, 6).padding(.top, 2).accessibilityHidden(true)
             if m.s.top.isEmpty { StateLine(kind: .loading, text: "正在统计进程占用", id: "proc.state").padding(4) }
@@ -335,12 +335,12 @@ struct ProcList: View {
                     Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? .white : .primary)
                     Spacer(minLength: 4)
                     Text(String(format: "%.1f%%", p.cpu)).font(DS.num(11, .medium))
-                        .foregroundColor(on ? .white : ProcessCPU.color(p.cpu)).frame(width: 40, alignment: .trailing)
+                        .foregroundColor(on ? DS.text.onSelection : DS.text.tone(ProcessCPU.color(p.cpu))).frame(width: 40, alignment: .trailing)
                     Text(Fmt.mem(p.memMB)).font(DS.num(11, .regular))
-                        .foregroundColor(on ? Color.white.opacity(0.85) : .secondary).frame(width: 54, alignment: .trailing)
+                        .foregroundColor(on ? DS.text.onSelectionSecondary : DS.text.secondary).frame(width: 54, alignment: .trailing)
                     Group {
                         if let t = ProcActions.fix(for: p).short {
-                            Text(t).font(DS.cap()).foregroundColor(on ? .white : .secondary)
+                            Text(t).font(DS.cap()).foregroundColor(on ? DS.text.onSelection : DS.text.secondary)
                                 .padding(.horizontal, 5).padding(.vertical, 1)
                                 .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
                                     .fill(on ? Color.white.opacity(0.18) : Color.primary.opacity(0.05)))
@@ -349,12 +349,12 @@ struct ProcList: View {
                 }
                 .padding(.horizontal, 6).frame(height: 28)
                 .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-                    .fill(on ? AnyShapeStyle(accent) : AnyShapeStyle(Color.clear)))
+                    .fill(on ? AnyShapeStyle(DS.selectionFill) : AnyShapeStyle(Color.clear)))
                 .contentShape(Rectangle())
                 .onTapGesture { onSelect?(i) }
                 .contextMenu { if onMore != nil { Button("更多操作…") { onMore?(p) } } }
             }
-            if !feedback.note.isEmpty { Text(feedback.note).font(DS.cap()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true).padding(4) }
+            if !feedback.note.isEmpty { Text(feedback.note).font(DS.cap()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true).padding(4) }
         }
     }
 }
@@ -377,7 +377,7 @@ struct QuickActions: View {
                         Text(a.title).font(DS.sub(.medium))
                         Spacer(minLength: 4)
                         if !hasSwitch && !a.stateLabel().isEmpty {
-                            Text(a.stateLabel()).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+                            Text(a.stateLabel()).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1)
                         }
                         if hasSwitch {
                             Capsule().fill(a.isOn() ? good : Color.primary.opacity(0.12))
@@ -406,7 +406,7 @@ struct QuickActions: View {
     func stat(_ v: String, _ l: String) -> some View {
         VStack(spacing: 0) {
             Text(v).font(DS.num(13, .semibold))
-            Text(l).font(DS.cap(.regular)).foregroundColor(.secondary)
+            Text(l).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
         }.frame(maxWidth: .infinity)
     }
 }
@@ -480,11 +480,11 @@ final class PanelKeyView: NSView {
             IconBadge(symbol: symbol, tint: tint, size: 16)
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(title).font(DS.sub()).foregroundColor(.secondary)
+                    Text(title).font(DS.sub()).foregroundColor(DS.text.secondary)
                     Spacer(minLength: 4)
                     Text(value).font(DS.num(12)).foregroundColor(valueColor)
                 }
-                Text(detail).font(DS.cap()).foregroundColor(.secondary).lineLimit(1)
+                Text(detail).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1)
             }.frame(width: 182)
             Group {
                 if let series, !series.isEmpty { Spark(values: series, color: tint, maxValue: maxValue) }
@@ -536,7 +536,7 @@ struct PanelMore: View {
     func actionRow(_ t: String, _ k: String?, destructive: Bool = false, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
             HStack {
-                Text(t).font(DS.body()).foregroundColor(destructive ? bad : .primary)
+                Text(t).font(DS.body()).foregroundColor(destructive ? DS.text.bad : .primary)
                 Spacer()
                 if let k { Kbd(text: k) }
             }.padding(.horizontal, 8).frame(height: 30).contentShape(Rectangle())
@@ -588,7 +588,7 @@ struct ActiveStatusPills: View {
                     .buttonStyle(.plain).help("查看常亮设置")
             }
             Button { showActions = true } label: { Image(systemName: "ellipsis.circle") }
-                .buttonStyle(.plain).foregroundColor(.secondary).help("快捷操作")
+                .buttonStyle(.plain).foregroundColor(DS.text.secondary).help("快捷操作")
                 .accessibilityLabel("快捷操作").accessibilityIdentifier("monitor.actions")
         }
         .sheet(isPresented: $showActions) {
@@ -677,7 +677,7 @@ struct GlowAlert: View {
             VStack(spacing: 10) {
                 Image(systemName: "battery.0").font(.system(size: 17)).foregroundColor(.red)
                 Text("电量仅剩 \(level)%").font(.system(size: 17, weight: .bold))
-                Text("请尽快接上电源 · 按 Esc 关闭").font(.system(size: 13)).foregroundColor(.secondary)
+                Text("请尽快接上电源 · 按 Esc 关闭").font(.system(size: 13)).foregroundColor(DS.text.secondary)
                 Button("知道了") { Overlay.close() }.buttonStyle(PillButton())
             }.padding(28).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.regularMaterial))
         }.onAppear { withAnimation(.easeInOut(duration: 1).repeatForever()) { pulse = true } }

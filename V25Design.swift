@@ -4,6 +4,9 @@ import SwiftUI
 import AppKit
 
 // MARK: - 令牌
+/// DS.text 里同名的 good/warn/bad 会遮住全局状态色，这里留一份别名供 tone() 比较
+private let statusGood = good, statusWarn = warn, statusBad = bad
+
 enum DS {
     // 表面：中性灰阶。浅色偏白，深色接近图标的深蓝黑，不再大面积铺紫。
     static let window = dyn(NSColor(srgbRed: 0.949, green: 0.949, blue: 0.961, alpha: 1),
@@ -25,6 +28,39 @@ enum DS {
     enum r { static let card: CGFloat = 12; static let control: CGFloat = 6; static let pill: CGFloat = 999 }
     static let cardPadding: CGFloat = 16
     static let cardGap: CGFloat = 12
+    /// 菜单栏面板里的指标卡、电池宽卡和主窗口紧凑 Tile 的内边距（更紧凑的一档）
+    static let tilePadding: CGFloat = 10
+
+    // 2.12 文字承载色：只给文字用，和品牌色、状态图形色、指标色分开。
+    // 图标、圆环、曲线、进度条继续用 accent / good / warn / bad；小字一律用这里的令牌。
+    // 取值按 WCAG sRGB 相对亮度计算，浅深两套在 window / card / raised / sidebar 上都 ≥ 4.5:1（见 V212Tests）。
+    enum text {
+        /// 次级文字：说明、单位、列头、角标。浅色不再用半透明黑（约 3.9:1），改为不透明 #62626E
+        static let secondary = dyn(NSColor(srgbRed: 0x62 / 255.0, green: 0x62 / 255.0, blue: 0x6E / 255.0, alpha: 1),
+                                   NSColor(srgbRed: 0xA1 / 255.0, green: 0xA1 / 255.0, blue: 0xB0 / 255.0, alpha: 1))   // #62626E / #A1A1B0
+        /// 正常 / 完成的文字（浅色加深；深色沿用 good）
+        static let good = dyn(NSColor(srgbRed: 0x08 / 255.0, green: 0x74 / 255.0, blue: 0x4F / 255.0, alpha: 1),
+                              NSColor(srgbRed: 0.204, green: 0.827, blue: 0.600, alpha: 1))                              // #08744F / #34D399
+        /// 注意的文字
+        static let warn = dyn(NSColor(srgbRed: 0x8B / 255.0, green: 0x51 / 255.0, blue: 0x00 / 255.0, alpha: 1),
+                              NSColor(srgbRed: 1.0, green: 0.702, blue: 0.251, alpha: 1))                                // #8B5100 / #FFB340
+        /// 危险 / 失败的文字
+        static let bad = dyn(NSColor(srgbRed: 0xB4 / 255.0, green: 0x23 / 255.0, blue: 0x18 / 255.0, alpha: 1),
+                             NSColor(srgbRed: 1.0, green: 0.420, blue: 0.420, alpha: 1))                                 // #B42318 / #FF6B6B
+        /// 选中行（selectionFill 上）的主字与副字
+        static let onSelection = Color.white
+        static let onSelectionSecondary = Color(nsColor: NSColor(srgbRed: 0xEE / 255.0, green: 0xEC / 255.0, blue: 0xFB / 255.0, alpha: 1))   // #EEECFB
+        /// 把状态图形色换成对应的文字色；其他颜色原样返回（指标色本身已按文字验收）
+        static func tone(_ c: Color) -> Color {
+            if c == statusGood { return good }
+            if c == statusWarn { return warn }
+            if c == statusBad { return bad }
+            if c == .secondary { return secondary }
+            return c
+        }
+    }
+    /// 承载白字的填充：列表选中行、操作面板选中项、主按钮。比品牌紫深一档，白字 6.44:1（品牌紫 accent 只做图形与焦点）
+    static let selectionFill = Color(nsColor: NSColor(srgbRed: 0x58 / 255.0, green: 0x46 / 255.0, blue: 0xD6 / 255.0, alpha: 1))   // #5846D6
 
     // 字号只保留 4 档：标题 / 正文 13 / 次要 11 / 角标 10
     static let fontSizes: [CGFloat] = [30, 22, 17, 13, 12.5, 11, 10.5, 10]
@@ -62,7 +98,7 @@ struct MetricStat: Equatable {
 @MainActor struct Unavailable: View {
     var reason: String
     var body: some View {
-        Text("—").foregroundColor(.secondary)
+        Text("—").foregroundColor(DS.text.secondary)
             .overlay(alignment: .bottom) {
                 Rectangle().fill(.clear).frame(height: 1)
                     .overlay(Path { path in path.move(to: .zero); path.addLine(to: CGPoint(x: 14, y: 0)) }
@@ -95,7 +131,7 @@ struct MetricStat: Equatable {
                 Image(systemName: symbol).font(DS.label()).accessibilityHidden(true)
                 Text(title).font(DS.label())
                 Spacer(minLength: 2)
-                if !note.isEmpty { Text(note).font(DS.cap()).foregroundColor(.secondary).lineLimit(1).help(note) }
+                if !note.isEmpty { Text(note).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1).help(note) }
             }.foregroundColor(tint)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 if let value {
@@ -104,7 +140,7 @@ struct MetricStat: Equatable {
                 } else {
                     Unavailable(reason: unavailableReason).font(DS.hero(compact: compact))
                 }
-                if !unit.isEmpty { Text(unit).font(DS.unit()).foregroundColor(.secondary) }
+                if !unit.isEmpty { Text(unit).font(DS.unit()).foregroundColor(DS.text.secondary) }
                 Spacer(minLength: 0)
             }
             if !compact {
@@ -123,7 +159,7 @@ struct MetricStat: Equatable {
             VStack(spacing: 3) {
                 ForEach(Array(stats.prefix(compact ? 1 : 2).enumerated()), id: \.offset) { _, stat in
                     HStack(spacing: 6) {
-                        Text(stat.label).foregroundColor(.secondary)
+                        Text(stat.label).foregroundColor(DS.text.secondary)
                         Spacer(minLength: 2)
                         Text(stat.value).monospacedDigit().foregroundColor(.primary)
                     }.font(DS.cap()).lineLimit(1).minimumScaleFactor(0.8).help(stat.label + "：" + stat.value)
@@ -147,7 +183,7 @@ struct MetricStat: Equatable {
             ForEach(Array(items.prefix(4).enumerated()), id: \.offset) { index, item in
                 if index > 0 { Rectangle().fill(DS.separator).frame(width: 1, height: 28) }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(.secondary)
+                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(DS.text.secondary)
                     Text(item.value).font(DS.num()).lineLimit(1).minimumScaleFactor(0.8)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .combine)
@@ -163,7 +199,7 @@ struct MetricStat: Equatable {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 if index > 0 { Rectangle().fill(DS.separator).frame(width: 1, height: 29) }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(.secondary)
+                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(DS.text.secondary)
                     Text(item.value).font(DS.body(.medium)).lineLimit(1).minimumScaleFactor(0.75).help(item.value)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .combine)
@@ -219,7 +255,7 @@ struct BarListItem {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 Button { selection = item.1 } label: {
                     Text(item.0).font(DS.cap(.medium)).padding(.horizontal, 8).padding(.vertical, 4)
-                        .foregroundColor(selection == item.1 ? .primary : .secondary)
+                        .foregroundColor(selection == item.1 ? .primary : DS.text.secondary)
                         .background(RoundedRectangle(cornerRadius: DS.r.control).fill(selection == item.1 ? DS.card : .clear))
                 }.buttonStyle(.plain).accessibilityAddTraits(selection == item.1 ? .isSelected : [])
             }
@@ -230,7 +266,7 @@ struct BarListItem {
 @MainActor struct Footnote: View {
     let text: String
     var body: some View {
-        Text(text).font(DS.cap(.regular)).foregroundColor(.secondary)
+        Text(text).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
             .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -296,7 +332,7 @@ struct Kbd: View {
     var body: some View {
         Text(text)
             .font(DS.cap(.medium))
-            .foregroundColor(on ? Color.white.opacity(0.85) : .secondary)
+            .foregroundColor(on ? DS.text.onSelectionSecondary : DS.text.secondary)
             .padding(.horizontal, 5).padding(.vertical, 1.5)
             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
                 .fill(on ? Color.white.opacity(0.18) : Color.primary.opacity(0.06)))
@@ -324,10 +360,10 @@ struct ListRow<Trailing: View>: View {
             RowIcon(icon: icon, symbol: symbol, tint: tint, size: compact ? 18 : 22, selected: selected)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(DS.body(selected ? .medium : .regular))
-                    .foregroundColor(selected ? .white : .primary).lineLimit(1)
+                    .foregroundColor(selected ? DS.text.onSelection : .primary).lineLimit(1)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(DS.sub())
-                        .foregroundColor(selected ? Color.white.opacity(0.8) : .secondary).lineLimit(1)
+                        .foregroundColor(selected ? DS.text.onSelectionSecondary : DS.text.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
@@ -336,7 +372,7 @@ struct ListRow<Trailing: View>: View {
         .padding(.horizontal, 8)
         .frame(height: compact ? 32 : 44)
         .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-            .fill(selected ? AnyShapeStyle(accent) : (hovering ? AnyShapeStyle(DS.hover) : AnyShapeStyle(Color.clear))))
+            .fill(selected ? AnyShapeStyle(DS.selectionFill) : (hovering ? AnyShapeStyle(DS.hover) : AnyShapeStyle(Color.clear))))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { action?() }
@@ -355,7 +391,7 @@ extension ListRow where Trailing == EmptyView {
 struct SectionLabel: View {
     let text: String
     var body: some View {
-        Text(text).font(DS.cap(.semibold)).foregroundColor(.secondary)
+        Text(text).font(DS.cap(.semibold)).foregroundColor(DS.text.secondary)
             .textCase(nil).padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 2)
     }
 }
@@ -373,7 +409,7 @@ struct PageHeader<Trailing: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(DS.title())
-                if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(.secondary) }
+                if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary) }
             }
             Spacer(minLength: 8)
             trailing
@@ -441,7 +477,7 @@ struct SearchField: View {
     var onSubmit: (() -> Void)? = nil
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass").font(DS.body()).foregroundColor(.secondary)
+            Image(systemName: "magnifyingglass").font(DS.body()).foregroundColor(DS.text.secondary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain).font(DS.body())
                 .focused($focused)
@@ -449,7 +485,7 @@ struct SearchField: View {
                 .accessibilityIdentifier("search.field")
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(DS.sub()) }
-                    .buttonStyle(.plain).foregroundColor(.secondary)
+                    .buttonStyle(.plain).foregroundColor(DS.text.secondary)
             }
         }
         .padding(.horizontal, 10).frame(height: 32)
@@ -467,7 +503,7 @@ struct EmptyState: View {
         VStack(spacing: 6) {
             IconBadge(symbol: symbol, tint: good, size: 34)
             Text(title).font(DS.body(.medium))
-            if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(.secondary) }
+            if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

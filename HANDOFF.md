@@ -291,3 +291,14 @@
 - 设置：`TrioSettings` 嵌在设置页「菜单栏显示内容」下方，只在选了「合并状态」时出现。
 - 截图测试新增 `trio-gallery`（各种设置下的图标）、`trio-settings`、`trio-panel`，供人工查看。
 
+
+## 2026-11-11 · 2.12.0（35）可读性 P0（分支 v2.12，未发布）
+
+依据《视觉与交互优化方案》P0，代码在 `V25Design.swift`（令牌）、`V211Trio.swift`（电池符号）、`V212Tests.swift`（静态对比度与图标检查）。
+
+- 文字承载色 `DS.text`：`secondary` #62626E / #A1A1B0，`good` #08744F / #34D399，`warn` #8B5100 / #FFB340，`bad` #B42318 / #FF6B6B；选中行字 `onSelection` 白、`onSelectionSecondary` #EEECFB。**小字一律用 `DS.text.*`，图标、圆环、曲线继续用 `good/warn/bad/accent`**；颜色来自变量时用 `DS.text.tone(c)` 换成对应文字色。
+- `DS.selectionFill` #5846D6：承载白字的填充（列表/操作面板/进程选中行、主按钮）。品牌紫 `accent` 只做图形、焦点和开关。
+- 全部 `.foregroundColor(.secondary)` 已换成 `DS.text.secondary`（旧的是半透明黑，浅色约 3.9:1）。`Color.secondary` 只剩描边等图形用途；`tempTint(nil)` 仍返回 `.secondary`（V28 测试约定），标签文字经 `tone()` 转成 `DS.text.secondary`。
+- 菜单栏电池：`TrioIcon.batteryMarks` 决定画数字/闪电；显示百分比时充电也画闪电，放在数字左边，放不下就缩小字号。
+- 内边距：`Card` → `DS.cardPadding`（16），面板卡与 `Tile` → `DS.tilePadding`（10）。离屏布局测量（未上屏窗口，实时数据）：最紧的是 1180×780 下的显示器页，内容 687 / 可见 694 pt；最小窗口下显示器页 604 / 634 pt、电池页 536 / 634 pt。最终以 `./test.sh` 的 `fits` 为准。
+- 颜色变化会让黄金图比对失败，属于预期：用户放行后 `./test.sh --approve` 重拍，再跑一次 `./test.sh` 确认。
