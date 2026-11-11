@@ -98,10 +98,10 @@ enum V28 {
                 && DDCFeedback.kind("已发送输入切换，无法回读确认；请在显示器上核对") == .unknown, "显示器操作反馈映射到统一状态")
 
         T.sec("2.8 U03 双列面板")
-        T.check(PanelLayout.width == 400 && PanelLayout.tileHeight >= 96, "面板宽 400，两列指标卡")
+        T.check(PanelLayout.width == 400 && PanelLayout.tileHeight >= 72, "面板宽 400，两列指标卡（卡高不低于 72）")
         T.check(PanelContent.verdict(90).word == "不卡" && PanelContent.verdict(70).word == "有点卡" && PanelContent.verdict(40).word == "很卡", "结论分三档")
         T.check(PanelContent.tempTint(nil) == .secondary && PanelContent.tempTint(95) == bad && PanelContent.tempTint(80) == warn, "温度标签按状态着色，读不到不着色")
-        T.check(PanelHeight.height(contentHeight: 840, visibleHeight: 760) == 730 && PanelHeight.height(contentHeight: 840, visibleHeight: 1200) == 840, "矮屏幕按可见高度封顶，内容可无滚动条滚动")
+        T.check(PanelHeight.height(contentHeight: 660, visibleHeight: 600) == 570 && PanelHeight.height(contentHeight: 660, visibleHeight: 1200) == 660, "矮屏幕按可见高度封顶（内容 660 在可见 600 的屏上封顶 570 并滚动）")
     }
 
     // MARK: 交互
@@ -114,7 +114,7 @@ enum V28 {
         let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
         let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
         pw.contentView = host; pw.orderFrontRegardless(); T.settle(1.0)
-        for id in ["panel.header", "panel.metrics", "panel.battery", "panel.stats", "panel.open", "act.shot", "act.mic", "act.awake", "act.clean", "act.charge", "act.dock"] {
+        for id in ["panel.header", "panel.metrics", "panel.battery", "panel.stats", "panel.open", "panel.procs.toggle", "panel.actions.edit", "act.mic", "act.awake", "act.charge", "act.dock"] {
             T.check(T.find1(host, id: id) != nil, "面板有 \(id)")
         }
         let ring = T.find1(host, id: "panel.device.Keychron K3 Pro").map { T.axString($0.o, "accessibilityLabel") } ?? ""

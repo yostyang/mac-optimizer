@@ -8,7 +8,7 @@ extension MOTests {
         check(PanelHeight.height(contentHeight: 950, visibleHeight: 1080) == 950, "外接屏内容 950 时一次放下，不滚动")
         check(PanelHeight.height(contentHeight: 950, visibleHeight: 900) == 870, "笔记本可见 900 时封顶 870，超出才滚动")
         check(PanelHeight.height(contentHeight: 0, visibleHeight: 900) == 870, "测不到内容时回退到可见高度 -30")
-        check(PanelHeight.height(contentHeight: 950, visibleHeight: 500) == 600, "极小屏下限 600，不压成一条")
+        check(PanelHeight.height(contentHeight: 950, visibleHeight: 500) == 470 && PanelHeight.height(contentHeight: 950, visibleHeight: 300) == 420, "极小屏按可见高度封顶（下限 420），不超出屏幕")
         sec("面板减负")
         let top = [1, 2, 3, 4, 5]
         check(Array(top.prefix(4)).count == 4, "面板进程只放前 4 条")

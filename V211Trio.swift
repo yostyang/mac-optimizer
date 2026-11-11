@@ -387,7 +387,7 @@ struct TrioSettings: View {
                 Spacer()
             }
             Text("要省出菜单栏空间，可以在「系统设置 › 控制中心」里把系统自带的 Wi-Fi、电池、声音图标设为不在菜单栏显示。")
-                .font(.caption).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .controlSize(.small)
         .onAppear { model.refresh() }
@@ -408,7 +408,7 @@ struct TrioPanelCard: View {
                 if let l = v.level {
                     Slider(value: Binding(get: { v.muted ? 0 : l }, set: { model.setVolume($0) }), in: 0...1)
                         .controlSize(.small).disabled(!v.settable).accessibilityIdentifier("panel.trio.volume").accessibilityLabel("输出音量")
-                    Text(v.text).font(DS.num(11)).foregroundColor(DS.text.secondary).frame(width: 44, alignment: .trailing)
+                    Text(v.text).font(DS.num(12)).foregroundColor(DS.text.secondary).frame(width: 44, alignment: .trailing)
                 } else {
                     Text(v.text).font(DS.sub()).foregroundColor(DS.text.secondary); Spacer()
                 }

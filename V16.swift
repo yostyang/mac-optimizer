@@ -368,17 +368,17 @@ struct DockModeCard: View {
     @ObservedObject var d = DockMode.shared
     func chip(_ ok: Bool, _ text: String) -> some View {
         Label(text, systemImage: ok ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 11)).foregroundColor(ok ? DS.text.good : DS.text.secondary)
+            .font(.system(size: 12)).foregroundColor(ok ? DS.text.good : DS.text.secondary)
     }
     var body: some View {
         Card(title: "接显示器模式", icon: "powerplug") {
             HStack {
-                Text("息屏不断网").font(.system(size: 11, weight: .medium))
+                Text("息屏不断网").font(.system(size: 12, weight: .medium))
                 Spacer()
                 Toggle("", isOn: Binding(get: { d.enabled }, set: { d.setEnabled($0) })).toggleStyle(.switch).controlSize(.small).labelsHidden().tint(accent).accessibilityIdentifier("dock.toggle")
             }
             Text("接着显示器又插着电时：屏幕照常按系统设置熄灭，但 Mac 不睡眠，VPN、下载、远程连接都不断。拔掉电源或显示器就恢复系统默认，不改任何系统设置。")
-                .font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 14) {
                 chip(d.external, "外接显示器")
                 chip(d.onAC, "电源")

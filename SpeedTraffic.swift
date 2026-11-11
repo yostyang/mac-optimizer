@@ -288,25 +288,25 @@ struct SpeedCard: View {
         Card(title: "测速", icon: "speedometer") {
             HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("下载").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                    Text("下载").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     Text(String(format: "%.1f", t.result.downMbps)).font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
-                    Text("Mbps").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                    Text("Mbps").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("上传").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                    Text("上传").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     Text(String(format: "%.1f", t.result.upMbps)).font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
-                    Text("Mbps").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                    Text("Mbps").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                 }
                 Spacer()
                 Button(t.running ? "测速中…" : "开始测速") { t.run() }.buttonStyle(PillButton()).disabled(t.running).accessibilityIdentifier("speed.run")
             }
-            Text("显示整次传输的平均速度，暂不提供逐秒曲线").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+            Text("显示整次传输的平均速度，暂不提供逐秒曲线").font(.system(size: 12)).foregroundColor(DS.text.secondary)
             HStack(spacing: 12) {
-                Text("空闲延迟：" + (t.result.idleMs.map { String(format: "%.0f ms", $0) } ?? "—")).font(.system(size: 11)).foregroundColor(DS.text.secondary)
-                Text("抖动：" + String(format: "%.1f ms", t.result.jitterMs)).font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text("空闲延迟：" + (t.result.idleMs.map { String(format: "%.0f ms", $0) } ?? "—")).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                Text("抖动：" + String(format: "%.1f ms", t.result.jitterMs)).font(.system(size: 12)).foregroundColor(DS.text.secondary)
             }
-            Text(t.result.failed ? t.result.note : t.result.tierText).font(.system(size: 11)).foregroundColor(t.result.failed ? DS.text.bad : DS.text.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("只在你点开始测速时跑，不常驻测速").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+            Text(t.result.failed ? t.result.note : t.result.tierText).font(.system(size: 12)).foregroundColor(t.result.failed ? DS.text.bad : DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("只在你点开始测速时跑，不常驻测速").font(.system(size: 12)).foregroundColor(DS.text.secondary)
         }
     }
 }
@@ -317,7 +317,7 @@ struct TrafficCard: View {
     var body: some View {
         Card(title: "联网应用与速率历史", icon: "arrow.up.arrow.down") {
             HStack(spacing: 10) {
-                Text("当前：" + Fmt.rate(mon.s.downBps) + " ↓ · " + Fmt.rate(mon.s.upBps) + " ↑").font(.system(size: 11, weight: .medium)).monospacedDigit()
+                Text("当前：" + Fmt.rate(mon.s.downBps) + " ↓ · " + Fmt.rate(mon.s.upBps) + " ↑").font(.system(size: 12, weight: .medium)).monospacedDigit()
                 Spacer()
                 Button("刷新联网应用") { store.refreshApps() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("traffic.apps.run")
             }
@@ -328,19 +328,19 @@ struct TrafficCard: View {
                 Text("30 天").tag(30.0)
             }.pickerStyle(.segmented)
             let sm = store.summary(rangeDays)
-            Text("这段平均下载 " + Fmt.rate(sm.avgDown) + " · 上传 " + Fmt.rate(sm.avgUp) + " · 下载峰值 " + Fmt.rate(sm.maxDown)).font(.system(size: 11)).foregroundColor(DS.text.secondary)
+            Text("这段平均下载 " + Fmt.rate(sm.avgDown) + " · 上传 " + Fmt.rate(sm.avgUp) + " · 下载峰值 " + Fmt.rate(sm.maxDown)).font(.system(size: 12)).foregroundColor(DS.text.secondary)
             if store.buckets.contains(where: { $0.tun }) {
-                Text("检测到 TUN 接口：总速率只按主接口统计，不重复加总 TUN 与物理接口").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("检测到 TUN 接口：总速率只按主接口统计，不重复加总 TUN 与物理接口").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if store.apps.isEmpty {
-                Text("点“刷新联网应用”查看当前连接数；此列表不表示应用流量大小。").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text("点“刷新联网应用”查看当前连接数；此列表不表示应用流量大小。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
             } else {
                 ForEach(store.apps.prefix(10)) { a in
-                    HStack { Text(a.name).font(.system(size: 11)).lineLimit(1); Spacer(); Text("\(a.connections) 个连接").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
+                    HStack { Text(a.name).font(.system(size: 12)).lineLimit(1); Spacer(); Text("\(a.connections) 个连接").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
                 }
             }
-            if !store.appsNote.isEmpty { Text(store.appsNote).font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
-            Text("打开网络诊断页时每分钟记一笔流量，重启后记录仍在，30 天外自动删除").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+            if !store.appsNote.isEmpty { Text(store.appsNote).font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
+            Text("打开网络诊断页时每分钟记一笔流量，重启后记录仍在，30 天外自动删除").font(.system(size: 12)).foregroundColor(DS.text.secondary)
         }
         .onAppear { store.startMinuteTimer(); let s = mon.s; store.add(downBps: s.downBps, upBps: s.upBps, tun: TrafficParse.tunActive()) }
         .onDisappear { store.stopMinuteTimer() }
@@ -350,11 +350,11 @@ struct NetInfoCard: View {
     @ObservedObject var info = NetInfo.shared
     var body: some View {
         Card(title: "网络信息", icon: "wifi") {
-            HStack { Text("Wi-Fi").font(.system(size: 11)); Spacer(); Text(info.wifi).font(.system(size: 11)).foregroundColor(DS.text.secondary).lineLimit(1) }
-            HStack { Text("公网 IP").font(.system(size: 11)); Spacer(); Text(info.publicIP).font(.system(size: 11, weight: .medium)).monospacedDigit() }
-            HStack { Text("ChatGPT").font(.system(size: 11)); Spacer(); Text(info.chatGPT).font(.system(size: 11, weight: .medium)).foregroundColor(info.chatGPT == "能连上" ? DS.text.good : DS.text.secondary) }
+            HStack { Text("Wi-Fi").font(.system(size: 12)); Spacer(); Text(info.wifi).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1) }
+            HStack { Text("公网 IP").font(.system(size: 12)); Spacer(); Text(info.publicIP).font(.system(size: 12, weight: .medium)).monospacedDigit() }
+            HStack { Text("ChatGPT").font(.system(size: 12)); Spacer(); Text(info.chatGPT).font(.system(size: 12, weight: .medium)).foregroundColor(info.chatGPT == "能连上" ? DS.text.good : DS.text.secondary) }
             Button(info.running ? "检测中…" : "刷新网络信息") { info.refresh() }.buttonStyle(PillButton(filled: false)).disabled(info.running).accessibilityIdentifier("netinfo.refresh")
-            Text("公网 IP 与 ChatGPT 只在你点刷新时检测一次，读不到会写不可读，不会谎报").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("公网 IP 与 ChatGPT 只在你点刷新时检测一次，读不到会写不可读，不会谎报").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

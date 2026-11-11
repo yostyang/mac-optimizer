@@ -259,19 +259,19 @@ struct BatteryTile: View {
                     BigValue(value: "\(b)", unit: "%")
                     Bar(frac: Double(b) / 100, color: batteryColor(b), height: 8)
                 }
-                Text(stateText).font(.system(size: 10)).foregroundColor(DS.text.secondary)
+                Text(stateText).font(.system(size: 12)).foregroundColor(DS.text.secondary)
                 // 面板紧凑条（单行版，与电池页功率标签同一口径，面板高度检查上限 1000pt，单行更安全）
                 HStack(spacing: 8) {
-                    if s.charging, let mm = mins { Text("预计 \(fmtMinutes(mm)) 充满（估算）").font(.system(size: 10)).foregroundColor(DS.text.secondary) }
-                    Text("充电 \(fmtW(flow.chargeWatts))").font(.system(size: 10)).foregroundColor(DS.text.secondary)
-                    Text("系统 \(fmtW(flow.systemWatts))").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+                    if s.charging, let mm = mins { Text("预计 \(fmtMinutes(mm)) 充满（估算）").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
+                    Text("充电 \(fmtW(flow.chargeWatts))").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                    Text("系统 \(fmtW(flow.systemWatts))").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                 }.accessibilityIdentifier("panel.battery.compact")
-            } else { Text("没有内置电池").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
+            } else { Text("没有内置电池").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
             let devs = BTBattery.shared.withBattery.isEmpty ? s.devices : BTBattery.shared.withBattery.map { DeviceBattery(name: $0.name, percent: $0.percent ?? 0, kind: $0.kind) }
             if !devs.isEmpty {
                 HStack(spacing: 10) {
                     ForEach(devs.prefix(4)) { d in
-                        HStack(spacing: 3) { Image(systemName: d.kind).font(.system(size: 10)); Text("\(d.percent)%").font(.system(size: 10, weight: .medium)).monospacedDigit() }.foregroundColor(batteryColor(d.percent))
+                        HStack(spacing: 3) { Image(systemName: d.kind).font(.system(size: 12)); Text("\(d.percent)%").font(.system(size: 12, weight: .medium)).monospacedDigit() }.foregroundColor(batteryColor(d.percent))
                     }
                 }
             }
@@ -334,9 +334,9 @@ struct ProcList: View {
                     else { IconBadge(symbol: "gearshape", tint: Color(nsColor: .secondaryLabelColor), size: 16, selected: on) }
                     Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? .white : .primary)
                     Spacer(minLength: 4)
-                    Text(String(format: "%.1f%%", p.cpu)).font(DS.num(11, .medium))
+                    Text(String(format: "%.1f%%", p.cpu)).font(DS.num(12, .medium))
                         .foregroundColor(on ? DS.text.onSelection : DS.text.tone(ProcessCPU.color(p.cpu))).frame(width: 40, alignment: .trailing)
-                    Text(Fmt.mem(p.memMB)).font(DS.num(11, .regular))
+                    Text(Fmt.mem(p.memMB)).font(DS.num(12, .regular))
                         .foregroundColor(on ? DS.text.onSelectionSecondary : DS.text.secondary).frame(width: 54, alignment: .trailing)
                     Group {
                         if let t = ProcActions.fix(for: p).short {
@@ -416,9 +416,11 @@ enum PanelHeight {
     /// 面板窗口高度 = 内容高度，上限为屏幕可见高度 -30。
     /// 之前 v2.1 错把窗口高写成可见高度 -30：大屏上内容只有 950 左右，窗口却撑到 1400+，
     /// 底部出现大面积空白；之前写死 940 则内容放不下要滚动。正确做法是按内容定高、按屏幕封顶。
+    static let minHeight: CGFloat = 420
     static func height(contentHeight: CGFloat, visibleHeight: CGFloat) -> CGFloat {
-        guard contentHeight > 0 else { return max(600, visibleHeight - 30) }
-        return min(contentHeight, max(600, visibleHeight - 30))
+        // 2.13：下限从 600 降到 420——内容已压到 660 以内，矮屏上要让面板在屏幕里滚动，而不是超出屏幕
+        guard contentHeight > 0 else { return max(minHeight, visibleHeight - 30) }
+        return min(contentHeight, max(minHeight, visibleHeight - 30))
     }
 }
 /// 测量面板内容高度：用 PreferenceKey 把 ScrollView 里内容的真实高度传回 PanelView
@@ -428,9 +430,11 @@ struct PanelContentHeightKey: PreferenceKey {
 }
 struct PanelView: View {
     @ObservedObject var m: Monitor
-    @State private var contentHeight: CGFloat = 640
+    /// 测试用：模拟矮屏幕的可见高度
+    var visibleHeight: CGFloat? = nil
+    @State private var contentHeight: CGFloat = 600
     var body: some View {
-        let h = PanelHeight.height(contentHeight: contentHeight, visibleHeight: NSScreen.main?.visibleFrame.height ?? 900)
+        let h = PanelHeight.height(contentHeight: contentHeight, visibleHeight: visibleHeight ?? NSScreen.main?.visibleFrame.height ?? 900)
         ScrollView(showsIndicators: false) {
             PanelContent(m: m)
                 .background(GeometryReader { geo in
@@ -548,20 +552,21 @@ struct PanelMore: View {
 struct DashboardView: View {
     @ObservedObject var m: Monitor
     var body: some View {
-        GeometryReader { geometry in
-            PageScroll {
-                VStack(alignment: .leading, spacing: DS.cardGap) {
-                    HStack(alignment: .center) {
-                        PageHeader(title: "实时监控", sub: "系统读数 · 当前状态与来源")
-                        Spacer(minLength: 8)
-                        ActiveStatusPills()
-                    }
-                    KPIStrip(items: [MetricStat("芯片", m.s.chip + " · \(m.s.ramGB) GiB"),
-                                     MetricStat("系统", m.s.osVersion), MetricStat("开机", Fmt.uptime(m.s.uptime)),
-                                     MetricStat("网络", m.s.netKind + " · " + m.s.proxy)])
-                    MetricTiles(m: m, compact: geometry.size.height < 690)
-                    Footnote(text: "前台每 \(Int(Monitor.detailInterval)) 秒刷新，后台每 \(Int(Monitor.lightInterval)) 秒采样；磁盘为十进制 GB，内存为二进制 GiB。温度为已识别传感器均温；高占用为当前采样，不代表历史峰值。")
-                }.padding(16)
+        // 2.13：结论置顶 → 四项核心读数 → 连续的高占用进程；GPU、温度、风扇等放进详情（局部滚动）
+        PageScaffold {
+            VStack(alignment: .leading, spacing: DS.cardGap) {
+                HStack(alignment: .center) {
+                    PageHeader(title: "实时监控", sub: "结论、核心读数与高占用进程")
+                    Spacer(minLength: 8)
+                    ActiveStatusPills()
+                }
+                MonitorVerdict(s: m.s)
+                CoreReadings(m: m)
+            }
+        } details: {
+            VStack(alignment: .leading, spacing: DS.cardGap) {
+                MonitorProcesses(m: m)
+                MonitorDetails(m: m)
             }
         }
         .onAppear { m.dashboardShown = true }.onDisappear { m.dashboardShown = false }

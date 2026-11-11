@@ -9,22 +9,25 @@ struct NavPage: Identifiable, Equatable {
     let id: Page; let icon: String; let title: String; let sub: String; let group: String
 }
 
+/// 侧栏分组（2.13）：按任务分——看状态、日常控制、整理与恢复；不常用的放进「全部工具」。搜索仍能直达每一页。
+let navGroups = ["状态", "日常控制", "整理与恢复", "全部工具", "设置"]
+
 let navPages: [NavPage] = [
     NavPage(id: .overview, icon: "square.grid.2x2", title: "概览", sub: "卡不卡、为什么、怎么处理", group: "状态"),
     NavPage(id: .monitor, icon: "waveform.path.ecg.rectangle", title: "实时监控", sub: "CPU、内存、磁盘、网络", group: "状态"),
     NavPage(id: .battery, icon: "battery.75", title: "电池", sub: "健康、耗电与充电上限", group: "状态"),
-    NavPage(id: .display, icon: "display", title: "显示器", sub: "亮度、场景与分辨率", group: "状态"),
-    NavPage(id: .network, icon: "network", title: "网络诊断", sub: "延迟、DNS 与测速", group: "状态"),
-    NavPage(id: .clean, icon: "trash", title: "清理预览", sub: "先扫描、勾选，再进废纸篓", group: "状态"),
-    NavPage(id: .changes, icon: "list.clipboard", title: "改动与提醒", sub: "DNS、清理记录与异常提醒", group: "状态"),
-    NavPage(id: .tool(.resources), icon: "chart.bar.xaxis", title: "资源排行", sub: "看看谁最占内存和 CPU", group: "工具"),
-    NavPage(id: .tool(.startup), icon: "power", title: "开机启动", sub: "关掉不需要的开机自启", group: "工具"),
-    NavPage(id: .tool(.browsers), icon: "globe", title: "浏览器", sub: "同时开太多浏览器会拖慢系统", group: "工具"),
-    NavPage(id: .tool(.spotlight), icon: "magnifyingglass", title: "Spotlight", sub: "索引卡住时一键重启", group: "工具"),
-    NavPage(id: .tool(.virtualMachines), icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机", group: "工具"),
-    NavPage(id: .tool(.vpn), icon: "shield.lefthalf.filled", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突", group: "工具"),
-    NavPage(id: .tool(.displayPerformance), icon: "rectangle.on.rectangle", title: "显示性能", sub: "减轻大屏幕的渲染负担", group: "工具"),
-    NavPage(id: .split, icon: "rectangle.split.3x1", title: "桌面分区", sub: "每块屏幕的窗口分区模板", group: "状态"),
+    NavPage(id: .display, icon: "display", title: "显示器", sub: "亮度、场景与分辨率", group: "日常控制"),
+    NavPage(id: .network, icon: "network", title: "网络诊断", sub: "延迟、DNS 与测速", group: "日常控制"),
+    NavPage(id: .split, icon: "rectangle.split.3x1", title: "桌面分区", sub: "每块屏幕的窗口分区模板", group: "日常控制"),
+    NavPage(id: .clean, icon: "trash", title: "清理预览", sub: "先扫描、勾选，再进废纸篓", group: "整理与恢复"),
+    NavPage(id: .tool(.startup), icon: "power", title: "开机启动", sub: "关掉不需要的开机自启", group: "整理与恢复"),
+    NavPage(id: .changes, icon: "list.clipboard", title: "改动与提醒", sub: "DNS、清理记录与异常提醒", group: "整理与恢复"),
+    NavPage(id: .tool(.resources), icon: "chart.bar.xaxis", title: "资源排行", sub: "看看谁最占内存和 CPU", group: "全部工具"),
+    NavPage(id: .tool(.browsers), icon: "globe", title: "浏览器", sub: "同时开太多浏览器会拖慢系统", group: "全部工具"),
+    NavPage(id: .tool(.spotlight), icon: "magnifyingglass", title: "Spotlight", sub: "索引卡住时一键重启", group: "全部工具"),
+    NavPage(id: .tool(.virtualMachines), icon: "shippingbox", title: "虚拟机", sub: "Claude 等应用的后台虚拟机", group: "全部工具"),
+    NavPage(id: .tool(.vpn), icon: "shield.lefthalf.filled", title: "网络与 VPN", sub: "多个 VPN 同时运行会互相冲突", group: "全部工具"),
+    NavPage(id: .tool(.displayPerformance), icon: "rectangle.on.rectangle", title: "显示性能", sub: "减轻大屏幕的渲染负担", group: "全部工具"),
     NavPage(id: .settings, icon: "gearshape", title: "设置", sub: "全局快捷键、菜单栏与启动", group: "设置"),
 ]
 
@@ -107,6 +110,7 @@ struct CmdAction: Identifiable {
     var short: String? = nil      // 列表行右侧的短标签
     var hint: String? = nil
     var destructive = false
+    var group: String? = nil      // ⌘K 列表里的分组标题（2.13）
     let run: () -> Void
 }
 
@@ -237,25 +241,17 @@ final class Shell: ObservableObject {
 
     func openActions() {
         guard items.indices.contains(sel) else {
-            // 空搜索时：桌面分区页给分区操作，其它页明确提示（不再静默无响应）
-            if let ctx = Self.contextItem(page: Nav.shared.sel) {
-                actionQuery = ""; actionSel = 0
-                withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = ctx }
-            } else {
-                SplitHUD.show("在顶部搜索框输入关键词（页面、操作或进程），选中后按 ⌘K 查看更多操作")
-            }
+            // 空搜索：打开当前页面的分组操作列表（当前页面 → 快捷操作 → 前往）
+            actionQuery = ""; actionSel = 0
+            let ctx = Self.contextItem(page: Nav.shared.sel)
+            withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = ctx }
             return
         }
         actionQuery = ""; actionSel = 0
         withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = items[sel] }
     }
 
-    static func contextItem(page: Page) -> CmdItem? {
-        guard page == .split else { return nil }
-        let acts = SplitController.commands("分区").flatMap { $0.actions }
-        return CmdItem(id: "ctx.split", kind: .action, title: "桌面分区", subtitle: "把最近使用的应用窗口放进分区",
-                       symbol: "rectangle.split.3x1", actions: acts)
-    }
+    static func contextItem(page: Page) -> CmdItem { ContextActions.item(page) }
 
     var filteredActions: [CmdAction] {
         guard let a = actionsFor else { return [] }
@@ -348,7 +344,7 @@ struct Sidebar: View {
                     .foregroundColor(on ? .primary : DS.text.secondary)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8).frame(height: 30)
+            .padding(.horizontal, 8).frame(height: 28)
             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
                 .fill(on ? AnyShapeStyle(Color.primary.opacity(0.07)) : AnyShapeStyle(Color.clear)))
             .contentShape(Rectangle())
@@ -365,8 +361,8 @@ struct Sidebar: View {
             }.padding(.horizontal, 10).padding(.top, 46).padding(.bottom, 14)
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ForEach(["状态", "工具", "设置"], id: \.self) { g in
-                        if g != "状态" { SectionLabel(text: g) }
+                    ForEach(navGroups, id: \.self) { g in
+                        SectionLabel(text: g)
                         ForEach(navPages.filter { $0.group == g }) { item($0) }
                     }
                 }.padding(.horizontal, 8)
@@ -407,23 +403,32 @@ struct BottomBar: View {
     @ObservedObject var shell = Shell.shared
     @ObservedObject var mon = Monitor.shared
     @ObservedObject var nav = Nav.shared
+    @ObservedObject var charge = ChargeClient.shared
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Circle().fill(shell.searching ? accent : good).frame(width: 6, height: 6)
-            Text(status).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1)
+            Text(status).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 8)
-            hint("主操作", "↵")
-            hint("操作", "⌘K")
-            hint("切换页面", "⌘1–9")
+            if shell.searching {
+                hint("执行", "↵")
+            } else {
+                // 2.13：当前页面的常驻动作按钮（最多 2 个），其余在 ⌘K 分组列表里
+                ForEach(Array(ContextActions.page(nav.sel).prefix(2).enumerated()), id: \.offset) { i, a in
+                    BarButton(title: a.short ?? a.title, id: "bottom.action.\(i)", run: a.run).help(a.title)
+                }
+            }
+            BarButton(title: "全部操作", kbd: "⌘K", id: "bottom.actions") { shell.openActions() }
+                .help("当前页面、快捷操作与前往其他页面")
         }
-        .padding(.horizontal, 16).frame(height: 34)
+        .padding(.horizontal, 16).frame(height: 36)
         .background(Vibrancy(material: .headerView, solid: DS.window))
         .overlay(alignment: .top) { Hairline() }
+        .accessibilityElement(children: .contain).accessibilityIdentifier("bottom.bar")
     }
     var status: String {
         if shell.searching { return "\(shell.items.count) 项结果 · ↑↓ 选择，↵ 执行" }
         let h = mon.s.health
-        return "\(pageTitle(nav.sel)) · \(h.status) · 健康分 \(h.score)"
+        return "\(pageTitle(nav.sel)) · \(h.status) · 健康分 \(h.score) · ⌘1–9 切换页面"
     }
     func hint(_ t: String, _ k: String) -> some View {
         HStack(spacing: 4) { Text(t).font(DS.cap()).foregroundColor(DS.text.secondary); Kbd(text: k) }
@@ -482,7 +487,13 @@ struct ActionPanel: View {
                 Hairline()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 1) {
-                        ForEach(Array(shell.filteredActions.enumerated()), id: \.element.id) { i, a in
+                        let list = shell.filteredActions
+                        ForEach(Array(list.enumerated()), id: \.element.id) { i, a in
+                            if let g = a.group, i == 0 || list[i - 1].group != g {
+                                Text(g).font(DS.cap(.semibold)).foregroundColor(DS.text.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.top, i == 0 ? 2 : 8).padding(.bottom, 2)
+                                    .accessibilityIdentifier("cmdk.group.\(g)")
+                            }
                             HStack(spacing: 8) {
                                 Text(a.title).font(DS.body(a.destructive ? .medium : .regular))
                                     .foregroundColor(a.destructive && shell.actionSel != i ? DS.text.bad : (shell.actionSel == i ? DS.text.onSelection : .primary)).lineLimit(1)
@@ -497,7 +508,7 @@ struct ActionPanel: View {
                             .onTapGesture { shell.runAction(i) }
                         }
                     }.padding(6)
-                }
+                }.frame(maxHeight: 380)
             }
             .frame(width: 380)
             .background(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous).fill(.regularMaterial))
@@ -625,6 +636,7 @@ struct SettingsPage: View {
     @ObservedObject var alerts = BatteryAlerts.shared
     @ObservedObject var ka = KeepAwake.shared
     @ObservedObject var dock = DockMode.shared
+    @ObservedObject var panelPrefs = PanelPrefs.shared
     @State private var recording = false
     @State private var monitor: Any?
     @State private var label = CommandPalette.label(code: CommandPalette.shared.shortcut.code,
@@ -659,6 +671,11 @@ struct SettingsPage: View {
                     }
                     if alerts.settings.menuIndicator == "trio" {
                         TrioSettings().padding(.leading, 38).padding(.trailing, 12).padding(.vertical, 8)
+                    }
+                    Hairline().padding(.leading, 38)
+                    row("菜单栏", "square.grid.2x2", "面板快捷操作", "已选 \(panelPrefs.ids.count) 项：" + panelPrefs.selectedActions().map(\.title).joined(separator: "、")) {
+                        QuickActionEditMenu { Text("选择…").font(DS.sub(.medium)).foregroundColor(accentText) }
+                            .accessibilityIdentifier("set.quickActions")
                     }
                     Hairline().padding(.leading, 38)
                     row("启动", "power", "登录时自动启动", "默认关闭") {

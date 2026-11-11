@@ -32,7 +32,7 @@ enum DS {
     static let tilePadding: CGFloat = 10
     /// 带标题的 `Card`（电池、显示器、网络等详情页）。2.12 仍为 12：改成 16 时电池页在最小窗口（1080×720）超出 28 pt，
     /// 违反「不滚动」测试；2.13 把规则改成「摘要不滚、详情局部滚动」后再统一到 cardPadding
-    static let titledCardPadding: CGFloat = 12
+    static let titledCardPadding: CGFloat = 16
 
     // 2.12 文字承载色：只给文字用，和品牌色、状态图形色、指标色分开。
     // 图标、圆环、曲线、进度条继续用 accent / good / warn / bad；小字一律用这里的令牌。
@@ -65,18 +65,18 @@ enum DS {
     /// 承载白字的填充：列表选中行、操作面板选中项、主按钮。比品牌紫深一档，白字 6.44:1（品牌紫 accent 只做图形与焦点）
     static let selectionFill = Color(nsColor: NSColor(srgbRed: 0x58 / 255.0, green: 0x46 / 255.0, blue: 0xD6 / 255.0, alpha: 1))   // #5846D6
 
-    // 字号只保留 4 档：标题 / 正文 13 / 次要 11 / 角标 10
-    static let fontSizes: [CGFloat] = [30, 22, 17, 13, 12.5, 11, 10.5, 10]
+    // 字号（2.13）：标题 17 / 正文 13 / 说明 12；10–11 pt 只用于单位和时间，需在行尾注明（fontlint.sh 检查）
+    static let fontSizes: [CGFloat] = [30, 22, 17, 13, 12.5, 12, 12, 12]
     static func title(_ w: Font.Weight = .semibold) -> Font { .system(size: 17, weight: w) }
     static func body(_ w: Font.Weight = .regular) -> Font { .system(size: 13, weight: w) }
-    static func sub(_ w: Font.Weight = .regular) -> Font { .system(size: 11, weight: w) }
-    static func cap(_ w: Font.Weight = .medium) -> Font { .system(size: 10, weight: w) }
+    static func sub(_ w: Font.Weight = .regular) -> Font { .system(size: 12, weight: w) }
+    static func cap(_ w: Font.Weight = .medium) -> Font { .system(size: 12, weight: w) }
     /// 数字：等宽，避免刷新时跳动
     static func num(_ size: CGFloat = 13, _ w: Font.Weight = .medium) -> Font { .system(size: size, weight: w, design: .rounded).monospacedDigit() }
     static func hero(compact: Bool = false) -> Font { num(compact ? 22 : 30, .semibold) }
     static func unit() -> Font { .system(size: 13, weight: .medium) }
     static func label() -> Font { .system(size: 12.5, weight: .semibold) }
-    static func eyebrow() -> Font { .system(size: 10.5, weight: .semibold) }
+    static func eyebrow() -> Font { .system(size: 12, weight: .semibold) }
 
     enum metric {
         static let cpu = dyn(NSColor(srgbRed: 0.067, green: 0.475, blue: 0.412, alpha: 1), NSColor(srgbRed: 0.420, green: 0.792, blue: 0.714, alpha: 1))
@@ -241,7 +241,7 @@ struct BarListItem {
                     HStack {
                         Text(item.name).font(DS.sub()).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: 8)
-                        Text(item.value).font(DS.num(11)).lineLimit(1)
+                        Text(item.value).font(DS.num(12)).lineLimit(1)
                     }
                     Bar(frac: item.fraction, color: tint, height: 3).accessibilityHidden(true)
                 }.accessibilityElement(children: .ignore).accessibilityLabel(item.name + "，" + item.value)
