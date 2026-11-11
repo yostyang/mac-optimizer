@@ -1087,12 +1087,29 @@ var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 var film = document.getElementById("promo-video");
 var filmStart = document.getElementById("promo-start");
 var filmError = document.getElementById("promo-error");
+var filmLanguage = "zh";
+function syncFilmLanguage(language){
+  if(!film || language === filmLanguage) return;
+  filmLanguage = language;
+  var suffix = language === "en" ? "-en" : "";
+  var videoPath = "media/mac-optimizer-promo-45s" + suffix + ".mp4";
+  film.pause();
+  film.muted = true;
+  film.defaultMuted = true;
+  film.poster = "media/mac-optimizer-promo-poster" + suffix + ".jpg";
+  film.querySelector("source").src = videoPath;
+  document.querySelectorAll("a[data-i='film_fallback']").forEach(function(link){ link.href = videoPath; });
+  filmStart.hidden = false;
+  filmError.hidden = true;
+  film.load();
+  film.pause();
+}
 if(film && filmStart){
   filmStart.hidden = false;
   filmStart.addEventListener("click", function(){
     filmError.hidden = true;
     var request = film.play();
-    if(request && request.catch) request.catch(function(){ filmError.hidden = false; });
+    if(request && request.catch) request.catch(function(error){ if(error.name !== "AbortError") filmError.hidden = false; });
   });
   film.addEventListener("play", function(){ filmStart.hidden = true; filmError.hidden = true; });
   film.addEventListener("ended", function(){ filmStart.hidden = false; });
@@ -1114,8 +1131,8 @@ var EN = {
   sub:"Mac suddenly laggy with an external display and a pile of AI tools and browsers open, but nothing looks wrong? Run a quick checkup, find the culprit, fix it on the spot.",
   cta1:'Download for free<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
   cta2:"Watch the 45-second demo",
-  film_eyebrow:"See it in action", film_title:"See what it does in 45 seconds", film_note:"Chinese-language demo · 1080p",
-  film_label:"Mac Optimizer product film (45 seconds, Chinese)", film_play:"Play the 45-second product film",
+  film_eyebrow:"See it in action", film_title:"See what it does in 45 seconds", film_note:"English-language demo · 1080p",
+  film_label:"Mac Optimizer product film (45 seconds, English)", film_play:"Play the 45-second product film",
   film_caption:"Live monitoring, charge limits, desktop zones and cleanup restore. Click to play. Muted by default; turn sound on whenever you like.",
   film_fallback:"Open video directly", film_error:"The video could not play. Try again later or open it directly.",
   meta:"macOS 13+ <i>·</i> Apple silicon &amp; Intel <i>·</i> v2.11.0 <i>·</i> Free &amp; open source",
@@ -1224,6 +1241,7 @@ var ri = 0, timer = null;
 
 function apply(l){
   lang = l;
+  syncFilmLanguage(l);
   try{ localStorage.setItem("lang", l); }catch(e){}
   var d = l === "zh" ? ZH : EN;
   document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
