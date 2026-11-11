@@ -93,12 +93,12 @@ struct StateLine: View {
                 else { Image(systemName: kind.symbol).font(DS.sub(.semibold)).foregroundColor(kind.tint) }
             }.frame(width: 16, height: 16).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(text).font(DS.sub(.medium)).foregroundColor(kind == .failed ? bad : .primary)
+                Text(text).font(DS.sub(.medium)).foregroundColor(kind == .failed ? DS.text.bad : .primary)
                     .fixedSize(horizontal: false, vertical: true)
                 if !detail.isEmpty {
-                    Text(detail).font(DS.cap(.regular)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(detail).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                if let updated { Text("更新于 " + Fmt.ago(updated)).font(DS.cap(.regular)).foregroundColor(.secondary) }
+                if let updated { Text("更新于 " + Fmt.ago(updated)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary) }
             }
             Spacer(minLength: 4)
             ForEach(actions) { a in
@@ -122,7 +122,7 @@ struct UpdatedText: View {
     var prefix = "更新于 "
     var body: some View {
         TimelineView(.periodic(from: .now, by: 5)) { ctx in
-            Text(prefix + Fmt.ago(date, now: ctx.date)).font(DS.cap(.regular)).foregroundColor(.secondary).monospacedDigit()
+            Text(prefix + Fmt.ago(date, now: ctx.date)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).monospacedDigit()
         }
     }
 }
@@ -232,7 +232,7 @@ struct PowerTrendChart: View {
                         }
                     }.stroke(line.0, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
                 }
-                Text(String(format: "%.0f W", mx)).font(DS.cap(.regular)).foregroundColor(.secondary)
+                Text(String(format: "%.0f W", mx)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -267,12 +267,12 @@ struct PowerTrendCard: View {
             } else {
                 PowerTrendChart(window: w).frame(height: 84).accessibilityIdentifier("power.trend")
                 HStack {
-                    Text(Fmt.clock(w.start, now: t)).font(DS.cap(.regular)).foregroundColor(.secondary)
+                    Text(Fmt.clock(w.start, now: t)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
                     Spacer()
-                    Text("现在").font(DS.cap(.regular)).foregroundColor(.secondary)
+                    Text("现在").font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
                 }
             }
-            Text(coverage(w, now: t)).font(DS.cap(.regular)).foregroundColor(.secondary)
+            Text(coverage(w, now: t)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
                 .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("power.trend.coverage")
             Footnote(text: "三条线来源不同，分开画、不相加：输入来自电源遥测，充入/放电由电池电压 × 电流计算。系统功耗是估算值，不画进曲线。虚线为接电或拔电时刻，空白处没有样本。")
         }
@@ -280,8 +280,8 @@ struct PowerTrendCard: View {
     func legend(_ name: String, _ c: Color, _ v: Double?, _ reason: String?) -> some View {
         HStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 1).fill(c).frame(width: 10, height: 3).accessibilityHidden(true)
-            Text(name).font(DS.cap(.regular)).foregroundColor(.secondary)
-            Text(reason ?? Fmt.watts(v)).font(DS.num(11)).foregroundColor(reason == nil ? .primary : .secondary)
+            Text(name).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
+            Text(reason ?? Fmt.watts(v)).font(DS.num(11)).foregroundColor(reason == nil ? .primary : DS.text.secondary)
         }.accessibilityElement(children: .combine)
     }
     func coverage(_ w: PowerHistory.Window, now: Date) -> String {

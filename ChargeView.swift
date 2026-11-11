@@ -192,7 +192,7 @@ struct ChargeCard: View {
                 small("充电上限等需要后台助手（系统设置里允许一次）。默认不装。本机用断开电源实现上限，接外接显示器时会自动暂停。")
                 small("本机支持：" + capsText(c.localCaps)).accessibilityIdentifier("charge.caps")
                 if c.phase == .needsApproval {
-                    small("等待授权：在「系统设置 › 通用 › 登录项与扩展」里打开「Mac一键优化」的后台项目开关，并输入管理员密码。").foregroundColor(.orange)
+                    small("等待授权：在「系统设置 › 通用 › 登录项与扩展」里打开「Mac一键优化」的后台项目开关，并输入管理员密码。").foregroundColor(DS.text.warn)
                     if c.upgrade == .needsApproval { small("这是升级后的新版助手，需要再允许一次；原来的充电设置会保留，允许之前不会限制充电。").accessibilityIdentifier("charge.upgrade.approval") }
                     HStack {
                         Button { SMAppService.openSystemSettingsLoginItems() } label: { Label("打开登录项设置", systemImage: "gear") }.buttonStyle(PillButton())
@@ -223,7 +223,7 @@ struct ChargeCard: View {
         case .none, .needsApproval: EmptyView()
         }
     }
-    func small(_ s: String) -> some View { Text(s).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
+    func small(_ s: String) -> some View { Text(s).font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
     func capsText(_ k: ChargeCaps) -> String {
         var a: [String] = []
         a.append(k.inhibit != .none ? "暂停充电" : (k.adapter ? "断开电源实现上限" : "无"))
@@ -246,7 +246,7 @@ struct ChargeCard: View {
         HStack {
             Toggle("启用充电上限", isOn: Binding(get: { s.settings.enabled }, set: { c.setLimit(s.settings.limit, enabled: $0) })).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("charge.enabled")
             Spacer()
-            Text(stateText).font(.system(size: 10)).foregroundColor(s.adapterCut || s.inhibited ? good : .secondary).lineLimit(2).multilineTextAlignment(.trailing)
+            Text(stateText).font(.system(size: 10)).foregroundColor(s.adapterCut || s.inhibited ? DS.text.good : DS.text.secondary).lineLimit(2).multilineTextAlignment(.trailing)
         }.font(.system(size: 11))
         Group {
             HStack(spacing: 6) {
@@ -259,10 +259,10 @@ struct ChargeCard: View {
             }
             if s.dockProtected == true && s.caps.adapterMode {
                 Label("已识别 Plugable TBT4-UD5，保持扩展坞供电。断开扩展坞后，先关闭再开启上限以重新检测连接状态。", systemImage: "display")
-                    .font(.system(size: 11)).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
+                    .font(.system(size: 11)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
             } else if s.displayPaused == true && s.caps.adapterMode {
                 Label("接着外接显示器时不断开电源（否则显示器会掉线），先正常充电；拔掉显示器约 10 秒后自动恢复上限。", systemImage: "display")
-                    .font(.system(size: 11)).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
+                    .font(.system(size: 11)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
             } else if s.caps.adapterMode {
                 small("本机无停充键：到上限断开电源用电池，降到下沿再接通。")
             } else if s.caps.adapter {

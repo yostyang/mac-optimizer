@@ -361,7 +361,7 @@ struct SplitPage: View {
                 }.frame(width: 220).accessibilityElement(children: .contain).accessibilityIdentifier("split.list")
                 if let d = ds.first(where: { $0.uuid == (sel ?? ds.first?.uuid) }) {
                     detail(d).id(tick)
-                } else { Text("没有检测到显示器").foregroundColor(.secondary) }
+                } else { Text("没有检测到显示器").foregroundColor(DS.text.secondary) }
             }
             Spacer()
         }.padding(20)
@@ -384,11 +384,11 @@ struct SplitPage: View {
             Button("关闭分区") { c.prefs.set(nil, for: d.uuid); tick += 1 }
                 .disabled(c.prefs.weights(d.uuid) == nil).accessibilityIdentifier("split.off")
             Text(String(format: "可用区域 %.0f×%.0f pt · %.0fx", d.visible.width, d.visible.height, d.scale))
-                .font(.caption).foregroundColor(.secondary)
+                .font(.caption).foregroundColor(DS.text.secondary)
             Divider()
             Text("把窗口放进分区").font(DS.sub(.semibold))
             Text("选好模板后，切换到要摆放的应用窗口，按 ⌘K，选择目标分区。只移动你选中的窗口，完成后可撤销。")
-                .font(DS.sub()).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("split.howto")
             SplitDragToggle()
         }.frame(maxWidth: .infinity, alignment: .leading)

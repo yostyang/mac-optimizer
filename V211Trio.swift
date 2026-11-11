@@ -241,6 +241,8 @@ enum TrioIcon {
     static func batteryColor(_ p: Int, charging: Bool) -> NSColor {
         p <= 10 ? .systemRed : (p <= 20 ? .systemOrange : (charging ? .systemGreen : NSColor(red: 0.18, green: 0.70, blue: 0.96, alpha: 1)))
     }
+    /// 电池图标里画什么：数字（显示百分比时）和闪电（充电时，不论是否显示百分比、单色还是彩色）
+    static func batteryMarks(charging: Bool, config c: TrioConfig) -> (number: Bool, bolt: Bool) { (c.percent, charging) }
     static func drawBattery(in r: CGRect, percent p: Int, charging: Bool, config c: TrioConfig, ink: NSColor) {
         let nub: CGFloat = 2.5, body = CGRect(x: r.minX + 0.5, y: r.minY + 1.5, width: r.width - nub - 1, height: r.height - 3)
         let radius = body.height * 0.28
@@ -253,14 +255,29 @@ enum TrioIcon {
         // 单色且要显示数字时，电量条画淡一些，数字压在上面才看得清
         (c.color ? batteryColor(p, charging: charging) : ink.withAlphaComponent(c.percent ? 0.32 : 0.9)).setFill()
         NSBezierPath(roundedRect: fill, xRadius: radius * 0.6, yRadius: radius * 0.6).fill()
-        if c.percent {
-            var attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: (r.height * 0.6).rounded(), weight: .bold), .foregroundColor: c.color ? NSColor.white : ink]
-            if c.color { attrs[.strokeColor] = NSColor.black.withAlphaComponent(0.35); attrs[.strokeWidth] = -2 }
-            // 彩色模式下电量条不够长（低于 70%）时，白字会有一部分落在空白处看不见：改用墨色
-            if c.color, p < 70 { attrs = [.font: attrs[.font]!, .foregroundColor: ink] }
-            let t = NSAttributedString(string: "\(p)", attributes: attrs), sz = t.size()
-            t.draw(at: CGPoint(x: body.midX - sz.width / 2, y: body.midY - sz.height / 2))
-        } else if charging {
+        let marks = batteryMarks(charging: charging, config: c)
+        if marks.number {
+            // 2.12：显示百分比时充电也要画闪电（单色模式只靠数字分不出是否在充电）。闪电放在数字左边，放不下就把字缩小
+            let boltW = marks.bolt ? (body.height * 0.62).rounded(.down) : 0, gap: CGFloat = marks.bolt ? 0.5 : 0
+            var fontSize = (r.height * 0.6).rounded()
+            func attrs(_ size: CGFloat) -> [NSAttributedString.Key: Any] {
+                var a: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size, weight: .bold), .foregroundColor: c.color ? NSColor.white : ink]
+                if c.color { a[.strokeColor] = NSColor.black.withAlphaComponent(0.35); a[.strokeWidth] = -2 }
+                // 彩色模式下电量条不够长（低于 70%）时，白字会有一部分落在空白处看不见：改用墨色
+                if c.color, p < 70 { a = [.font: a[.font]!, .foregroundColor: ink] }
+                return a
+            }
+            var t = NSAttributedString(string: "\(p)", attributes: attrs(fontSize))
+            while marks.bolt, fontSize > 6, t.size().width + gap + boltW > body.width - 2 {
+                fontSize -= 0.5; t = NSAttributedString(string: "\(p)", attributes: attrs(fontSize))
+            }
+            let sz = t.size(), total = sz.width + gap + boltW, x0 = body.midX - total / 2
+            if marks.bolt {
+                let textInk = (attrs(fontSize)[.foregroundColor] as? NSColor) ?? ink
+                draw(symbol(("bolt.fill", nil), point: body.height), in: CGRect(x: x0, y: body.minY + 1, width: boltW, height: body.height - 2), color: textInk)
+            }
+            t.draw(at: CGPoint(x: x0 + boltW + gap, y: body.midY - sz.height / 2))
+        } else if marks.bolt {
             draw(symbol(("bolt.fill", nil), point: r.height * 0.6), in: body.insetBy(dx: 2, dy: 1.5), color: c.color ? .white : ink)
         }
     }
@@ -328,7 +345,7 @@ struct TrioSettings: View {
         let c = model.config
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Text("预览").font(DS.sub()).foregroundColor(.secondary)
+                Text("预览").font(DS.sub()).foregroundColor(DS.text.secondary)
                 Image(nsImage: TrioIcon.image(config: c, battery: m.s.battery ?? 80, charging: m.s.charging || m.s.onAC, wifi: model.wifi, volume: model.volume))
                     .renderingMode(c.color ? .original : .template).foregroundColor(.primary)
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -370,7 +387,7 @@ struct TrioSettings: View {
                 Spacer()
             }
             Text("要省出菜单栏空间，可以在「系统设置 › 控制中心」里把系统自带的 Wi-Fi、电池、声音图标设为不在菜单栏显示。")
-                .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.caption).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .controlSize(.small)
         .onAppear { model.refresh() }
@@ -386,23 +403,23 @@ struct TrioPanelCard: View {
             HStack(spacing: 8) {
                 Button(action: { model.toggleMute() }) {
                     Image(systemName: v.muted || v.waves == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").frame(width: 18)
-                }.buttonStyle(.plain).foregroundColor(.secondary).disabled(v.level == nil)
+                }.buttonStyle(.plain).foregroundColor(DS.text.secondary).disabled(v.level == nil)
                     .help(v.muted ? "取消静音" : "静音").accessibilityIdentifier("panel.trio.mute").accessibilityLabel(v.muted ? "取消静音" : "静音")
                 if let l = v.level {
                     Slider(value: Binding(get: { v.muted ? 0 : l }, set: { model.setVolume($0) }), in: 0...1)
                         .controlSize(.small).disabled(!v.settable).accessibilityIdentifier("panel.trio.volume").accessibilityLabel("输出音量")
-                    Text(v.text).font(DS.num(11)).foregroundColor(.secondary).frame(width: 44, alignment: .trailing)
+                    Text(v.text).font(DS.num(11)).foregroundColor(DS.text.secondary).frame(width: 44, alignment: .trailing)
                 } else {
-                    Text(v.text).font(DS.sub()).foregroundColor(.secondary); Spacer()
+                    Text(v.text).font(DS.sub()).foregroundColor(DS.text.secondary); Spacer()
                 }
             }
             HStack(spacing: 8) {
-                Image(systemName: w.link == .connected ? "wifi" : "wifi.slash").frame(width: 18).foregroundColor(.secondary).accessibilityHidden(true)
-                Text(w.summary).font(DS.sub()).foregroundColor(.secondary).lineLimit(1).minimumScaleFactor(0.8).accessibilityIdentifier("panel.trio.wifi")
+                Image(systemName: w.link == .connected ? "wifi" : "wifi.slash").frame(width: 18).foregroundColor(DS.text.secondary).accessibilityHidden(true)
+                Text(w.summary).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8).accessibilityIdentifier("panel.trio.wifi")
                 Spacer()
             }
         }
-        .padding(10).frame(maxWidth: .infinity, alignment: .leading).card()
+        .padding(DS.tilePadding).frame(maxWidth: .infinity, alignment: .leading).card()
         .accessibilityElement(children: .contain).accessibilityIdentifier("panel.trio")
         .onAppear { model.refresh() }
     }

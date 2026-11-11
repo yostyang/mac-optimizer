@@ -16,7 +16,7 @@ struct PanelTile<Viz: View>: View {
     let title: String
     let tint: Color
     var badge: String? = nil
-    var badgeTint: Color = .secondary
+    var badgeTint: Color = DS.text.secondary
     let value: String?
     var unit = ""
     var valueColor: Color = .primary
@@ -30,7 +30,7 @@ struct PanelTile<Viz: View>: View {
                 Text(title).font(DS.sub(.semibold)).foregroundColor(tint)
                 Spacer(minLength: 2)
                 if let badge {
-                    Text(badge).font(DS.num(10, .semibold)).foregroundColor(badgeTint).lineLimit(1)
+                    Text(badge).font(DS.num(10, .semibold)).foregroundColor(DS.text.tone(badgeTint)).lineLimit(1)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill(badgeTint.opacity(0.13)))
                 }
@@ -41,13 +41,13 @@ struct PanelTile<Viz: View>: View {
                 } else {
                     Unavailable(reason: unavailable).font(DS.num(24, .semibold))
                 }
-                if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(.secondary) }
+                if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(DS.text.secondary) }
                 Spacer(minLength: 0)
             }
             viz.frame(height: 18).accessibilityHidden(true)
-            Text(footer).font(DS.cap(.regular)).foregroundColor(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(footer).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
         }
-        .padding(10)
+        .padding(DS.tilePadding)
         .frame(maxWidth: .infinity, minHeight: PanelLayout.tileHeight, maxHeight: PanelLayout.tileHeight, alignment: .topLeading)
         .card()
         .clipShape(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous))
@@ -72,7 +72,7 @@ struct DeviceRing: View {
             } else {
                 Circle().stroke(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
             }
-            Image(systemName: symbol).font(.system(size: size * 0.32, weight: .medium)).foregroundColor(percent == nil ? .secondary : .primary)
+            Image(systemName: symbol).font(.system(size: size * 0.32, weight: .medium)).foregroundColor(percent == nil ? DS.text.secondary : .primary)
         }
         .frame(width: size, height: size)
         .help(name + "：" + (percent.map { "\($0)%" } ?? "未取得" + (reason.isEmpty ? "" : "（\(reason)）")))
@@ -150,15 +150,15 @@ struct PanelContent: View {
         let sampled = s.uptime > 0
         return HStack(spacing: 8) {
             Image(systemName: sampled ? v.symbol : "hourglass").font(.system(size: 20, weight: .semibold))
-                .foregroundColor(sampled ? v.tint : .secondary).frame(width: 24).accessibilityHidden(true)
+                .foregroundColor(sampled ? v.tint : DS.text.secondary).frame(width: 24).accessibilityHidden(true)
             Text(sampled ? "\(h.score)" : Fmt.dash).font(DS.num(28, .bold)).foregroundColor(.primary)
             VStack(alignment: .leading, spacing: 0) {
-                Text(sampled ? v.word : "等待采样").font(DS.cap(.semibold)).foregroundColor(sampled ? v.tint : .secondary)
+                Text(sampled ? v.word : "等待采样").font(DS.cap(.semibold)).foregroundColor(sampled ? DS.text.tone(v.tint) : DS.text.secondary)
                 Text(sampled ? h.status : "首次读数约 2 秒").font(DS.body(.medium)).lineLimit(1).minimumScaleFactor(0.8)
             }
             Spacer(minLength: 4)
             Button { ui.openMain() } label: { Image(systemName: "macwindow").font(DS.body()) }
-                .buttonStyle(.plain).foregroundColor(.secondary).help("打开主窗口").accessibilityIdentifier("panel.open")
+                .buttonStyle(.plain).foregroundColor(DS.text.secondary).help("打开主窗口").accessibilityIdentifier("panel.open")
             Menu {
                 Picker("菜单栏显示", selection: $alerts.settings.menuIndicator) {
                     Text("CPU 占用").tag("cpu"); Text("健康分").tag("score")
@@ -273,7 +273,7 @@ struct PanelContent: View {
                 Text("电池").font(DS.sub(.semibold))
                 Spacer(minLength: 2)
                 if let hh = s.batteryHealth {
-                    Text("健康 \(hh)%").font(DS.num(10, .semibold)).foregroundColor(hh < 80 ? warn : good)
+                    Text("健康 \(hh)%").font(DS.num(10, .semibold)).foregroundColor(hh < 80 ? DS.text.warn : DS.text.good)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill((hh < 80 ? warn : good).opacity(0.13)))
                 }
@@ -283,12 +283,12 @@ struct PanelContent: View {
                     if let b = s.battery {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("\(b)%").font(DS.num(24, .semibold)).foregroundColor(b <= 20 ? batteryColor(b) : .primary)
-                            Text(flow.supplyText).font(DS.sub()).foregroundColor(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                            Text(flow.supplyText).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
                         }
-                        Text(powerLine(flow, mins)).font(DS.cap(.regular)).foregroundColor(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(powerLine(flow, mins)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
                             .accessibilityIdentifier("panel.battery.compact")
                     } else {
-                        Text("这台 Mac 没有内置电池").font(DS.sub()).foregroundColor(.secondary)
+                        Text("这台 Mac 没有内置电池").font(DS.sub()).foregroundColor(DS.text.secondary)
                     }
                 }
                 Spacer(minLength: 4)
@@ -297,7 +297,7 @@ struct PanelContent: View {
                 }
             }
         }
-        .padding(10).frame(maxWidth: .infinity, alignment: .leading).card()
+        .padding(DS.tilePadding).frame(maxWidth: .infinity, alignment: .leading).card()
         .accessibilityElement(children: .contain).accessibilityIdentifier("panel.battery")
     }
     func powerLine(_ f: PowerFlow, _ mins: Double?) -> String {
@@ -314,9 +314,9 @@ struct PanelContent: View {
         VStack(spacing: 2) {
             ProcList(m: m, limit: 4, selection: sel, onSelect: { sel = $0 }, onMore: { more = $0 })
             HStack(spacing: 6) {
-                Kbd(text: "↑↓"); Text("选择").font(DS.cap()).foregroundColor(.secondary)
-                Kbd(text: "↵"); Text("处理").font(DS.cap()).foregroundColor(.secondary)
-                Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(.secondary)
+                Kbd(text: "↑↓"); Text("选择").font(DS.cap()).foregroundColor(DS.text.secondary)
+                Kbd(text: "↵"); Text("处理").font(DS.cap()).foregroundColor(DS.text.secondary)
+                Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(DS.text.secondary)
                 Spacer()
             }.padding(.horizontal, 4).padding(.bottom, 2)
         }.padding(6).card()
@@ -349,7 +349,7 @@ struct PanelContent: View {
                 IconBadge(symbol: a.symbol, tint: on ? good : accent, size: 20)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(a.title).font(DS.sub(.medium)).foregroundColor(.primary).lineLimit(1)
-                    Text(state.isEmpty ? a.hint : state).font(DS.cap(.regular)).foregroundColor(on ? good : .secondary).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(state.isEmpty ? a.hint : state).font(DS.cap(.regular)).foregroundColor(on ? DS.text.good : DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
             }
@@ -367,7 +367,7 @@ struct PanelContent: View {
     func stat(_ v: String, _ l: String) -> some View {
         VStack(spacing: 0) {
             Text(v).font(DS.num(13, .semibold))
-            Text(l).font(DS.cap(.regular)).foregroundColor(.secondary)
+            Text(l).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
         }.frame(maxWidth: .infinity)
     }
 }
