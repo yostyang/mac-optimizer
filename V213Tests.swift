@@ -94,10 +94,13 @@ enum V213 {
         let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
         pw.contentView = host; pw.orderFrontRegardless(); T.settle(1.0)
         T.check(T.find1(host, id: "act.shot") == nil && T.find1(host, id: "act.clean") == nil && T.find1(host, id: "act.awake") != nil, "默认不显示截图、擦屏")
-        T.check(T.find1(host, id: "proc.state") != nil, "进程默认展开（显示列表）")
+        T.check(prefs.procExpanded, "偏好默认展开")
+        T.check(T.waitUntil(3) { T.find1(host, id: "proc.row.0") != nil }, "进程默认展开（显示列表）")
         if let t = T.find1(host, id: "panel.procs.toggle") {
-            t.press(); T.check(T.waitUntil(2) { !prefs.procExpanded }, "点标题收起进程列表")
-            t.press(); T.check(T.waitUntil(2) { prefs.procExpanded }, "再点展开")
+            let lab = T.axString(t.o, "accessibilityLabel")
+            T.check(lab.hasPrefix("收起"), "展开态按钮读作「收起高占用进程」", lab)
+            t.press(); T.check(T.waitUntil(2) { !prefs.procExpanded && T.find1(host, id: "proc.row.0") == nil }, "点标题收起进程列表")
+            t.press(); T.check(T.waitUntil(2) { prefs.procExpanded && T.find1(host, id: "proc.row.0") != nil }, "再点展开")
         } else { T.check(false, "找到进程展开按钮") }
         prefs.set("act.shot", on: true); T.settle(0.6)
         T.check(T.find1(host, id: "act.shot") != nil, "在偏好里加上截图后，面板出现截图按钮")
@@ -133,7 +136,7 @@ enum V213 {
             let w2 = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: s2.width, height: s2.height), styleMask: [.titled], backing: .buffered, defer: false)
             w2.appearance = NSAppearance(named: ap); w2.contentView = h2; w2.orderFrontRegardless(); T.settle(1.0)
             _ = T.pngRep(h2, out + "/panel213-expanded-\(mode).png")
-            T.check(s2.height > 400 && s2.height <= 880, "展开进程后面板高度不超过 880 pt \(mode)", "\(Int(s2.height)) pt")
+            T.check(s2.height > 400 && s2.height <= 810, "展开进程后面板高度不超过 810 pt \(mode)", "\(Int(s2.height)) pt")
             w2.orderOut(nil)
         }
         NSApp.appearance = NSAppearance(named: .aqua)

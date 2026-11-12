@@ -480,6 +480,12 @@ enum MOTests {
     static func snapshots(_ out: String, _ w: NSWindow, goldens: String?, approve: Bool) {
         let mon = Monitor.shared
         mon.panelOpen = true
+        // 本机若开了「合并状态」且面板里显示音量/Wi-Fi，会多出 TrioPanelCard（约 64 pt）。
+        // 单独跑 --snapshot 会量到 867，install-local 先跑的界面测试会把 menuIndicator 写成 cpu 并保存，于是正式量到 803。
+        // 截图与默认高度门槛固定为不含该卡，结束时恢复用户原设置。
+        let keepIndicator = BatteryAlerts.shared.settings.menuIndicator
+        BatteryAlerts.shared.settings.menuIndicator = "cpu"
+        defer { BatteryAlerts.shared.settings.menuIndicator = keepIndicator }
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
         w.makeKeyAndOrderFront(nil)
         ensureActive(w, "截图窗口")
@@ -556,7 +562,7 @@ enum MOTests {
             pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
             if let rep = pngRep(host, out + "/panel-\(mode).png") { contrast(host, rep, "面板 \(mode)") }
             if mode == "light" { pngRep(host, out + "/panel.png") }
-            check(size.width == PanelLayout.width && size.height > 400 && size.height <= 880, "面板尺寸 \(mode)（默认内容 ≤ 880 pt）", "\(Int(size.width))×\(Int(size.height))")
+            check(size.width == PanelLayout.width && size.height > 400 && size.height <= 810, "面板尺寸 \(mode)（默认内容 ≤ 810 pt）", "\(Int(size.width))×\(Int(size.height))")
             pw.orderOut(nil)
             // 主窗口：默认尺寸和最小尺寸
             w.appearance = NSAppearance(named: ap)
@@ -615,6 +621,8 @@ enum MOTests {
 
     static func uiChecks(_ w: NSWindow) {
         let mon = Monitor.shared
+        let keepIndicator = BatteryAlerts.shared.settings.menuIndicator
+        defer { BatteryAlerts.shared.settings.menuIndicator = keepIndicator }
         let loginBefore = Actions.loginEnabled
         info("测试开始时登录项状态：\(loginBefore ? "已开启（用户设置，保持不动）" : "关闭")")
         sec("菜单栏与采样频率")
