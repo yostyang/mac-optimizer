@@ -264,7 +264,8 @@ enum Readers {
     // 进程：proc_pidinfo 差值（只能读到当前用户的进程，系统进程无权限读取会被跳过）
     private static var prevProc: [Int32: UInt64] = [:]
     private static var prevProcTime: UInt64 = 0
-    private static var procNames: [Int32: String] = [:]
+    /// 名称缓存带进程启动时间：进程号被系统复用时不会沿用旧进程的名字
+    private static var procNames: [Int32: (start: Date?, name: String)] = [:]
     private static let timebase: Double = { var t = mach_timebase_info(); mach_timebase_info(&t); return Double(t.numer) / Double(t.denom) }()
     static func topProcesses(limit: Int = 5) -> [ProcInfo] {
         let n = proc_listallpids(nil, 0); guard n > 0 else { return [] }
@@ -285,13 +286,14 @@ enum Readers {
         }
         // 只为前几名解析名称（并缓存），避免每次给几百个进程查名字
         list = Array(list.sorted { $0.cpu > $1.cpu }.prefix(limit)).map { p in
-            if let n = procNames[p.id] { return ProcInfo(id: p.id, name: n, cpu: p.cpu, memMB: p.memMB) }
+            let start = ProcName.startTime(p.id)
+            if let c = procNames[p.id], c.start == start { return ProcInfo(id: p.id, name: c.name, cpu: p.cpu, memMB: p.memMB) }
             var nameBuf = [CChar](repeating: 0, count: 256)
             proc_name(p.id, &nameBuf, 256)
             var name = String(cString: nameBuf)
             if let app = NSRunningApplication(processIdentifier: p.id), let ln = app.localizedName { name = ln }
             if name.isEmpty { name = "pid \(p.id)" }
-            procNames[p.id] = name
+            procNames[p.id] = (start, name)
             return ProcInfo(id: p.id, name: name, cpu: p.cpu, memMB: p.memMB)
         }
         if procNames.count > 200 { procNames = procNames.filter { cur[$0.key] != nil } }

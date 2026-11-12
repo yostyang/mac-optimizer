@@ -4,10 +4,13 @@ set -e
 # SWIFTFLAGS：可选的额外编译参数（例如在受限沙盒里编译时传 -disable-sandbox）
 SWIFTFLAGS="${SWIFTFLAGS:-}"
 cd "$(dirname "$0")"
-SRC="main.swift Monitor.swift Battery.swift Dashboard.swift BatteryView.swift ChargeCore.swift ChargeView.swift Tests.swift ChargeTests.swift DNSCore.swift Display.swift DisplayView.swift Network.swift NetView.swift BTBattery.swift V15Tests.swift V16.swift V16Tests.swift SpeedTraffic.swift Clean.swift Changes.swift V17Tests.swift V18Tests.swift V19Tests.swift CDSDesign.swift BatteryPower.swift V20Tests.swift V21Tests.swift Operations.swift V22Tests.swift PowerTelemetry.swift DisplayColor.swift V23Tests.swift V24.swift V24View.swift V24Tests.swift V241Tests.swift V25Design.swift V25Shell.swift V25Tests.swift V26Split.swift V26Tests.swift PhaseZeroTests.swift AppPage.swift PhaseOneTests.swift NetworkOverview.swift PhaseTwoTests.swift V28.swift V28Panel.swift V28Tests.swift V292.swift V292Tests.swift V210.swift V210HID.swift V210Drag.swift V210Tests.swift V211Trio.swift V211Tests.swift V212Tests.swift V213.swift V213Tests.swift"
+# 主程序 = 目录下全部 .swift，除了助手入口和两个独立小工具；新增文件不用再手动登记
+SRC=$(ls *.swift | grep -vxE 'ChargeHelper\.swift|icon\.swift|MeasureWindows\.swift' | tr '\n' ' ')
 HSRC="ChargeCore.swift ChargeHelper.swift DNSCore.swift"
-swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm
-swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86
+# 两个架构并行编译；任一失败即停止
+swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm & PA=$!
+swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target x86_64-apple-macos13 $SRC -o mo_x86 & PX=$!
+wait $PA; wait $PX
 lipo -create mo_arm mo_x86 -output MacOptimizer
 # 充电助手：自签名（无 Team ID）时，macOS 按助手的 cdhash 记录用户授权（launchd LWCR）。
 # 助手二进制只要变一个字节，升级后就要用户重新允许。所以只有助手源码变化时才重新编译/签名，
