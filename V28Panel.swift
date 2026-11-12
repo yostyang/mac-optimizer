@@ -7,7 +7,8 @@ import AppKit
 enum PanelLayout {
     static let width: CGFloat = 400
     static let gap: CGFloat = 8
-    static let tileHeight: CGFloat = 104
+    /// 2.13：104 → 72（标题行 + 数值与曲线同一行 + 一行说明）
+    static let tileHeight: CGFloat = 72
 }
 
 /// 指标卡：标题 + 状态标签 / 主值 / 曲线或进度 / 一行说明
@@ -24,30 +25,31 @@ struct PanelTile<Viz: View>: View {
     var unavailable = "当前系统没有提供此读数"
     @ViewBuilder var viz: Viz
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
                 Image(systemName: symbol).font(DS.cap(.semibold)).foregroundColor(tint).accessibilityHidden(true)
                 Text(title).font(DS.sub(.semibold)).foregroundColor(tint)
                 Spacer(minLength: 2)
                 if let badge {
-                    Text(badge).font(DS.num(10, .semibold)).foregroundColor(DS.text.tone(badgeTint)).lineLimit(1)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
+                    Text(badge).font(DS.num(12, .semibold)).foregroundColor(DS.text.tone(badgeTint)).lineLimit(1)
+                        .padding(.horizontal, 5).padding(.vertical, 0.5)
                         .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill(badgeTint.opacity(0.13)))
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                if let value {
-                    Text(value).font(DS.num(24, .semibold)).foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7)
-                } else {
-                    Unavailable(reason: unavailable).font(DS.num(24, .semibold))
-                }
-                if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(DS.text.secondary) }
-                Spacer(minLength: 0)
+            HStack(alignment: .center, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    if let value {
+                        Text(value).font(DS.num(20, .semibold)).foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7)
+                    } else {
+                        Unavailable(reason: unavailable).font(DS.num(20, .semibold))
+                    }
+                    if !unit.isEmpty { Text(unit).font(DS.sub(.medium)).foregroundColor(DS.text.secondary).lineLimit(1) }
+                }.layoutPriority(1)
+                viz.frame(maxWidth: .infinity).frame(height: 16).accessibilityHidden(true)
             }
-            viz.frame(height: 18).accessibilityHidden(true)
-            Text(footer).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(footer).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.85)
         }
-        .padding(DS.tilePadding)
+        .padding(.horizontal, DS.tilePadding).padding(.vertical, 7)
         .frame(maxWidth: .infinity, minHeight: PanelLayout.tileHeight, maxHeight: PanelLayout.tileHeight, alignment: .topLeading)
         .card()
         .clipShape(RoundedRectangle(cornerRadius: DS.r.card, style: .continuous))
@@ -92,6 +94,7 @@ struct PanelContent: View {
     @ObservedObject var cc = ChargeClient.shared
     @ObservedObject var dock = DockMode.shared
     @ObservedObject var trio = TrioModel.shared
+    @ObservedObject var prefs = PanelPrefs.shared
     @State private var sel = 0
     @State private var more: ProcInfo?
     @State private var showApps = false
@@ -121,6 +124,11 @@ struct PanelContent: View {
             PanelKeys.shared.handler = { e in
                 let count = min(4, m.s.top.count)
                 if more != nil { return false }
+                // 进程默认展开；若已收起，↓ 先展开，其余按键交给系统
+                if !prefs.procExpanded {
+                    if e.keyCode == Key.down { prefs.procExpanded = true; sel = 0; return true }
+                    return false
+                }
                 switch e.keyCode {
                 case Key.down: sel = min(sel + 1, max(0, count - 1)); return true
                 case Key.up: sel = max(0, sel - 1); return true
@@ -183,7 +191,7 @@ struct PanelContent: View {
                                          ("clock", s.uptime > 0 ? "已运行 " + Fmt.uptime(s.uptime) : "已运行 —"),
                                          ("network", s.proxy.isEmpty ? "直连" : s.proxy)]
         return ViewThatFits(in: .horizontal) {
-            row(items); row(Array(items.prefix(4))); row(Array(items.prefix(3)))
+            row(items); row(Array(items.prefix(4))); row(Array(items.prefix(3))); row([items[0], items[2]]); row([items[0]])
         }.accessibilityElement(children: .combine).accessibilityLabel(items.map(\.1).joined(separator: "，"))
     }
     func row(_ items: [(String, String)]) -> some View {
@@ -273,7 +281,7 @@ struct PanelContent: View {
                 Text("电池").font(DS.sub(.semibold))
                 Spacer(minLength: 2)
                 if let hh = s.batteryHealth {
-                    Text("健康 \(hh)%").font(DS.num(10, .semibold)).foregroundColor(hh < 80 ? DS.text.warn : DS.text.good)
+                    Text("健康 \(hh)%").font(DS.num(12, .semibold)).foregroundColor(hh < 80 ? DS.text.warn : DS.text.good)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill((hh < 80 ? warn : good).opacity(0.13)))
                 }
@@ -309,27 +317,59 @@ struct PanelContent: View {
         return "放电 " + Fmt.watts(f.dischargeWatts) + (m.s.timeRemaining.map { " · 约剩 \($0 / 60) 小时 \($0 % 60) 分" } ?? "")
     }
 
-    // MARK: 进程
+    // MARK: 进程（2.13.1 默认展开；用户收起或展开后会记住）
     var processCard: some View {
-        VStack(spacing: 2) {
-            ProcList(m: m, limit: 4, selection: sel, onSelect: { sel = $0 }, onMore: { more = $0 })
-            HStack(spacing: 6) {
-                Kbd(text: "↑↓"); Text("选择").font(DS.cap()).foregroundColor(DS.text.secondary)
-                Kbd(text: "↵"); Text("处理").font(DS.cap()).foregroundColor(DS.text.secondary)
-                Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(DS.text.secondary)
-                Spacer()
-            }.padding(.horizontal, 4).padding(.bottom, 2)
+        let top = m.s.top.max { $0.cpu < $1.cpu }
+        return VStack(spacing: 2) {
+            Button { withAnimation(.easeOut(duration: DS.motionFast)) { prefs.procExpanded.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: prefs.procExpanded ? "chevron.down" : "chevron.right").font(DS.cap(.semibold))
+                        .foregroundColor(DS.text.secondary).frame(width: 12).accessibilityHidden(true)
+                    Text("高占用进程").font(DS.sub(.semibold)).foregroundColor(.primary)
+                    Spacer(minLength: 4)
+                    if !prefs.procExpanded {
+                        if let top {
+                            Text(top.name).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).truncationMode(.middle)
+                            Text(String(format: "%.1f%%", top.cpu)).font(DS.num(12, .medium)).foregroundColor(DS.text.tone(ProcessCPU.color(top.cpu)))
+                        } else {
+                            Text("正在统计").font(DS.sub()).foregroundColor(DS.text.secondary)
+                        }
+                    }
+                }.padding(.horizontal, 6).frame(height: 24).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(prefs.procExpanded ? "收起高占用进程" : "展开高占用进程" + (top.map { "，最高 \($0.name)" } ?? ""))
+            .accessibilityIdentifier("panel.procs.toggle")
+            if prefs.procExpanded {
+                ProcList(m: m, limit: 4, selection: sel, onSelect: { sel = $0 }, onMore: { more = $0 })
+                HStack(spacing: 6) {
+                    Kbd(text: "↑↓"); Text("选择").font(DS.cap()).foregroundColor(DS.text.secondary)
+                    Kbd(text: "↵"); Text("处理").font(DS.cap()).foregroundColor(DS.text.secondary)
+                    Kbd(text: "⌘K"); Text("更多操作").font(DS.cap()).foregroundColor(DS.text.secondary)
+                    Spacer()
+                }.padding(.horizontal, 4).padding(.bottom, 2)
+            }
         }.padding(6).card()
+        .accessibilityElement(children: .contain).accessibilityIdentifier("panel.procs")
     }
 
-    // MARK: 快捷操作 + 优化记录
+    // MARK: 快捷操作（默认 4 个，可编辑）+ 优化记录
     var actionsCard: some View {
-        let actions = QuickActionList.all()
+        let actions = prefs.selectedActions()
+        let rows = (actions.count + 1) / 2
         return VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Text("快捷操作").font(DS.sub(.semibold)).foregroundColor(DS.text.secondary)
+                Spacer()
+                QuickActionEditMenu {
+                    HStack(spacing: 3) { Image(systemName: "slider.horizontal.3").font(DS.cap()); Text("编辑").font(DS.sub()) }
+                        .foregroundColor(DS.text.secondary)
+                }.accessibilityIdentifier("panel.actions.edit")
+            }.padding(.horizontal, 2)
             Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-                ForEach(0..<2, id: \.self) { r in
+                ForEach(0..<rows, id: \.self) { r in
                     GridRow {
-                        ForEach(actions.indices.filter { $0 / 3 == r }, id: \.self) { i in actionButton(actions[i]) }
+                        ForEach(actions.indices.filter { $0 / 2 == r }, id: \.self) { i in actionButton(actions[i]) }
                     }
                 }
             }

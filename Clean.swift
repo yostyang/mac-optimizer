@@ -270,7 +270,7 @@ struct CleanPage: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("清理预览").font(DS.title())
-                        Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                        Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     }
                     Spacer()
                     SegmentedTrack {
@@ -284,28 +284,28 @@ struct CleanPage: View {
                     }
                 }
                 if tab == 1 { UninstallTab() } else {
-                if !store.note.isEmpty { Text(store.note).font(.system(size: 11)).foregroundColor(store.failures.isEmpty ? DS.text.secondary : DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
+                if !store.note.isEmpty { Text(store.note).font(.system(size: 12)).foregroundColor(store.failures.isEmpty ? DS.text.secondary : DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
                 if !store.saveError.isEmpty {
                     StateLine(kind: .failed, text: store.saveError, id: "clean.save.error")
                     Button("重试保存") { store.saveMeta() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("clean.save.retry")
                 }
                 Card(title: "清理清单", icon: "trash") {
                     if store.items.isEmpty {
-                        Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 11)).foregroundColor(DS.text.secondary)
-                        Text("“找大文件”仅查看下载目录；卸载应用和残留在「卸载应用」标签。").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+                        Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                        Text("“找大文件”仅查看下载目录；卸载应用和残留在「卸载应用」标签。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     } else {
-                        Text("已选 \(store.items.filter { $0.selected }.count) 项 · 共 \(CleanLogic.fmtSize(selectedSize))").font(.system(size: 11, weight: .medium))
+                        Text("已选 \(store.items.filter { $0.selected }.count) 项 · 共 \(CleanLogic.fmtSize(selectedSize))").font(.system(size: 12, weight: .medium))
                         ForEach(store.items.indices, id: \.self) { i in
                             HStack(spacing: 8) {
                                 Toggle("", isOn: $store.items[i].selected).toggleStyle(.switch).controlSize(.small).labelsHidden().disabled(store.trashing)
                                 VStack(alignment: .leading, spacing: 0) {
-                                    Text((store.items[i].path as NSString).lastPathComponent).font(.system(size: 11, weight: .medium)).lineLimit(1)
-                                    Text(store.items[i].path).font(.system(size: 10)).foregroundColor(DS.text.secondary).lineLimit(1)
-                                    if let error = store.failures[store.items[i].path] { Text(error).font(.system(size: 10)).foregroundColor(DS.text.warn).lineLimit(2) }
+                                    Text((store.items[i].path as NSString).lastPathComponent).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    Text(store.items[i].path).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
+                                    if let error = store.failures[store.items[i].path] { Text(error).font(.system(size: 12)).foregroundColor(DS.text.warn).lineLimit(2) }
                                 }
                                 Spacer()
-                                Text(store.items[i].category).font(.system(size: 10)).foregroundColor(DS.text.secondary)
-                                Text(CleanLogic.fmtSize(store.items[i].size)).font(.system(size: 11, weight: .medium)).monospacedDigit()
+                                Text(store.items[i].category).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                                Text(CleanLogic.fmtSize(store.items[i].size)).font(.system(size: 12, weight: .medium)).monospacedDigit()
                             }
                         }
                         Button(store.trashing ? "处理中…" : (store.failures.isEmpty ? "移到废纸篓（\(store.items.filter { $0.selected }.count) 项）" : "重试所选未完成项")) { showConfirm = true }.buttonStyle(PillButton()).disabled(store.items.filter { $0.selected }.isEmpty || store.trashing || store.scanning).accessibilityIdentifier("clean.trash")
@@ -322,14 +322,14 @@ struct CleanPage: View {
                         TextField("输入要保护的路径，点添加", text: $newWhite).textFieldStyle(.roundedBorder)
                         Button("添加白名单") { if store.addWhitelist(newWhite) { newWhite = "" } }.buttonStyle(PillButton(filled: false)).disabled(store.trashing).accessibilityIdentifier("clean.whitelist.add")
                     }
-                    Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                     if store.whitelist.isEmpty { StateLine(kind: .empty, text: "暂无自定义白名单", id: "clean.whitelist.state") }
-                    ForEach(store.whitelist, id: \.self) { w in Text(w).font(.system(size: 11)).lineLimit(1) }
+                    ForEach(store.whitelist, id: \.self) { w in Text(w).font(.system(size: 12)).lineLimit(1) }
                     if !store.records.isEmpty {
                         Divider()
                         ForEach(store.records.suffix(10)) { r in CleanRecordRow(record: r, store: store) }
                         if !store.restoreNote.isEmpty { StateLine(kind: store.restoreNote.hasPrefix("已") ? .done : .failed, text: store.restoreNote, id: "clean.restore.state") }
-                        Text("只有还在废纸篓里的项可以恢复；原位置已有同名文件时不覆盖，会改名放回。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text("只有还在废纸篓里的项可以恢复；原位置已有同名文件时不覆盖，会改名放回。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 }

@@ -384,7 +384,7 @@ struct SplitPage: View {
             Button("关闭分区") { c.prefs.set(nil, for: d.uuid); tick += 1 }
                 .disabled(c.prefs.weights(d.uuid) == nil).accessibilityIdentifier("split.off")
             Text(String(format: "可用区域 %.0f×%.0f pt · %.0fx", d.visible.width, d.visible.height, d.scale))
-                .font(.caption).foregroundColor(DS.text.secondary)
+                .font(DS.sub()).foregroundColor(DS.text.secondary)
             Divider()
             Text("把窗口放进分区").font(DS.sub(.semibold))
             Text("选好模板后，切换到要摆放的应用窗口，按 ⌘K，选择目标分区。只移动你选中的窗口，完成后可撤销。")

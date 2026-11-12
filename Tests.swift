@@ -163,6 +163,7 @@ enum MOTests {
         V210.tests()
         V211.tests()
         V212.tests()
+        V213.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -412,19 +413,17 @@ enum MOTests {
         }
         check(checked >= 5 && bad.isEmpty, "文字对比度 \(name)", "检查 \(checked) 段文字，最低 \(String(format: "%.2f", minR))" + (bad.isEmpty ? "" : "；看不清：" + bad.prefix(6).joined(separator: "、")))
     }
-    /// 布局检查：页面内容完全放得下，不需要滚动，也没有可见滚动条
+    /// 布局检查（2.13 门槛 A）：
+    /// - 页面标了摘要区（`pageSummary()`）时：摘要必须完整在可见范围内、不在滚动区域里；只有摘要下方的详情区可以局部滚动。
+    /// - 没标摘要区时：沿用原规则，所有滚动区域都要放得下。
+    /// - 两种情况都不允许出现常驻滚动条。说明文字 ≥ 12 pt 由 `fontlint.sh`（源码）和 `DS.fontSizes` 自检保证。
     static func fits(_ root: NSView, _ name: String) {
-        var scrolls: [NSScrollView] = []
-        func walk(_ v: NSView) { if let s = v as? NSScrollView { scrolls.append(s) }; v.subviews.forEach(walk) }
-        walk(root)
-        var worst = ""
-        for s in scrolls {
-            guard let doc = s.documentView else { continue }
-            let over = doc.frame.height - s.contentView.bounds.height
-            if over > 1 { worst = "内容超出 \(Int(over)) pt" }
-            if s.hasVerticalScroller, let sc = s.verticalScroller, !sc.isHidden, sc.alphaValue > 0, s.scrollerStyle == .legacy { worst += " 有滚动条" }
+        let v = LayoutGate.evaluate(root)
+        if v.summaries == 0 {
+            check(v.problems.isEmpty, "无需滚动 \(name)", v.problems.isEmpty ? "\(v.scrolls) 个滚动区域都放得下" : v.problems.joined(separator: " "))
+        } else {
+            check(v.problems.isEmpty, "摘要一屏可见 \(name)", v.problems.isEmpty ? "摘要 \(v.summaries) 处在可见范围内；\(v.scrolls) 个滚动区域，其中 \(v.scrolledDetails) 个详情区局部滚动" : v.problems.joined(separator: " "))
         }
-        check(worst.isEmpty, "无需滚动 \(name)", worst.isEmpty ? "\(scrolls.count) 个滚动区域都放得下" : worst)
     }
     static func diffRatio(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> Double {
         guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh else { return 1 }
@@ -481,6 +480,12 @@ enum MOTests {
     static func snapshots(_ out: String, _ w: NSWindow, goldens: String?, approve: Bool) {
         let mon = Monitor.shared
         mon.panelOpen = true
+        // 本机若开了「合并状态」且面板里显示音量/Wi-Fi，会多出 TrioPanelCard（约 64 pt）。
+        // 单独跑 --snapshot 会量到 867，install-local 先跑的界面测试会把 menuIndicator 写成 cpu 并保存，于是正式量到 803。
+        // 截图与默认高度门槛固定为不含该卡，结束时恢复用户原设置。
+        let keepIndicator = BatteryAlerts.shared.settings.menuIndicator
+        BatteryAlerts.shared.settings.menuIndicator = "cpu"
+        defer { BatteryAlerts.shared.settings.menuIndicator = keepIndicator }
         CleanStats.shared.addOptimized(12); CleanStats.shared.addQuit(memMB: 2350)
         w.makeKeyAndOrderFront(nil)
         ensureActive(w, "截图窗口")
@@ -509,6 +514,7 @@ enum MOTests {
         v24Snapshots(out)
         V25.snapshots(out)
         V28.snapshots(out)
+        V213.snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         // 改动记录用固定样例：不随本机真实记录的多少而变（记录多了页面本来就该滚动）
         let realChanges = ChangeLog.shared.records
@@ -556,7 +562,7 @@ enum MOTests {
             pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
             if let rep = pngRep(host, out + "/panel-\(mode).png") { contrast(host, rep, "面板 \(mode)") }
             if mode == "light" { pngRep(host, out + "/panel.png") }
-            check(size.width == PanelLayout.width && size.height > 600 && size.height < 1000, "面板尺寸 \(mode)", "\(Int(size.width))×\(Int(size.height))")
+            check(size.width == PanelLayout.width && size.height > 400 && size.height <= 810, "面板尺寸 \(mode)（默认内容 ≤ 810 pt）", "\(Int(size.width))×\(Int(size.height))")
             pw.orderOut(nil)
             // 主窗口：默认尺寸和最小尺寸
             w.appearance = NSAppearance(named: ap)
@@ -615,6 +621,8 @@ enum MOTests {
 
     static func uiChecks(_ w: NSWindow) {
         let mon = Monitor.shared
+        let keepIndicator = BatteryAlerts.shared.settings.menuIndicator
+        defer { BatteryAlerts.shared.settings.menuIndicator = keepIndicator }
         let loginBefore = Actions.loginEnabled
         info("测试开始时登录项状态：\(loginBefore ? "已开启（用户设置，保持不动）" : "关闭")")
         sec("菜单栏与采样频率")
@@ -753,7 +761,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w); V213.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

@@ -20,30 +20,38 @@ struct BatteryPage: View {
     var now = Date()
     var body: some View {
         let s = m.s
-        PageScroll {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("电池").font(DS.title())
-                        Text("健康、外设电量、耗电排行和提醒").font(.system(size: 11)).foregroundColor(DS.text.secondary)
-                    }
-                    Spacer()
-                    // v2.0 双标签：功率卡片叠在原页上会超高，拆成两页后每页都放得下（与网络页双标签同款做法）
-                    SegmentedTrack {
-                        Button("电池概览") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("bat.tab.0")
-                        Button("功率与能耗") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("bat.tab.1")
-                    }
+        // 2.13：标题、当前结论和标签固定在顶部（摘要），下面的卡片区可局部滚动
+        PageScaffold(spacing: 9) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("电池").font(DS.title())
+                    Text(Self.summaryLine(s)).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
+                        .accessibilityIdentifier("bat.summary")
                 }
-                if tab == 0 {
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(spacing: 5) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
-                        VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
-                    }
-                } else {
-                    powerTab(s)
+                Spacer()
+                // v2.0 双标签：功率卡片叠在原页上会超高，拆成两页后每页都放得下（与网络页双标签同款做法）
+                SegmentedTrack {
+                    Button("电池概览") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("bat.tab.0")
+                    Button("功率与能耗") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("bat.tab.1")
                 }
-            }.padding(16)
+            }
+        } details: {
+            if tab == 0 {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(spacing: 5) { health(s); BTCard(macLevel: s.battery); sounds; limits }.frame(maxWidth: .infinity)
+                    VStack(spacing: 8) { energy; alerts }.frame(maxWidth: .infinity)
+                }
+            } else {
+                powerTab(s)
+            }
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
+    }
+
+    /// 摘要一句话：电量 · 供电状态 · 健康度；读不到时写原来的说明
+    static func summaryLine(_ s: Snapshot) -> String {
+        guard let b = s.battery else { return "健康、外设电量、耗电排行和提醒" }
+        let state = s.charging ? "正在充电" : (s.onAC ? (s.batteryFullyCharged ? "已充满" : "接电未充") : "电池供电")
+        return "\(b)% · \(state)" + (s.batteryHealth.map { " · 健康度 \($0)%" } ?? "") + " · 外设电量、耗电排行和提醒在下方"
     }
 
     func powerTab(_ s: Snapshot, history: PowerHistory = .shared) -> some View {
@@ -93,7 +101,7 @@ struct BatteryPage: View {
                                   id: "energy.top.state")
                     }
                     ForEach(Array(top.enumerated()), id: \.offset) { _, r in
-                        HStack { Text(r.app).font(DS.sub()).lineLimit(1); Spacer(); Text(String(format: "%.1f mW", r.mw)).font(DS.num(11)) }
+                        HStack { Text(r.app).font(DS.sub()).lineLimit(1); Spacer(); Text(String(format: "%.1f mW", r.mw)).font(DS.num(12)) }
                     }
                     Footnote(text: "口径：最近一完整小时平均（焦耳 ÷ 秒 × 1000），没有上一小时数据时用本小时累计平均。来自 macOS 进程能耗计数，是处理器能耗估算，不含屏幕、外设与充电损耗，不能和左侧整机功率直接相加对比。")
                 }
@@ -108,7 +116,7 @@ struct BatteryPage: View {
     }
 
     func kv(_ k: String, _ v: String, _ c: Color = .primary) -> some View {
-        HStack { Text(k).font(.system(size: 11)).foregroundColor(DS.text.secondary); Spacer(); Text(v).font(.system(size: 11, weight: .medium)).foregroundColor(c).monospacedDigit() }
+        HStack { Text(k).font(.system(size: 12)).foregroundColor(DS.text.secondary); Spacer(); Text(v).font(.system(size: 12, weight: .medium)).foregroundColor(c).monospacedDigit() }
     }
     func health(_ s: Snapshot) -> some View {
         Card(title: "电池健康", icon: "heart.text.square") {
@@ -117,7 +125,7 @@ struct BatteryPage: View {
                     ZStack {
                         Circle().stroke(batteryColor(b).opacity(0.15), lineWidth: 7)
                         Circle().trim(from: 0, to: CGFloat(b) / 100).stroke(batteryColor(b), style: StrokeStyle(lineWidth: 7, lineCap: .round)).rotationEffect(.degrees(-90))
-                        VStack(spacing: 0) { Text("\(b)%").font(.system(size: 17, weight: .bold, design: .rounded)); Text(s.charging ? "充电中" : (s.onAC ? "已接电源" : "电池供电")).font(.system(size: 10)).foregroundColor(DS.text.secondary) }
+                        VStack(spacing: 0) { Text("\(b)%").font(.system(size: 17, weight: .bold, design: .rounded)); Text(s.charging ? "充电中" : (s.onAC ? "已接电源" : "电池供电")).font(.system(size: 12)).foregroundColor(DS.text.secondary) }
                     }.frame(width: 78, height: 78)
                     VStack(spacing: 4) {
                         kv("容量比（估算）", s.batteryHealth.map { "\($0)%" } ?? Fmt.dash, (s.batteryHealth ?? 100) < 80 ? .orange : .primary)
@@ -129,7 +137,7 @@ struct BatteryPage: View {
                     }
                 }
                 Footnote(text: "容量比为估算；系统状态独立读取；温度：\(s.batteryTempSource.isEmpty ? "未取得" : s.batteryTempSource)。")
-                Text(advice(s)).font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(advice(s)).font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             } else { StateLine(kind: .unknown, text: "未读取到内置电池信息", detail: "可能没有内置电池，或系统暂时未返回数据。", id: "battery.health.unknown") }
         }
     }
@@ -145,12 +153,12 @@ struct BatteryPage: View {
             ForEach(all) { d in
                 HStack(spacing: 10) {
                     Image(systemName: d.kind).frame(width: 18).foregroundColor(accent)
-                    Text(d.name).font(.system(size: 11)).lineLimit(1).frame(width: 110, alignment: .leading)
+                    Text(d.name).font(.system(size: 12)).lineLimit(1).frame(width: 110, alignment: .leading)
                     Bar(frac: Double(d.percent) / 100, color: batteryColor(d.percent), height: 7)
-                    Text("\(d.percent)%").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 38, alignment: .trailing)
+                    Text("\(d.percent)%").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 38, alignment: .trailing)
                 }
             }
-            Text("外设电量取决于设备、固件和连接方式；未取得的读数会标为未知。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("外设电量取决于设备、固件和连接方式；未取得的读数会标为未知。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
     var energy: some View {
@@ -177,7 +185,7 @@ struct BatteryPage: View {
                     Text(r.app).font(DS.sub()).lineLimit(1).frame(width: 120, alignment: .leading)
                     Bar(frac: r.joules / mx, color: accent2, height: 6)
                     Spark(values: r.series, color: accent).frame(width: 64, height: 18)
-                    Text(Fmt.energy(r.joules)).font(DS.num(11)).frame(width: 70, alignment: .trailing)
+                    Text(Fmt.energy(r.joules)).font(DS.num(12)).frame(width: 70, alignment: .trailing)
                 }
             }
             Toggle("在后台记录耗电（每分钟采样一次，开销极低）", isOn: $al.settings.energyTracking).toggleStyle(.switch).controlSize(.small).font(DS.sub())
@@ -188,13 +196,13 @@ struct BatteryPage: View {
         Card(title: "电量提醒", icon: "bell.badge") {
             Toggle("开启电量提醒（系统通知）", isOn: $al.settings.alertsOn).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("bat.alertsOn")
             Group {
-                Text("低电量提醒（可多选）").font(.system(size: 11))
+                Text("低电量提醒（可多选）").font(.system(size: 12))
                 ForEach([[3, 5, 10, 15], [20, 30, 40, 50]], id: \.self) { row in
                     HStack(spacing: 6) {
                         ForEach(row, id: \.self) { t in
                             let on = al.settings.lowThresholds.contains(t)
                             Button("\(t)%") { if on { al.settings.lowThresholds.removeAll { $0 == t } } else { al.settings.lowThresholds.append(t); al.settings.lowThresholds.sort() } }
-                                .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).frame(width: 46).padding(.vertical, 3)
+                                .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).frame(width: 46).padding(.vertical, 3)
                                 .background(Capsule().fill(on ? DS.selectionFill : accent.opacity(0.10))).foregroundColor(on ? DS.text.onSelection : accentText)
                         }
                     }
@@ -208,12 +216,12 @@ struct BatteryPage: View {
                 Toggle("电量 ≤ \(al.settings.criticalLevel)% 时全屏发光提醒", isOn: $al.settings.criticalGlow)
                 Toggle("外设电量 ≤ \(al.settings.deviceLow)% 或充满时提醒", isOn: $al.settings.deviceAlertsOn)
             }.disabled(!al.settings.alertsOn).opacity(al.settings.alertsOn ? 1 : 0.5)
-        }.toggleStyle(.checkbox).font(.system(size: 11))
+        }.toggleStyle(.checkbox).font(.system(size: 12))
     }
     var sounds: some View {
         Card(title: "提示音", icon: "speaker.wave.2") {
             if !al.settings.alertsOn {
-                Text("开启电量提醒后，可设置接电、充满和低电量提示音。").font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("开启电量提醒后，可设置接电、充满和低电量提示音。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                     ForEach([[("plug", "接电"), ("unplug", "断电"), ("upper", "上限")], [("full", "充满"), ("low", "低电")]], id: \.first!.0) { row in
@@ -227,7 +235,7 @@ struct BatteryPage: View {
                     }
                 }
             }
-        }.font(.system(size: 11))
+        }.font(.system(size: 12))
     }
     var limits: some View { ChargeCard(c: ChargeClient.shared).onAppear { ChargeClient.shared.refresh() } }
 }

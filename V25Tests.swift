@@ -16,7 +16,7 @@ enum V25 {
     static func tests() {
         MOTests.sec("设计基础（v2.5）")
         MOTests.check(DS.r.card == 12 && DS.r.control == 6 && DS.r.pill == 999, "圆角只有 3 种：卡片 12 / 控件 6 / 胶囊")
-        MOTests.check(DS.fontSizes == [30, 22, 17, 13, 12.5, 11, 10.5, 10], "字号统一：主值 30/22、标题 17、正文 13、标签 12.5、次要 11/10.5/10")
+        MOTests.check(DS.fontSizes == [30, 22, 17, 13, 12.5, 12, 12, 12] && DS.fontSizes.allSatisfy { $0 >= 12 }, "字号统一：主值 30/22、标题 17、正文 13、标签 12.5、说明 12（无 10–11 pt 档）")
         MOTests.check(pageBG != cardBG, "页面与卡片是两层中性灰阶")
         MOTests.check(accent != accent2, "品牌紫与图表青蓝分开")
         MOTests.check(good != accent && warn != accent && bad != accent, "状态色独立于品牌色")

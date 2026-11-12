@@ -115,13 +115,13 @@ enum V26 {
         T.check(c.undoLast() == "没有可撤销的归位", "关闭后撤销记录被清掉")
         let realPrefs = SplitController.shared.prefs; SplitController.shared.prefs = p   // 不受本机真实分区设置影响
         defer { SplitController.shared.prefs = realPrefs }
-        T.check(Shell.contextItem(page: .split)?.actions.count == 4, "分区页空 ⌘K：左/中/右/撤销四个操作")
-        T.check(Shell.contextItem(page: .monitor) == nil, "其它页没有分区操作")
+        T.check(Shell.contextItem(page: .split).actions.filter { $0.group == "分区" }.count == 4, "分区页空 ⌘K：「分区」组是左/中/右/撤销四个操作")
+        T.check(!Shell.contextItem(page: .monitor).actions.contains { $0.group == "分区" }, "其它页没有分区操作")
         var hints: [String] = []; SplitHUD.sink = { hints.append($0) }
         let oldSel = Nav.shared.sel; Nav.shared.sel = .monitor
         let shl = Shell.shared; let oldQ = shl.query; shl.query = ""; shl.actionsFor = nil
         shl.openActions()
-        T.check(hints.count == 1 && hints[0].contains("⌘K") && shl.actionsFor == nil, "其它页空 ⌘K：给出明确提示")
+        T.check(hints.isEmpty && shl.actionsFor?.id == "ctx.monitor", "其它页空 ⌘K：打开当前页面的分组操作列表（2.13）")
         Nav.shared.sel = .split; shl.openActions()
         T.check(shl.actionsFor?.id == "ctx.split", "分区页空 ⌘K：打开分区操作面板")
         shl.actionsFor = nil; Nav.shared.sel = oldSel; shl.query = oldQ; SplitHUD.sink = nil

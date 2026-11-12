@@ -7,8 +7,8 @@ struct ChoiceChip: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 1) {
-                Text(text).font(.system(size: 11, weight: on ? .semibold : .regular)).monospacedDigit().lineLimit(1)
-                if !sub.isEmpty { Text(sub).font(.system(size: 10)).opacity(0.7) }
+                Text(text).font(.system(size: 12, weight: on ? .semibold : .regular)).monospacedDigit().lineLimit(1)
+                if !sub.isEmpty { Text(sub).font(.system(size: 12)).opacity(0.7) }
             }
             .padding(.horizontal, 9).padding(.vertical, 5).frame(minWidth: 64)
             .foregroundColor(on ? .white : .primary)
@@ -54,7 +54,7 @@ struct DisplayPage: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("显示器").font(DS.title())
                         Button("桌面分区") { Nav.shared.sel = .split }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.split")
-                        Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                        Text("分辨率、硬件亮度、护眼色温和亮屏时间").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     }
                     Spacer()
                     SegmentedTrack {
@@ -95,7 +95,7 @@ struct DisplayPage: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(d.name).font(.system(size: 13, weight: .semibold))
-                        Text("\(d.current.label) · \(d.current.refreshLabel)" + (d.current.hidpi ? " · HiDPI" : "") + "  （实际像素 \(d.current.pixelWidth)×\(d.current.pixelHeight)）").font(.system(size: 11)).foregroundColor(DS.text.secondary).monospacedDigit()
+                        Text("\(d.current.label) · \(d.current.refreshLabel)" + (d.current.hidpi ? " · HiDPI" : "") + "  （实际像素 \(d.current.pixelWidth)×\(d.current.pixelHeight)）").font(.system(size: 12)).foregroundColor(DS.text.secondary).monospacedDigit()
                     }
                     Spacer()
                     if d.hasHiDPIChoice { Toggle("HiDPI", isOn: $hidpi).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("disp.hidpi") }
@@ -103,13 +103,13 @@ struct DisplayPage: View {
                 if let p = dm.pending, p.id == d.id {
                     HStack(spacing: 8) {
                         Image(systemName: "timer").foregroundColor(.orange)
-                        Text("显示正常吗？\(Int(DisplayManager.confirmSeconds)) 秒内不确认会自动还原").font(.system(size: 11))
+                        Text("显示正常吗？\(Int(DisplayManager.confirmSeconds)) 秒内不确认会自动还原").font(.system(size: 12))
                         Spacer()
                         Button("还原") { dm.revert() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.revert")
                         Button("保留") { dm.keep() }.buttonStyle(PillButton()).accessibilityIdentifier("disp.keep")
                     }.padding(8).background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
                 }
-                Text("分辨率").font(.system(size: 10, weight: .semibold)).foregroundColor(DS.text.secondary)
+                Text("分辨率").font(.system(size: 12, weight: .semibold)).foregroundColor(DS.text.secondary)
                 FlowRow(spacing: 6) {
                     ForEach(d.resolutions(hidpi: hidpi), id: \.self) { m in
                         ChoiceChip(text: m.label, on: m.label == d.current.label && m.hidpi == d.current.hidpi) {
@@ -121,7 +121,7 @@ struct DisplayPage: View {
                 }
                 let rates = d.refreshRates(for: d.current)
                 if rates.count > 1 {
-                    Text("刷新率").font(.system(size: 10, weight: .semibold)).foregroundColor(DS.text.secondary)
+                    Text("刷新率").font(.system(size: 12, weight: .semibold)).foregroundColor(DS.text.secondary)
                     HStack(spacing: 6) {
                         ForEach(rates, id: \.self) { r in
                             ChoiceChip(text: "\(Int(r)) Hz", on: abs(d.current.refresh.rounded() - r) < 1) {
@@ -137,15 +137,15 @@ struct DisplayPage: View {
     func slider(_ title: String, _ icon: String, value: Int?, max mx: Int, id: String, set: @escaping (Int) -> Void) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).frame(width: 16).foregroundColor(accent)
-            Text(title).font(.system(size: 11)).frame(width: 40, alignment: .leading)
+            Text(title).font(.system(size: 12)).frame(width: 40, alignment: .leading)
             Slider(value: Binding(get: { Double(value ?? 0) }, set: { set(Int($0.rounded())) }), in: 0...Double(max(1, mx))).controlSize(.small).accessibilityIdentifier(id)
-            Text("\(value ?? 0)").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 30, alignment: .trailing)
+            Text("\(value ?? 0)").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 30, alignment: .trailing)
         }
     }
     var ddcCard: some View {
         Card(title: "硬件调节（DDC/CI）", icon: "slider.horizontal.3") {
             if let d = cur, d.builtin {
-                Text("内建屏幕请用键盘亮度键调节；硬件调节只适用于外接显示器。").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text("内建屏幕请用键盘亮度键调节；硬件调节只适用于外接显示器。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
             } else if let d = cur, let s = dm.ddc[d.id], s.available {
                 if s.brightness != nil { slider("亮度", "sun.max", value: dm.displayedValue(d.id, .brightness), max: s.brightnessMax, id: "ddc.brightness") { dm.setDDC(d.id, .brightness, $0) } }
                 if s.contrast != nil { slider("对比度", "circle.lefthalf.filled", value: dm.displayedValue(d.id, .contrast), max: s.contrastMax, id: "ddc.contrast") { dm.setDDC(d.id, .contrast, $0) } }
@@ -153,20 +153,20 @@ struct DisplayPage: View {
                 if s.caps.inputs.count > 1 {
                     HStack(spacing: 6) {
                         Image(systemName: "rectangle.connected.to.line.below").frame(width: 16).foregroundColor(accent)
-                        Text("输入源").font(.system(size: 11)).frame(width: 40, alignment: .leading)
+                        Text("输入源").font(.system(size: 12)).frame(width: 40, alignment: .leading)
                         ForEach(s.caps.inputs, id: \.self) { v in
                             ChoiceChip(text: DDCCaps.inputName(v), on: s.input == v) { if s.input != v { confirmInput(d.id, v) } }
                         }
                     }
-                    Text("切到其他输入源后，这台 Mac 的画面会从该显示器上消失，需要用显示器按键切回。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("切到其他输入源后，这台 Mac 的画面会从该显示器上消失，需要用显示器按键切回。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                if let note = dm.ddcNotes[d.id] { Text(note).font(.system(size: 11)).foregroundColor(DS.text.secondary) }
+                if let note = dm.ddcNotes[d.id] { Text(note).font(.system(size: 12)).foregroundColor(DS.text.secondary) }
                 let miss = [s.volume == nil ? "音量" : nil, s.caps.inputs.count > 1 ? nil : "输入源"].compactMap { $0 }
-                if !miss.isEmpty { Text("这台显示器不支持通过 DDC 调" + miss.joined(separator: "、") + "，已隐藏。").font(.system(size: 10)).foregroundColor(DS.text.secondary) }
+                if !miss.isEmpty { Text("这台显示器不支持通过 DDC 调" + miss.joined(separator: "、") + "，已隐藏。").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
             } else if dm.probing {
-                HStack { ProgressView().controlSize(.small); Text("正在读取显示器…").font(.system(size: 11)).foregroundColor(DS.text.secondary) }
+                HStack { ProgressView().controlSize(.small); Text("正在读取显示器…").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
             } else {
-                Text("未匹配到明确的 DDC/CI 通道或显示器未响应。请开启显示器的 DDC/CI 后刷新；同型号多屏身份不明确时不猜测控制目标。").font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("未匹配到明确的 DDC/CI 通道或显示器未响应。请开启显示器的 DDC/CI 后刷新；同型号多屏身份不明确时不猜测控制目标。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -281,7 +281,7 @@ struct DisplayPage: View {
             HStack(spacing: 8) {
                 ForEach(DScene.all) { s in
                     Button { dm.apply(scene: s) } label: {
-                        VStack(spacing: 4) { Image(systemName: s.icon).font(.system(size: 13)); Text(s.name).font(.system(size: 11)) }
+                        VStack(spacing: 4) { Image(systemName: s.icon).font(.system(size: 13)); Text(s.name).font(.system(size: 12)) }
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
                             .foregroundColor(dm.settings.scene == s.id ? .white : .primary)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(dm.settings.scene == s.id ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.primary.opacity(0.06))))
@@ -291,25 +291,25 @@ struct DisplayPage: View {
             if !dm.conflict.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-                    Text("检测到 \(dm.conflict) 正在运行，它也会调整屏幕色彩。为避免互相覆盖，软件调光默认不开；场景只调硬件亮度。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("检测到 \(dm.conflict) 正在运行，它也会调整屏幕色彩。为避免互相覆盖，软件调光默认不开；场景只调硬件亮度。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let id = cur?.id, let note = dm.gammaNotes[id] { Text(note).font(.system(size: 10)).foregroundColor(DS.text.secondary) }
-            Toggle("软件调光与色温（关闭恢复原曲线）", isOn: Binding(get: { dm.settings.gammaOn }, set: { dm.setGamma(on: $0) })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.gamma")
+            if let id = cur?.id, let note = dm.gammaNotes[id] { Text(note).font(.system(size: 12)).foregroundColor(DS.text.secondary) }
+            Toggle("软件调光与色温（关闭恢复原曲线）", isOn: Binding(get: { dm.settings.gammaOn }, set: { dm.setGamma(on: $0) })).toggleStyle(.switch).controlSize(.small).font(.system(size: 12)).accessibilityIdentifier("disp.gamma")
             HStack(spacing: 8) {
-                Image(systemName: "sun.min").frame(width: 16).foregroundColor(accent); Text("调暗").font(.system(size: 11)).frame(width: 40, alignment: .leading)
+                Image(systemName: "sun.min").frame(width: 16).foregroundColor(accent); Text("调暗").font(.system(size: 12)).frame(width: 40, alignment: .leading)
                 Slider(value: Binding(get: { dm.settings.dim }, set: { dm.setDim($0) }), in: 0.3...1).controlSize(.small).disabled(!dm.settings.gammaOn)
-                Text("\(Int(dm.settings.dim * 100))%").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 36, alignment: .trailing)
+                Text("\(Int(dm.settings.dim * 100))%").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 36, alignment: .trailing)
             }
             HStack(spacing: 8) {
-                Image(systemName: "thermometer.sun").frame(width: 16).foregroundColor(.orange); Text("色温").font(.system(size: 11)).frame(width: 40, alignment: .leading)
+                Image(systemName: "thermometer.sun").frame(width: 16).foregroundColor(.orange); Text("色温").font(.system(size: 12)).frame(width: 40, alignment: .leading)
                 Slider(value: Binding(get: { dm.settings.kelvin }, set: { dm.setKelvin($0) }), in: 2700...6500).controlSize(.small).disabled(!dm.settings.gammaOn)
-                Text("\(Int(dm.settings.kelvin))K").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 44, alignment: .trailing)
+                Text("\(Int(dm.settings.kelvin))K").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 44, alignment: .trailing)
             }
             HStack(spacing: 8) {
-                Toggle("按时间自动切换", isOn: Binding(get: { dm.settings.autoSwitch }, set: { dm.settings.autoSwitch = $0; dm.scheduleAuto() })).toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).accessibilityIdentifier("disp.auto")
+                Toggle("按时间自动切换", isOn: Binding(get: { dm.settings.autoSwitch }, set: { dm.settings.autoSwitch = $0; dm.scheduleAuto() })).toggleStyle(.switch).controlSize(.small).font(.system(size: 12)).accessibilityIdentifier("disp.auto")
                 Spacer()
-                Text("日间 \(hm(dm.settings.dayStart))  ·  夜间 \(hm(dm.settings.nightStart))").font(.system(size: 11)).foregroundColor(DS.text.secondary).monospacedDigit()
+                Text("日间 \(hm(dm.settings.dayStart))  ·  夜间 \(hm(dm.settings.nightStart))").font(.system(size: 12)).foregroundColor(DS.text.secondary).monospacedDigit()
                 Stepper("", onIncrement: { dm.settings.nightStart = (dm.settings.nightStart + 30) % 1440; dm.scheduleAuto() }, onDecrement: { dm.settings.nightStart = (dm.settings.nightStart + 1410) % 1440; dm.scheduleAuto() }).labelsHidden().controlSize(.small).help("调整夜间开始时间")
             }
         }
@@ -321,21 +321,21 @@ struct DisplayPage: View {
         return Card(title: "亮屏时间", icon: "hourglass") {
             HStack(alignment: .firstTextBaseline) {
                 Text(fmtDuration(st.today)).font(.system(size: 17, weight: .bold, design: .rounded)).monospacedDigit()
-                Text("今天").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text("今天").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                 Spacer()
-                Text("7 天平均 " + fmtDuration(w.map(\.1).reduce(0, +) / 7)).font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text("7 天平均 " + fmtDuration(w.map(\.1).reduce(0, +) / 7)).font(.system(size: 12)).foregroundColor(DS.text.secondary)
             }
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(Array(w.enumerated()), id: \.offset) { i, e in
                     VStack(spacing: 4) {
-                        Text(e.1 >= 3600 ? String(format: "%.1fh", e.1 / 3600) : "\(Int(e.1 / 60))m").font(.system(size: 10)).foregroundColor(DS.text.secondary).monospacedDigit()
+                        Text(e.1 >= 3600 ? String(format: "%.1fh", e.1 / 3600) : "\(Int(e.1 / 60))m").font(.system(size: 12)).foregroundColor(DS.text.secondary).monospacedDigit()
                         RoundedRectangle(cornerRadius: 4, style: .continuous).fill(i == 6 ? AnyShapeStyle(LinearGradient(colors: [accent2, accent], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(accent.opacity(0.35)))
                             .frame(height: max(3, 64 * CGFloat(e.1 / mx)))
-                        Text(e.0).font(.system(size: 10)).foregroundColor(DS.text.secondary)
+                        Text(e.0).font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     }.frame(maxWidth: .infinity)
                 }
             }.frame(height: 96, alignment: .bottom)
-            Text("屏幕亮着且已解锁的时间；按屏幕睡眠/锁屏事件记账，不轮询。").font(.system(size: 10)).foregroundColor(DS.text.secondary)
+            Text("屏幕亮着且已解锁的时间；按屏幕睡眠/锁屏事件记账，不轮询。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
         }
     }
 }

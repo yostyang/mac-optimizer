@@ -13,7 +13,7 @@ struct NetworkPage: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("网络诊断").font(DS.title())
-                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(.system(size: 12)).foregroundColor(DS.text.secondary)
                     }
                     Spacer()
                     // 双标签放在标题行，不另占一行：v1.7 三张新卡片叠在原诊断页上会超高 277 pt，
@@ -63,24 +63,24 @@ struct NetworkPage: View {
     var pingCard: some View {
         Card(title: "延迟与丢包", icon: "waveform.path") {
             if nd.targets.isEmpty {
-                Text(nd.running ? "正在测试…" : "每个目标发 5 个包，约 2 秒。").font(.system(size: 11)).foregroundColor(DS.text.secondary)
+                Text(nd.running ? "正在测试…" : "每个目标发 5 个包，约 2 秒。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
             }
             ForEach(nd.targets) { t in
                 HStack(spacing: 8) {
                     Circle().fill(color(t.result)).frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(t.name).font(.system(size: 11, weight: .medium))
-                        Text(t.host).font(.system(size: 10)).foregroundColor(DS.text.secondary).lineLimit(1)
+                        Text(t.name).font(.system(size: 12, weight: .medium))
+                        Text(t.host).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
                     }
                     Spacer()
-                    Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(.system(size: 11, weight: .medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
-                    Text("丢包 " + String(format: "%.0f%%", t.result?.loss ?? 100)).font(.system(size: 11)).foregroundColor((t.result?.loss ?? 100) > 0 ? DS.text.warn : DS.text.secondary).monospacedDigit().frame(width: 64, alignment: .trailing)
+                    Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
+                    Text("丢包 " + String(format: "%.0f%%", t.result?.loss ?? 100)).font(.system(size: 12)).foregroundColor((t.result?.loss ?? 100) > 0 ? DS.text.warn : DS.text.secondary).monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
             }
             if nd.tcpOK == true {
-                Text("TCP 能连通：上面 ping 超时 / 丢包可能是 VPN / TUN 拦截了 ICMP，不是网络本身不稳定，丢包结论仅供参考。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("TCP 能连通：上面 ping 超时 / 丢包可能是 VPN / TUN 拦截了 ICMP，不是网络本身不稳定，丢包结论仅供参考。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             } else if nd.vpnActive && nd.targets.contains(where: { ($0.result?.loss ?? 0) >= 20 }) {
-                Text("VPN / TUN 正在运行：ping 丢包仅供参考，请以实际使用为准。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("VPN / TUN 正在运行：ping 丢包仅供参考，请以实际使用为准。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -89,35 +89,35 @@ struct NetworkPage: View {
             let svcs = dns.status?.services ?? nd.services
             if !svcs.isEmpty {
                 ForEach(svcs, id: \.service) { s in
-                    HStack { Text(s.service).font(.system(size: 11)); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
+                    HStack { Text(s.service).font(.system(size: 12)); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1) }
                 }
             }
             if !nd.effective.isEmpty {
-                HStack { Text("系统实际使用").font(.system(size: 11)).foregroundColor(DS.text.secondary); Spacer(); Text(nd.effective.joined(separator: ", ")).font(.system(size: 11, weight: .medium)).monospacedDigit().lineLimit(1) }
+                HStack { Text("系统实际使用").font(.system(size: 12)).foregroundColor(DS.text.secondary); Spacer(); Text(nd.effective.joined(separator: ", ")).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1) }
             }
             if !nd.resolves.isEmpty { Divider() }
             ForEach(nd.resolves) { r in
                 HStack(spacing: 8) {
                     Image(systemName: r.verdict == .ok ? "checkmark.circle.fill" : (r.verdict == .vpnFake ? "shield.lefthalf.filled" : "exclamationmark.circle.fill"))
-                        .foregroundColor(r.verdict == .ok ? DS.text.good : (r.verdict == .vpnFake ? accentText : (r.verdict == .slow ? DS.text.warn : DS.text.bad))).font(.system(size: 11))
-                    Text(r.host).font(.system(size: 11)).lineLimit(1)
+                        .foregroundColor(r.verdict == .ok ? DS.text.good : (r.verdict == .vpnFake ? accentText : (r.verdict == .slow ? DS.text.warn : DS.text.bad))).font(.system(size: 12))
+                    Text(r.host).font(.system(size: 12)).lineLimit(1)
                     Spacer()
-                    Text(r.verdict == .ok ? (r.ms.map { String(format: "%.0f ms", $0) } ?? "") : r.verdict.rawValue).font(.system(size: 11, weight: .medium)).monospacedDigit()
+                    Text(r.verdict == .ok ? (r.ms.map { String(format: "%.0f ms", $0) } ?? "") : r.verdict.rawValue).font(.system(size: 12, weight: .medium)).monospacedDigit()
                 }
             }
-            if nd.resolves.isEmpty { Text("诊断时会解析几个常用网站，并用一个不存在的域名检测运营商劫持。").font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
+            if nd.resolves.isEmpty { Text("诊断时会解析几个常用网站，并用一个不存在的域名检测运营商劫持。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
             if nd.resolves.contains(where: { $0.verdict == .vpnFake }) {
-                Text("198.18.x.x 是 VPN 的虚拟地址（分流模式的正常现象），不是劫持。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("198.18.x.x 是 VPN 的虚拟地址（分流模式的正常现象），不是劫持。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
     var fixCard: some View {
         Card(title: "DNS 一键修复", icon: "wrench.and.screwdriver") {
-            Text("把正在使用的网络的 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6，并清除 DNS 缓存。修改前会保存原设置，随时可以恢复。").font(.system(size: 11)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("把正在使用的网络的 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6，并清除 DNS 缓存。修改前会保存原设置，随时可以恢复。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             if !nd.vpns.isEmpty || !runningVPNs.isEmpty || nd.tun {
                 HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 11))
-                    Text("\((nd.vpns.isEmpty ? (runningVPNs.isEmpty ? ["VPN / TUN"] : runningVPNs) : nd.vpns).joined(separator: "、")) 正在运行并可能接管 DNS：先不要用 DNS 一键修复，断开 VPN 后再试，否则改动可能被 VPN 覆盖、无效。").font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 12))
+                    Text("\((nd.vpns.isEmpty ? (runningVPNs.isEmpty ? ["VPN / TUN"] : runningVPNs) : nd.vpns).joined(separator: "、")) 正在运行并可能接管 DNS：先不要用 DNS 一键修复，断开 VPN 后再试，否则改动可能被 VPN 覆盖、无效。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             HStack(spacing: 8) {
@@ -126,10 +126,10 @@ struct NetworkPage: View {
                     if dns.status?.backup != nil { Button("恢复原 DNS") { dns.restore() }.buttonStyle(PillButton(filled: false)).disabled(dns.busy).accessibilityIdentifier("dns.restore") }
                     if dns.busy { ProgressView().controlSize(.small) }
                 } else {
-                    Text("需要先在「电池 › 充电控制」安装助手（一次授权，充电和 DNS 共用）。").font(.system(size: 11)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true)
+                    Text("需要先在「电池 › 充电控制」安装助手（一次授权，充电和 DNS 共用）。").font(.system(size: 12)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if !dns.note.isEmpty { Text(dns.note).font(.system(size: 11)).foregroundColor(dns.note.hasPrefix("已") ? DS.text.good : DS.text.bad) }
+            if !dns.note.isEmpty { Text(dns.note).font(.system(size: 12)).foregroundColor(dns.note.hasPrefix("已") ? DS.text.good : DS.text.bad) }
         }
     }
     var runningVPNs: [String] { NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }.filter { $0.contains("VPN") || $0.contains("鹊桥") } }
@@ -156,7 +156,7 @@ struct BTCard: View {
             HStack {
                 let unknown = bt.devices.filter { $0.connected && $0.percent == nil }
                 if !unknown.isEmpty {
-                    Text("电量未知：" + unknown.map(\.name).joined(separator: "、")).font(.system(size: 10)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("电量未知：" + unknown.map(\.name).joined(separator: "、")).font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                         .help(unknown.map { $0.name + "：" + $0.reason }.joined(separator: "\n"))
                 }
                 if unknown.contains(where: KeychronHID.candidate), KeychronHID.access() != .granted {
@@ -166,19 +166,19 @@ struct BTCard: View {
                         // 第一次弹系统授权；已拒绝过就直接打开设置页
                         if KeychronHID.access() == .denied || !KeychronHID.request() { KeychronHID.openSettings() }
                         bt.refresh()
-                    }) { Text("读取 Keychron 电量").font(.system(size: 10, weight: .medium)).foregroundColor(accent) }
+                    }) { Text("读取 Keychron 电量").font(.system(size: 12, weight: .medium)).foregroundColor(accent) }
                     .buttonStyle(.plain).accessibilityIdentifier("bt.keychron.read")
                     .help("Keychron 键盘会自己上报电量，但系统不显示。读取它需要「输入监控」权限；本应用只取电量这一项，不记录任何按键。授权后如仍未显示，请退出并重新打开应用。")
                 }
                 Spacer(minLength: 4)
-                if let updated = bt.updated { Text("更新 " + updated.formatted(date: .omitted, time: .shortened)).font(.system(size: 10)).foregroundColor(DS.text.secondary) }
+                if let updated = bt.updated { Text("更新 " + updated.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundColor(DS.text.secondary) }
             }
         }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 8) {
-                Toggle("低于 \(bt.settings.threshold)% 通知", isOn: $bt.settings.lowAlert).toggleStyle(.switch).controlSize(.mini).font(.system(size: 10)).accessibilityIdentifier("bt.lowAlert")
+                Toggle("低于 \(bt.settings.threshold)% 通知", isOn: $bt.settings.lowAlert).toggleStyle(.switch).controlSize(.mini).font(.system(size: 12)).accessibilityIdentifier("bt.lowAlert")
                 if bt.loading { ProgressView().controlSize(.mini) }
-                Button { bt.userAsked = true; bt.refresh() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 11)) }.buttonStyle(.plain).foregroundColor(accent).help("刷新（平时每 5 分钟自动刷新一次）").accessibilityIdentifier("bt.refresh")
+                Button { bt.userAsked = true; bt.refresh() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 12)) }.buttonStyle(.plain).foregroundColor(accent).help("刷新（平时每 5 分钟自动刷新一次）").accessibilityIdentifier("bt.refresh")
             }.padding(.top, 13).padding(.trailing, 14)
         }
         .onAppear { if !bt.userAsked { bt.userAsked = true; bt.refresh() } }
@@ -186,10 +186,10 @@ struct BTCard: View {
     func chip(_ it: Item) -> some View {
         let c = it.p.map { batteryColor($0) } ?? Color.secondary
         return HStack(spacing: 5) {
-            Image(systemName: it.icon).font(.system(size: 11)).foregroundColor(accent).frame(width: 16)
-            Text(it.name).font(.system(size: 11)).lineLimit(1).truncationMode(.middle)
+            Image(systemName: it.icon).font(.system(size: 12)).foregroundColor(accent).frame(width: 16)
+            Text(it.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 2)
-            Text(it.p.map { "\($0)%" } ?? "—").font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundColor(it.p == nil ? DS.text.secondary : .primary)
+            Text(it.p.map { "\($0)%" } ?? "—").font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(it.p == nil ? DS.text.secondary : .primary)
         }
         .padding(.horizontal, 7).padding(.vertical, 3)
         .background(GeometryReader { g in ZStack(alignment: .leading) {

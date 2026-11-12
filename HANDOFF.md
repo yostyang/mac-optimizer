@@ -29,7 +29,8 @@
 |---|---|---|
 | 逻辑 | `--selftest` → `Tests.swift` + `V*_Tests.swift` | 指标读取、诊断、持久化、2.5 设计令牌/搜索/键盘/Toast |
 | 交互 | `--uitest` → `uiChecks` | 辅助功能树找控件并点击；`V25.ui` 覆盖设置页与搜索 |
-| 截图 | `--snapshot` → `snapshots` | 浅/深色、默认/最小窗口；`MOTests.contrast` 取样检查文字对比度，`MOTests.fits` 检查放得下且不显示滚动条；`MOTests.golden` 与 `goldens/` 比对 |
+| 截图 | `--snapshot` → `snapshots` | 浅/深色、默认/最小窗口；`MOTests.contrast` 取样检查文字对比度，`MOTests.fits` 检查布局（2.13 起：标了摘要区的页面「摘要一屏可见、详情可局部滚动」，没标的仍要整页放得下；都不许出现滚动条）；`MOTests.golden` 与 `goldens/` 比对 |
+| 字号 | `fontlint.sh`（`test.sh` 在自检后调用） | 2.13：说明文字 ≥ 12 pt；10–11 pt 只允许用于单位/时间，行尾注明 `// 单位` 或 `// 时间`，纯图标注明 `// 图标` |
 
 `test.sh` 会逐个检查 `build-test/shots/*.png` 是否齐全，新增截图名要同步加进 `test.sh` 的清单。
 
@@ -125,7 +126,8 @@
 - 改界面后：`./test.sh --approve` 重拍 `goldens/`，**再跑一次** `./test.sh` 确认黄金图比对通过。
 - 介绍页截图在 `docs/`，取自 `build-test/shots/` 的 `golden-dashboard-*.png`、`golden-panel-dark.png`、`charge/display/network/bt-light.png`；`panel-dark-2x.png` 与 `panel-actions-2x.png` 是 2 倍放大/裁剪。改版后要同步更新 `docs/index.html` 里的 `width` / `height`。
 - `MOTests.contrast` 在 2.5 重写过：10pt 小字的辅助功能框比实际字墨大一圈，取样向外扩 3px，用 5%/95% 分位代替极值；坐标对不上的无标签装饰节点跳过。**半透明背景最容易不达标**，改配色后务必跑浅/深两套。
-- `MOTests.fits` 要求默认尺寸和最小尺寸（1080×720）都放得下。资源排行是长列表，允许无滚动条滚动，在 `V25.snapshots` 里单独跳过 `fits`。
+- `MOTests.fits`（2.13 门槛 A，判定在 `LayoutGate.evaluate`）：页面用 `PageScaffold` 或 `.pageSummary()` 标出摘要区（标题、结论、主操作）时，摘要必须完整在默认 / 最小（1080×720）窗口的可见范围内、不在任何滚动区域里；只有位于摘要下方的滚动区域可以超出（详情局部滚动）。没标摘要区的页面仍按原规则整页放得下。任何情况下不许有常驻滚动条。资源排行是长列表，仍在 `V25.snapshots` 里单独跳过 `fits`。
+- 菜单栏面板（2.13 门槛 B）：指标卡 `PanelLayout.tileHeight` ≥ 72，默认内容高度 ≤ 810 pt（`snapshots` 的「面板尺寸」，正式测试实测 803），矮屏幕上必须能滚动（`V213.snapshots` 的「矮屏面板可以滚动」）。
 
 ### 离屏截图的已知限制
 
@@ -302,3 +304,17 @@
 - 菜单栏电池：`TrioIcon.batteryMarks` 决定画数字/闪电；显示百分比时充电也画闪电，放在数字左边，放不下就缩小字号。
 - 内边距：令牌化。指标卡 `DS.cardPadding`（16），带标题的 `Card` → `DS.titledCardPadding`（仍为 12），面板卡与 `Tile` → `DS.tilePadding`（10）。曾把 `Card` 改成 16，`./test.sh` 的 `fits` 报电池页最小窗口（浅/深）超出 28 pt，所以退回 12；统一到 16 放到 2.13（先改「摘要不滚、详情局部滚动」规则）。
 - 颜色变化会让黄金图比对失败，属于预期：用户放行后 `./test.sh --approve` 重拍，再跑一次 `./test.sh` 确认。
+
+
+## 2026-11-11 · 2.13.0（36）结构与密度 P1（分支 v2.13，未发布）
+
+依据《视觉与交互优化方案》P1，新代码在 `V213.swift`、`V213Tests.swift`、`fontlint.sh`。用户 11/11 23:15 确认改两条测试门槛（见 §1、§5）：A「整页不滚」→「摘要不滚、详情局部滚动 + 说明字 ≥ 12 pt」；B 面板指标卡下限 96 → 72、默认内容 ≤ 810 pt（2.13.1，进程默认展开，正式测试实测 803）、矮屏必须能滚。其余门槛不变。
+
+- **摘要与详情**：`PageScaffold { 摘要 } details: { 详情 }`；摘要背后铺一个 `SummaryMarkerView`（真实 NSView，不接收点击、辅助功能忽略），`LayoutGate.evaluate` 据此判定。已改用的页面：实时监控、电池。其他页面没超出，暂沿用整页规则。
+- **实时监控**：`MonitorVerdict`（不卡/有点卡/很卡 + 健康状态 + 一句原因）→ `CoreReadings`（CPU、内存、磁盘、网络，保留 `monitor.metrics`、`net.rates`）→ 详情区：`MonitorProcesses`（连续进程列表，`monitor.procs`）、`MonitorDetails`（GPU、温度、风扇、电池、系统状态、当前高占用、KPI、脚注）。旧的 `MetricTiles` 仍保留（`tiles24` 截图与各卡片构造在用）。
+- **菜单栏面板**：`PanelTile` 72 pt（标题行 / 数值 + 曲线同一行 / 一行说明）；进程默认展开（`panel.procs.toggle`，用户收起后记住选择，状态存 `panel.procExpanded`；键不存在时视为展开）；快捷操作默认 4 个（麦克风、常亮、充电上限、接显示器），`PanelPrefs`（`panel.quickActions`）可在面板「编辑」或设置页「面板快捷操作」增减，至少 1 个。测试进程用临时偏好域，不读写用户设置。`PanelHeight` 下限 600 → 420，矮屏不再超出屏幕。
+- **侧栏**：`navGroups` = 状态（概览、实时监控、电池）/ 日常控制（显示器、网络诊断、桌面分区）/ 整理与恢复（清理预览、开机启动、改动与提醒）/ 全部工具（其余工具页）/ 设置。`navPages` 顺序与侧栏一致，所以 ⌘1–9 变为：概览、实时监控、电池、显示器、网络诊断、桌面分区、清理预览、开机启动、改动与提醒。搜索仍直达每一页。
+- **底栏与 ⌘K**：`BottomBar` 常驻当前页面动作（`ContextActions.page`，最多 2 个：体检 / 刷新 / 充电上限开关 / 重新诊断 / 扫描 / 分区）和「全部操作 ⌘K」。空搜索时 ⌘K 一律打开 `ContextActions.item(page)`：当前页面 → 快捷操作 → 前往，`CmdAction.group` 决定分组标题。没有强制退出。
+- **字号**：`DS.sub`、`DS.cap`、`DS.eyebrow` 都是 12；源码里 10–11 pt 的说明文字全部改到 12。`fontlint.sh` 守住。
+- **内边距**：带标题 `Card` 的 `DS.titledCardPadding` 统一到 16（2.12 因电池页最小窗口超出 28 pt 退回 12，电池页改成摘要 + 详情后放开）。
+- 黄金图：实时监控与面板结构改变，`./test.sh --approve` 重拍后再跑一遍验证。

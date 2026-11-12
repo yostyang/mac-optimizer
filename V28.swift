@@ -281,7 +281,7 @@ struct PowerTrendCard: View {
         HStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 1).fill(c).frame(width: 10, height: 3).accessibilityHidden(true)
             Text(name).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
-            Text(reason ?? Fmt.watts(v)).font(DS.num(11)).foregroundColor(reason == nil ? .primary : DS.text.secondary)
+            Text(reason ?? Fmt.watts(v)).font(DS.num(12)).foregroundColor(reason == nil ? .primary : DS.text.secondary)
         }.accessibilityElement(children: .combine)
     }
     func coverage(_ w: PowerHistory.Window, now: Date) -> String {
