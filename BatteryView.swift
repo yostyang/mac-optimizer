@@ -15,6 +15,7 @@ struct BatteryPage: View {
     @ObservedObject var m: Monitor
     @ObservedObject var al = BatteryAlerts.shared
     @ObservedObject var en = EnergyTracker.shared
+    @ObservedObject var cc = ChargeClient.shared
     @State private var range: EnergyStore.Range = .day
     @State private var tab = 0
     var now = Date()
@@ -25,8 +26,13 @@ struct BatteryPage: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("电池").font(DS.title())
-                    Text(Self.summaryLine(s)).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
-                        .accessibilityIdentifier("bat.summary")
+                    // 2.14：有电池时标题下就是「目标 / 实际 / 健康度」，不额外占行；暂停时下面多一句原因
+                    if s.battery != nil {
+                        ChargeSummaryRow(sum: ChargeSummary.make(phase: cc.phase, st: cc.st, reading: ChargeSummary.reading(s)), health: s.batteryHealth)
+                    } else {
+                        Text(Self.summaryLine(s)).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
+                            .accessibilityIdentifier("bat.summary")
+                    }
                 }
                 Spacer()
                 // v2.0 双标签：功率卡片叠在原页上会超高，拆成两页后每页都放得下（与网络页双标签同款做法）
@@ -47,11 +53,10 @@ struct BatteryPage: View {
         }.onAppear { m.dashboardShown = true; en.sampleNow() }.onDisappear { m.dashboardShown = false }
     }
 
-    /// 摘要一句话：电量 · 供电状态 · 健康度；读不到时写原来的说明
+    /// 标题下一句：健康度与下方内容提示；电量和供电状态在「目标 / 实际」行（2.14）
     static func summaryLine(_ s: Snapshot) -> String {
-        guard let b = s.battery else { return "健康、外设电量、耗电排行和提醒" }
-        let state = s.charging ? "正在充电" : (s.onAC ? (s.batteryFullyCharged ? "已充满" : "接电未充") : "电池供电")
-        return "\(b)% · \(state)" + (s.batteryHealth.map { " · 健康度 \($0)%" } ?? "") + " · 外设电量、耗电排行和提醒在下方"
+        guard s.battery != nil else { return "健康、外设电量、耗电排行和提醒" }
+        return (s.batteryHealth.map { "健康度 \($0)% · " } ?? "") + "外设电量、耗电排行和提醒在下方"
     }
 
     func powerTab(_ s: Snapshot, history: PowerHistory = .shared) -> some View {
