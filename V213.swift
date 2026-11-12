@@ -18,21 +18,31 @@ extension View {
     func pageSummary() -> some View { background(SummaryMarker().allowsHitTesting(false)) }
 }
 
-/// 页面骨架：摘要固定在顶部，详情在下方单独滚动（不显示滚动条）
-struct PageScaffold<S: View, D: View>: View {
+/// 页面骨架：摘要固定在顶部，详情在下方单独滚动（不显示滚动条）；2.14 可加固定底栏（例如清理页的汇总）
+struct PageScaffold<S: View, D: View, F: View>: View {
     var spacing: CGFloat = DS.cardGap
     var padding: CGFloat = 16
-    @ViewBuilder let summary: S
-    @ViewBuilder let details: D
+    let summary: S
+    let details: D
+    let footer: F
+    init(spacing: CGFloat = DS.cardGap, padding: CGFloat = 16, @ViewBuilder summary: () -> S, @ViewBuilder details: () -> D, @ViewBuilder footer: () -> F) {
+        self.spacing = spacing; self.padding = padding; self.summary = summary(); self.details = details(); self.footer = footer()
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
             summary.pageSummary()
             ScrollView(.vertical, showsIndicators: false) {
                 details.frame(maxWidth: .infinity, alignment: .topLeading).padding(.bottom, 4)
             }
+            footer
         }
         .padding(padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+extension PageScaffold where F == EmptyView {
+    init(spacing: CGFloat = DS.cardGap, padding: CGFloat = 16, @ViewBuilder summary: () -> S, @ViewBuilder details: () -> D) {
+        self.init(spacing: spacing, padding: padding, summary: summary, details: details, footer: { EmptyView() })
     }
 }
 

@@ -114,8 +114,7 @@ enum NetworkSummary {
                 Text(range.title + " · 小时记录").font(DS.cap()).foregroundColor(DS.text.secondary)
             }
             if apps.isEmpty {
-                Text("暂无应用流量记录").font(DS.body()).foregroundColor(DS.text.secondary)
-                Footnote(text: "有采样记录后显示；未记录的应用不记为 0。")
+                StateLine(kind: .empty, text: "暂无应用流量记录", detail: "有采样记录后显示；未记录的应用不记为 0。", id: "net.apps.state")
             } else {
                 BarList(items: apps.map { BarListItem(name: $0.name, value: NetworkSummary.size($0.total), fraction: highest > 0 ? Double($0.total) / Double(highest) : 0) })
             }

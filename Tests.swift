@@ -164,6 +164,7 @@ enum MOTests {
         V211.tests()
         V212.tests()
         V213.tests()
+        PageExperienceTests.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -384,7 +385,17 @@ enum MOTests {
         guard let win = v.window else { return }
         let sx = CGFloat(rep.pixelsWide) / v.bounds.width, sy = CGFloat(rep.pixelsHigh) / v.bounds.height
         var bad: [String] = []; var minR = 99.0; var checked = 0
+        // 2.14：详情区局部滚动后，滚出可见范围的文字仍在辅助功能树里，取样会落到别的背景上；这类文字看不见，不检查
+        var scrolls: [NSScrollView] = []
+        func walk(_ x: NSView) { if let s = x as? NSScrollView { scrolls.append(s) }; x.subviews.forEach(walk) }
+        walk(v)
+        let hidden: [(doc: NSRect, clip: NSRect)] = scrolls.compactMap { s in
+            guard let doc = s.documentView else { return nil }
+            return (win.convertToScreen(doc.convert(doc.bounds, to: nil)), win.convertToScreen(s.contentView.convert(s.contentView.bounds, to: nil)))
+        }
         for (label, fr) in texts {
+            let c = NSPoint(x: fr.midX, y: fr.midY)
+            if hidden.contains(where: { $0.doc.contains(c) && !$0.clip.contains(c) }) { continue }
             var r = v.convert(win.convertFromScreen(fr), from: nil).intersection(v.bounds)
             guard r.width > 4, r.height > 4 else { continue }
             if !v.isFlipped { r.origin.y = v.bounds.height - r.maxY }
@@ -515,6 +526,7 @@ enum MOTests {
         V25.snapshots(out)
         V28.snapshots(out)
         V213.snapshots(out)
+        PageExperienceTests.snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         // 改动记录用固定样例：不随本机真实记录的多少而变（记录多了页面本来就该滚动）
         let realChanges = ChangeLog.shared.records
@@ -533,7 +545,7 @@ enum MOTests {
         let sc = SplitController.shared, realPrefs = sc.prefs, realScreens = sc.screens, realDriver = sc.driver
         let splitSuite = "mo.snapshot.split.\(getpid())"
         let splitUD = UserDefaults(suiteName: splitSuite)!; splitUD.removePersistentDomain(forName: splitSuite)
-        sc.prefs = SplitPrefs(splitUD); sc.prefs.setCustom([1, 1, 1, 1], for: "S1"); sc.prefs.setRows([1, 2, 2, 1], for: "S1"); sc.driver = FakeDriver()
+        sc.prefs = SplitPrefs(splitUD); sc.prefs.setCustom([25, 25, 25, 25], for: "S1"); sc.prefs.setRows([1, 2, 2, 1], for: "S1"); sc.driver = FakeDriver()
         sc.screens = FakeScreens([SplitDisplay(uuid: "S1", name: "内建显示器", visible: CGRect(x: 0, y: 0, width: 1728, height: 1079), scale: 2)], 1117)
         defer { CleanStore.shared.records = realClean; sc.prefs = realPrefs; sc.screens = realScreens; sc.driver = realDriver; splitUD.removePersistentDomain(forName: splitSuite) }
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
@@ -761,7 +773,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w); V213.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w); V213.ui(w); PageExperienceTests.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

@@ -3,6 +3,7 @@
 import SwiftUI
 import AppKit
 import Carbon.HIToolbox
+import ServiceManagement
 
 // MARK: - 页面清单
 struct NavPage: Identifiable, Equatable {
@@ -615,8 +616,11 @@ final class CommandPalette: NSObject {
         }
         let id = EventHotKeyID(signature: OSType(0x4D4F5054), id: 1)   // 'MOPT'
         let s = shortcut
-        RegisterEventHotKey(s.code, s.mods, id, GetApplicationEventTarget(), 0, &hotKey)
+        hotKeyStatus = RegisterEventHotKey(s.code, s.mods, id, GetApplicationEventTarget(), 0, &hotKey)
     }
+    /// 2.14：注册结果（被其他应用占用时不是 noErr），设置页据此提示
+    private(set) var hotKeyStatus: OSStatus = noErr
+    var hotKeyFailed: Bool { hotKeyStatus != noErr }
     static func label(code: UInt32, mods: UInt32) -> String {
         var s = ""
         if mods & UInt32(controlKey) != 0 { s += "⌃" }
@@ -641,6 +645,8 @@ struct SettingsPage: View {
     @State private var monitor: Any?
     @State private var label = CommandPalette.label(code: CommandPalette.shared.shortcut.code,
                                                    mods: CommandPalette.shared.shortcut.mods)
+    @State private var hotKeyFailed = CommandPalette.shared.hotKeyFailed
+    @State private var loginError: String?
 
     var body: some View {
         PageScroll {
@@ -655,6 +661,11 @@ struct SettingsPage: View {
                                 .buttonStyle(PillButton(filled: false))
                                 .accessibilityIdentifier("set.hotkey")
                         }
+                    }
+                    if hotKeyFailed {
+                        StateLine(kind: .failed, text: "\(label) 没有注册成功，可能已被输入法或其他应用占用", detail: "换一个组合再录制；在此之前可以从菜单栏或主窗口搜索使用命令。",
+                                  actions: [StateAction(title: "重新录制", symbol: "keyboard") { start() }], id: "set.hotkey.state")
+                            .padding(.leading, 38).padding(.trailing, 8).padding(.vertical, 4)
                     }
                     Hairline().padding(.leading, 38)
                     row("菜单栏", "menubar.rectangle", "在菜单栏显示实时指标", "关闭后停止低频采样") {
@@ -679,9 +690,14 @@ struct SettingsPage: View {
                     }
                     Hairline().padding(.leading, 38)
                     row("启动", "power", "登录时自动启动", "默认关闭") {
-                        Toggle("", isOn: Binding(get: { ui.login }, set: { Actions.setLogin($0); ui.login = Actions.loginEnabled }))
+                        Toggle("", isOn: Binding(get: { ui.login }, set: { loginError = Actions.setLogin($0); ui.login = Actions.loginEnabled }))
                             .toggleStyle(.switch).controlSize(.small).labelsHidden()
                             .accessibilityIdentifier("set.login")
+                    }
+                    if let e = loginError {
+                        StateLine(kind: .failed, text: "登录项没有设置成功：" + e, detail: "可以到系统设置的「登录项与扩展」里手动打开或关闭。",
+                                  actions: [StateAction(title: "登录项设置", symbol: "gearshape") { SMAppService.openSystemSettingsLoginItems() }], id: "set.login.state")
+                            .padding(.leading, 38).padding(.trailing, 8).padding(.vertical, 4)
                     }
                     Hairline().padding(.leading, 38)
                     row("常驻模式", "sun.max", "常亮", "临时阻止自动息屏，关闭后恢复系统默认") {
@@ -741,6 +757,7 @@ struct SettingsPage: View {
             if f.contains(.shift) { m |= UInt32(shiftKey) }
             CommandPalette.shared.saveShortcut(code: UInt32(e.keyCode), mods: m)
             label = CommandPalette.label(code: UInt32(e.keyCode), mods: m)
+            hotKeyFailed = CommandPalette.shared.hotKeyFailed
             stop()
             return nil
         }

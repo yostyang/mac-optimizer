@@ -219,6 +219,13 @@ struct SpeedTab24: View {
 struct UninstallTab: View {
     @ObservedObject var u = Uninstaller.shared
     @State private var confirm = false
+    /// 2.14 统一状态：进行中 / 完成 / 部分没处理 / 需要你先做一步
+    static func noteKind(_ note: String, busy: Bool) -> StateKind {
+        if busy { return .loading }
+        if note.contains("没有移动") || note.contains("没有恢复") { return .failed }
+        if note.hasPrefix("已") || note.hasPrefix("找到") { return .done }
+        return .unknown
+    }
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Card(title: "卸载应用（连同残留）", icon: "xmark.bin") {
@@ -227,7 +234,7 @@ struct UninstallTab: View {
                     Spacer()
                     Button("选择应用…") { u.choose() }.buttonStyle(PillButton(filled: false)).disabled(u.busy).accessibilityIdentifier("uninstall.choose")
                 }
-                if !u.note.isEmpty { Text(u.note).font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("uninstall.note") }
+                if !u.note.isEmpty { StateLine(kind: Self.noteKind(u.note, busy: u.busy), text: u.note, id: "uninstall.note") }
                 if !u.saveError.isEmpty {
                     StateLine(kind: .failed, text: u.saveError, id: "uninstall.save.error")
                     Button("重试保存") { u.saveLog() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("uninstall.save.retry")

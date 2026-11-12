@@ -125,7 +125,11 @@ enum Actions {
     }
     static func screenshot() { NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/System/Applications/Utilities/Screenshot.app"), configuration: .init()) }
     static var loginEnabled: Bool { SMAppService.mainApp.status == .enabled }
-    static func setLogin(_ on: Bool) { do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } } catch { NSLog("login item: \(error)") } }
+    /// 返回失败原因（成功为 nil），设置页据此显示失败状态
+    @discardableResult static func setLogin(_ on: Bool) -> String? {
+        do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; return nil }
+        catch { NSLog("login item: \(error)"); return error.localizedDescription }
+    }
 }
 
 final class UIState: ObservableObject {
