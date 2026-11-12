@@ -2,23 +2,71 @@
 import SwiftUI
 import AppKit
 
-// MARK: - 自定义比例
+// MARK: - 自定义比例（2.14 起为百分比：每栏整数百分比、合计 100、单栏至少 10%）
 enum SplitCustom {
     static let columns = 2...4
-    static let weight = 1...9
-    static func valid(_ w: [Int]) -> Bool { columns.contains(w.count) && w.allSatisfy { weight.contains($0) } }
-    static func title(_ w: [Int]) -> String { w.map(String.init).joined(separator: " : ") }
-    /// 进入自定义时的起点：沿用当前模板的比例，没有就从 1:1 开始
-    static func seed(from weights: [CGFloat]?) -> [Int] {
-        let w = (weights ?? [1, 1]).map { Int($0.rounded()) }
-        return valid(w) ? w : [1, 1]
+    static let minPct = 10, step = 5
+    static func valid(_ p: [Int]) -> Bool { columns.contains(p.count) && p.allSatisfy { $0 >= minPct } && p.reduce(0, +) == 100 }
+    static func title(_ p: [Int]) -> String { p.map { "\($0)%" }.joined(separator: " : ") }
+    /// 任意比例换成百分比：最大余数法凑满 100，再把低于下限的栏补到 10%（从最宽的栏里扣）
+    static func percents(_ w: [CGFloat]) -> [Int] {
+        let total = w.reduce(0, +)
+        guard columns.contains(w.count), total > 0, w.allSatisfy({ $0 > 0 }) else { return [50, 50] }
+        let raw = w.map { Double($0 / total) * 100 }
+        var out = raw.map { Int($0.rounded(.down)) }
+        // 余数相同按从左到右（sorted 不保证稳定，结果要可重复）
+        let order = raw.indices.sorted { a, b in
+            let ra = raw[a] - Double(out[a]), rb = raw[b] - Double(out[b])
+            return abs(ra - rb) > 1e-9 ? ra > rb : a < b
+        }
+        for i in order.prefix(100 - out.reduce(0, +)) { out[i] += 1 }
+        for i in out.indices where out[i] < minPct {
+            let need = minPct - out[i]; out[i] = minPct
+            if let j = out.indices.max(by: { out[$0] < out[$1] }) { out[j] -= need }
+        }
+        return out
     }
-    static func adjust(_ w: [Int], column i: Int, by d: Int) -> [Int] {
-        guard w.indices.contains(i) else { return w }
-        var out = w; out[i] = min(max(out[i] + d, weight.lowerBound), weight.upperBound); return out
+    /// 进入自定义时的起点：沿用当前模板的比例，没有就从 50 : 50 开始
+    static func seed(from weights: [CGFloat]?) -> [Int] { percents(weights ?? [1, 1]) }
+    /// 拖动或键盘调第 i 条分隔线（左边是第 i 栏，右边是第 i+1 栏），两栏合计不变
+    /// - snap：按 5% 对齐（键盘每次 5%、拖动吸附）；false 时按 1% 调整
+    static func moveDivider(_ p: [Int], _ i: Int, by d: Int, snap: Bool = true) -> [Int] {
+        guard p.indices.contains(i), p.indices.contains(i + 1), d != 0 else { return p }
+        var left = p[i] + d
+        if snap { left = d > 0 ? (p[i] / step + 1) * step : ((p[i] + step - 1) / step - 1) * step }
+        return setDivider(p, i, left: left)
     }
-    static func addColumn(_ w: [Int]) -> [Int] { w.count < columns.upperBound ? w + [1] : w }
-    static func removeColumn(_ w: [Int]) -> [Int] { w.count > columns.lowerBound ? Array(w.dropLast()) : w }
+    /// 拖动：分隔线放到整块宽度的 fraction（0–1）处
+    static func dragDivider(_ p: [Int], _ i: Int, to fraction: CGFloat, snap: Bool = true) -> [Int] {
+        guard p.indices.contains(i), p.indices.contains(i + 1) else { return p }
+        let before = p[..<i].reduce(0, +)
+        var left = Double(fraction) * 100 - Double(before)
+        left = snap ? (left / Double(step)).rounded() * Double(step) : left.rounded()
+        return setDivider(p, i, left: Int(left))
+    }
+    private static func setDivider(_ p: [Int], _ i: Int, left: Int) -> [Int] {
+        let pair = p[i] + p[i + 1]
+        var out = p; out[i] = min(max(left, minPct), pair - minPct); out[i + 1] = pair - out[i]
+        return out
+    }
+    /// 输入框：把第 i 栏设成 v，差额由右边相邻栏补（最后一栏由左边相邻栏补）；放不下就拒绝并说明原因
+    enum Input: Equatable { case ok([Int]), rejected(String) }
+    static func set(_ p: [Int], column i: Int, to v: Int) -> Input {
+        guard p.indices.contains(i), p.count >= 2 else { return .rejected("没有第 \(i + 1) 栏") }
+        let j = i + 1 < p.count ? i + 1 : i - 1
+        let maxV = p[i] + p[j] - minPct
+        guard v >= minPct else { return .rejected("每栏至少 \(minPct)%") }
+        guard v <= maxV else { return .rejected("第 \(i + 1) 栏最多 \(maxV)%：第 \(j + 1) 栏至少要留 \(minPct)%") }
+        var out = p; out[j] -= v - p[i]; out[i] = v
+        return .ok(out)
+    }
+    /// 加一栏：新栏取平均宽度，其余按原比例让出
+    static func addColumn(_ p: [Int]) -> [Int] {
+        guard p.count < columns.upperBound else { return p }
+        return percents(p.map { CGFloat($0) } + [CGFloat(100) / CGFloat(p.count)])
+    }
+    /// 减一栏：去掉最后一栏，其余按原比例放大
+    static func removeColumn(_ p: [Int]) -> [Int] { p.count > columns.lowerBound ? percents(p.dropLast().map { CGFloat($0) }) : p }
 }
 
 struct SplitPreview: View {
@@ -33,56 +81,8 @@ struct SplitPreview: View {
     }
 }
 
-struct SplitCustomEditor: View {
-    let uuid: String
-    let prefs: SplitPrefs
-    let changed: () -> Void
-    var body: some View {
-        let cur = prefs.custom(uuid)
-        VStack(alignment: .leading, spacing: 6) {
-            Button(action: { if cur == nil { apply(SplitCustom.seed(from: prefs.weights(uuid))) } }) {
-                HStack {
-                    SplitPreview(weights: (cur ?? SplitCustom.seed(from: prefs.weights(uuid))).map { CGFloat($0) }, rows: cur == nil ? [] : prefs.rows(uuid)).frame(width: 96, height: 40)
-                    Text(cur.map { "自定义 " + SplitCustom.title($0) + (prefs.rows(uuid).contains(2) ? "（含上下平分）" : "") } ?? "自定义比例"); Spacer()
-                    if cur != nil { Image(systemName: "checkmark").foregroundColor(accent) }
-                }
-            }.buttonStyle(.plain).accessibilityIdentifier("split.custom")
-            if let w = cur {
-                HStack(spacing: 10) {
-                    ForEach(Array(w.enumerated()), id: \.offset) { i, v in
-                        HStack(spacing: 2) {
-                            Button(action: { apply(SplitCustom.adjust(w, column: i, by: -1)) }) { Image(systemName: "minus") }
-                                .disabled(v <= SplitCustom.weight.lowerBound).accessibilityIdentifier("split.custom.minus.\(i)").accessibilityLabel("第 \(i + 1) 栏变窄")
-                            Text("\(v)").font(DS.sub(.semibold)).monospacedDigit().frame(minWidth: 14)
-                            Button(action: { apply(SplitCustom.adjust(w, column: i, by: 1)) }) { Image(systemName: "plus") }
-                                .disabled(v >= SplitCustom.weight.upperBound).accessibilityIdentifier("split.custom.plus.\(i)").accessibilityLabel("第 \(i + 1) 栏变宽")
-                            let stacked = prefs.rows(uuid)[safe: i] == 2
-                            Button(action: { toggleRows(i) }) { Image(systemName: stacked ? "rectangle.split.1x2.fill" : "rectangle.split.1x2") }
-                                .help(stacked ? "取消上下平分" : "这一栏上下平分").accessibilityIdentifier("split.custom.rows.\(i)")
-                                .accessibilityLabel("第 \(i + 1) 栏" + (stacked ? "取消上下平分" : "上下平分"))
-                        }
-                    }
-                    Spacer()
-                    Button("减一栏") { apply(SplitCustom.removeColumn(w)) }.disabled(w.count <= SplitCustom.columns.lowerBound).accessibilityIdentifier("split.custom.remove")
-                    Button("加一栏") { apply(SplitCustom.addColumn(w)) }.disabled(w.count >= SplitCustom.columns.upperBound).accessibilityIdentifier("split.custom.add")
-                }.controlSize(.small)
-                Text("数字是各栏的宽度比例，可设 2 到 4 栏；点每栏右边的图标，可以把这一栏再上下平分。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-    private func apply(_ w: [Int]) {
-        // 加减栏时保留已有各栏的上下平分设置
-        let old = prefs.custom(uuid) == nil ? [] : prefs.rows(uuid)
-        prefs.setCustom(w, for: uuid)
-        prefs.setRows(w.indices.map { old.indices.contains($0) ? old[$0] : 1 }, for: uuid)
-        changed()
-    }
-    private func toggleRows(_ i: Int) {
-        var r = prefs.rows(uuid); guard r.indices.contains(i) else { return }
-        r[i] = r[i] == 2 ? 1 : 2; prefs.setRows(r, for: uuid); changed()
-    }
-}
-private extension Array { subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil } }
+// 比例编辑器见 SplitRatioEditor.swift（2.14）
+extension Array { subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil } }
 
 /// 分区间距：窗口之间和屏幕边缘留多少空
 struct SplitGapEditor: View {
