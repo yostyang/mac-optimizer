@@ -1,4 +1,4 @@
-// 2.13 P1 结构与密度：摘要区标记 / 页面骨架、面板偏好（快捷操作可选、进程默认收起）、上下文动作（底栏与分组 ⌘K）、实时监控新结构
+// 2.13 P1 结构与密度：摘要区标记 / 页面骨架、面板偏好（快捷操作可选、进程默认展开）、上下文动作（底栏与分组 ⌘K）、实时监控新结构
 import SwiftUI
 import AppKit
 
@@ -103,7 +103,8 @@ final class PanelPrefs: ObservableObject {
     init(_ d: UserDefaults) {
         self.d = d
         ids = Self.sanitize(d.stringArray(forKey: Self.idsKey))
-        procExpanded = d.object(forKey: Self.procKey) as? Bool ?? false
+        // 从未手动操作过时默认展开；用户收起或展开后写入此键并记住
+        procExpanded = d.object(forKey: Self.procKey) as? Bool ?? true
     }
     static var known: [String] { ["act.shot", "act.mic", "act.awake", "act.clean", "act.charge", "act.dock"] }
     /// 只保留认识的操作，按固定顺序；读不到或为空时回到默认 4 个

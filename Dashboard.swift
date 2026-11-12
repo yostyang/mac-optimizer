@@ -418,7 +418,7 @@ enum PanelHeight {
     /// 底部出现大面积空白；之前写死 940 则内容放不下要滚动。正确做法是按内容定高、按屏幕封顶。
     static let minHeight: CGFloat = 420
     static func height(contentHeight: CGFloat, visibleHeight: CGFloat) -> CGFloat {
-        // 2.13：下限从 600 降到 420——内容已压到 660 以内，矮屏上要让面板在屏幕里滚动，而不是超出屏幕
+        // 2.13.1：下限 420；默认展开进程后测试夹具实测 867 pt（门槛 ≤ 880）。矮屏上按可见高度封顶并滚动，而不是超出屏幕
         guard contentHeight > 0 else { return max(minHeight, visibleHeight - 30) }
         return min(contentHeight, max(minHeight, visibleHeight - 30))
     }

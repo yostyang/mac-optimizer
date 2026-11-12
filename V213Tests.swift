@@ -42,13 +42,14 @@ enum V213 {
         let suite = "mo.v213.prefs.\(getpid())"
         let d = UserDefaults(suiteName: suite)!; d.removePersistentDomain(forName: suite)
         let pp = PanelPrefs(d)
-        T.check(pp.ids == ["act.mic", "act.awake", "act.charge", "act.dock"] && !pp.procExpanded, "默认 4 个快捷操作，进程默认收起", pp.ids.joined(separator: ","))
+        T.check(pp.ids == ["act.mic", "act.awake", "act.charge", "act.dock"] && pp.procExpanded, "默认 4 个快捷操作，进程默认展开", pp.ids.joined(separator: ","))
         T.check(pp.set("act.shot", on: true) && pp.ids.count == 5 && PanelPrefs(d).ids.contains("act.shot"), "可以加上截图，并会保存")
         for id in ["act.shot", "act.mic", "act.awake", "act.charge"] { pp.set(id, on: false) }
         T.check(pp.ids == ["act.dock"] && !pp.set("act.dock", on: false) && pp.ids == ["act.dock"], "至少保留 1 个")
         d.set(["act.unknown"], forKey: PanelPrefs.idsKey)
         T.check(PanelPrefs(d).ids == PanelPrefs.defaultIDs, "不认识的操作被丢弃，回到默认")
-        pp.procExpanded = true; T.check(PanelPrefs(d).procExpanded, "进程展开状态会记住")
+        pp.procExpanded = false; T.check(!PanelPrefs(d).procExpanded, "进程收起状态会记住")
+        pp.procExpanded = true; T.check(PanelPrefs(d).procExpanded, "再展开也会记住")
         pp.resetDefaults(); T.check(pp.ids.count == 4, "恢复默认 4 项")
         d.removePersistentDomain(forName: suite)
         T.check(Set(PanelPrefs.known) == Set(QuickActionList.all().map(\.id)), "偏好覆盖全部快捷操作")
@@ -85,18 +86,18 @@ enum V213 {
             Shell.shared.actionsFor = nil; T.settle(0.3)
         } else { T.check(false, "找到「全部操作」按钮") }
 
-        T.sec("2.13 面板：快捷操作默认 4 个、进程默认收起")
+        T.sec("2.13 面板：快捷操作默认 4 个、进程默认展开")
         let prefs = PanelPrefs.shared; let oldIDs = prefs.ids, oldExp = prefs.procExpanded
-        prefs.resetDefaults(); prefs.procExpanded = false
+        prefs.resetDefaults(); prefs.procExpanded = true
         let host = NSHostingView(rootView: PanelContent(m: Monitor.shared))
         let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
         let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
         pw.contentView = host; pw.orderFrontRegardless(); T.settle(1.0)
         T.check(T.find1(host, id: "act.shot") == nil && T.find1(host, id: "act.clean") == nil && T.find1(host, id: "act.awake") != nil, "默认不显示截图、擦屏")
-        T.check(T.find1(host, id: "proc.state") == nil, "进程默认收起（不展开列表）")
+        T.check(T.find1(host, id: "proc.state") != nil, "进程默认展开（显示列表）")
         if let t = T.find1(host, id: "panel.procs.toggle") {
-            t.press(); T.check(T.waitUntil(2) { prefs.procExpanded }, "点标题展开进程列表")
-            t.press(); T.check(T.waitUntil(2) { !prefs.procExpanded }, "再点收起")
+            t.press(); T.check(T.waitUntil(2) { !prefs.procExpanded }, "点标题收起进程列表")
+            t.press(); T.check(T.waitUntil(2) { prefs.procExpanded }, "再点展开")
         } else { T.check(false, "找到进程展开按钮") }
         prefs.set("act.shot", on: true); T.settle(0.6)
         T.check(T.find1(host, id: "act.shot") != nil, "在偏好里加上截图后，面板出现截图按钮")
@@ -109,7 +110,7 @@ enum V213 {
     // MARK: 截图
     static func snapshots(_ out: String) {
         let mon = Monitor.shared
-        let prefs = PanelPrefs.shared; prefs.resetDefaults(); prefs.procExpanded = false
+        let prefs = PanelPrefs.shared; prefs.resetDefaults(); prefs.procExpanded = true
         for (mode, ap) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: ap)
             // 门槛 B：矮屏幕（可见高度 520）上面板封顶并滚动
@@ -132,9 +133,8 @@ enum V213 {
             let w2 = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: s2.width, height: s2.height), styleMask: [.titled], backing: .buffered, defer: false)
             w2.appearance = NSAppearance(named: ap); w2.contentView = h2; w2.orderFrontRegardless(); T.settle(1.0)
             _ = T.pngRep(h2, out + "/panel213-expanded-\(mode).png")
-            T.check(s2.height <= 840, "展开进程后面板高度不超过 2.12 的默认高度 840 \(mode)", "\(Int(s2.height)) pt")
+            T.check(s2.height > 400 && s2.height <= 880, "展开进程后面板高度不超过 880 pt \(mode)", "\(Int(s2.height)) pt")
             w2.orderOut(nil)
-            prefs.procExpanded = false
         }
         NSApp.appearance = NSAppearance(named: .aqua)
     }

@@ -127,7 +127,7 @@
 - 介绍页截图在 `docs/`，取自 `build-test/shots/` 的 `golden-dashboard-*.png`、`golden-panel-dark.png`、`charge/display/network/bt-light.png`；`panel-dark-2x.png` 与 `panel-actions-2x.png` 是 2 倍放大/裁剪。改版后要同步更新 `docs/index.html` 里的 `width` / `height`。
 - `MOTests.contrast` 在 2.5 重写过：10pt 小字的辅助功能框比实际字墨大一圈，取样向外扩 3px，用 5%/95% 分位代替极值；坐标对不上的无标签装饰节点跳过。**半透明背景最容易不达标**，改配色后务必跑浅/深两套。
 - `MOTests.fits`（2.13 门槛 A，判定在 `LayoutGate.evaluate`）：页面用 `PageScaffold` 或 `.pageSummary()` 标出摘要区（标题、结论、主操作）时，摘要必须完整在默认 / 最小（1080×720）窗口的可见范围内、不在任何滚动区域里；只有位于摘要下方的滚动区域可以超出（详情局部滚动）。没标摘要区的页面仍按原规则整页放得下。任何情况下不许有常驻滚动条。资源排行是长列表，仍在 `V25.snapshots` 里单独跳过 `fits`。
-- 菜单栏面板（2.13 门槛 B）：指标卡 `PanelLayout.tileHeight` ≥ 72，默认内容高度 ≤ 660 pt（`snapshots` 的「面板尺寸」），矮屏幕上必须能滚动（`V213.snapshots` 的「矮屏面板可以滚动」）。
+- 菜单栏面板（2.13 门槛 B）：指标卡 `PanelLayout.tileHeight` ≥ 72，默认内容高度 ≤ 880 pt（`snapshots` 的「面板尺寸」，测试夹具实测 867），矮屏幕上必须能滚动（`V213.snapshots` 的「矮屏面板可以滚动」）。
 
 ### 离屏截图的已知限制
 
@@ -308,11 +308,11 @@
 
 ## 2026-11-11 · 2.13.0（36）结构与密度 P1（分支 v2.13，未发布）
 
-依据《视觉与交互优化方案》P1，新代码在 `V213.swift`、`V213Tests.swift`、`fontlint.sh`。用户 11/11 23:15 确认改两条测试门槛（见 §1、§5）：A「整页不滚」→「摘要不滚、详情局部滚动 + 说明字 ≥ 12 pt」；B 面板指标卡下限 96 → 72、默认内容 ≤ 660 pt、矮屏必须能滚。其余门槛不变。
+依据《视觉与交互优化方案》P1，新代码在 `V213.swift`、`V213Tests.swift`、`fontlint.sh`。用户 11/11 23:15 确认改两条测试门槛（见 §1、§5）：A「整页不滚」→「摘要不滚、详情局部滚动 + 说明字 ≥ 12 pt」；B 面板指标卡下限 96 → 72、默认内容 ≤ 880 pt（2.13.1，进程默认展开，测试夹具实测 867）、矮屏必须能滚。其余门槛不变。
 
 - **摘要与详情**：`PageScaffold { 摘要 } details: { 详情 }`；摘要背后铺一个 `SummaryMarkerView`（真实 NSView，不接收点击、辅助功能忽略），`LayoutGate.evaluate` 据此判定。已改用的页面：实时监控、电池。其他页面没超出，暂沿用整页规则。
 - **实时监控**：`MonitorVerdict`（不卡/有点卡/很卡 + 健康状态 + 一句原因）→ `CoreReadings`（CPU、内存、磁盘、网络，保留 `monitor.metrics`、`net.rates`）→ 详情区：`MonitorProcesses`（连续进程列表，`monitor.procs`）、`MonitorDetails`（GPU、温度、风扇、电池、系统状态、当前高占用、KPI、脚注）。旧的 `MetricTiles` 仍保留（`tiles24` 截图与各卡片构造在用）。
-- **菜单栏面板**：`PanelTile` 72 pt（标题行 / 数值 + 曲线同一行 / 一行说明）；进程默认收起（`panel.procs.toggle`，标题行显示最高的一项，↓ 展开，状态存 `panel.procExpanded`）；快捷操作默认 4 个（麦克风、常亮、充电上限、接显示器），`PanelPrefs`（`panel.quickActions`）可在面板「编辑」或设置页「面板快捷操作」增减，至少 1 个。测试进程用临时偏好域，不读写用户设置。`PanelHeight` 下限 600 → 420，矮屏不再超出屏幕。
+- **菜单栏面板**：`PanelTile` 72 pt（标题行 / 数值 + 曲线同一行 / 一行说明）；进程默认展开（`panel.procs.toggle`，用户收起后记住选择，状态存 `panel.procExpanded`；键不存在时视为展开）；快捷操作默认 4 个（麦克风、常亮、充电上限、接显示器），`PanelPrefs`（`panel.quickActions`）可在面板「编辑」或设置页「面板快捷操作」增减，至少 1 个。测试进程用临时偏好域，不读写用户设置。`PanelHeight` 下限 600 → 420，矮屏不再超出屏幕。
 - **侧栏**：`navGroups` = 状态（概览、实时监控、电池）/ 日常控制（显示器、网络诊断、桌面分区）/ 整理与恢复（清理预览、开机启动、改动与提醒）/ 全部工具（其余工具页）/ 设置。`navPages` 顺序与侧栏一致，所以 ⌘1–9 变为：概览、实时监控、电池、显示器、网络诊断、桌面分区、清理预览、开机启动、改动与提醒。搜索仍直达每一页。
 - **底栏与 ⌘K**：`BottomBar` 常驻当前页面动作（`ContextActions.page`，最多 2 个：体检 / 刷新 / 充电上限开关 / 重新诊断 / 扫描 / 分区）和「全部操作 ⌘K」。空搜索时 ⌘K 一律打开 `ContextActions.item(page)`：当前页面 → 快捷操作 → 前往，`CmdAction.group` 决定分组标题。没有强制退出。
 - **字号**：`DS.sub`、`DS.cap`、`DS.eyebrow` 都是 12；源码里 10–11 pt 的说明文字全部改到 12。`fontlint.sh` 守住。

@@ -124,7 +124,7 @@ struct PanelContent: View {
             PanelKeys.shared.handler = { e in
                 let count = min(4, m.s.top.count)
                 if more != nil { return false }
-                // 进程默认收起：↓ 先展开，其余按键交给系统
+                // 进程默认展开；若已收起，↓ 先展开，其余按键交给系统
                 if !prefs.procExpanded {
                     if e.keyCode == Key.down { prefs.procExpanded = true; sel = 0; return true }
                     return false
@@ -317,7 +317,7 @@ struct PanelContent: View {
         return "放电 " + Fmt.watts(f.dischargeWatts) + (m.s.timeRemaining.map { " · 约剩 \($0 / 60) 小时 \($0 % 60) 分" } ?? "")
     }
 
-    // MARK: 进程（2.13 默认收起，只显示最高的一项；展开状态会记住）
+    // MARK: 进程（2.13.1 默认展开；用户收起或展开后会记住）
     var processCard: some View {
         let top = m.s.top.max { $0.cpu < $1.cpu }
         return VStack(spacing: 2) {

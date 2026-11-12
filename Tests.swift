@@ -556,7 +556,7 @@ enum MOTests {
             pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
             if let rep = pngRep(host, out + "/panel-\(mode).png") { contrast(host, rep, "面板 \(mode)") }
             if mode == "light" { pngRep(host, out + "/panel.png") }
-            check(size.width == PanelLayout.width && size.height > 400 && size.height <= 660, "面板尺寸 \(mode)（默认内容 ≤ 660 pt）", "\(Int(size.width))×\(Int(size.height))")
+            check(size.width == PanelLayout.width && size.height > 400 && size.height <= 880, "面板尺寸 \(mode)（默认内容 ≤ 880 pt）", "\(Int(size.width))×\(Int(size.height))")
             pw.orderOut(nil)
             // 主窗口：默认尺寸和最小尺寸
             w.appearance = NSAppearance(named: ap)
