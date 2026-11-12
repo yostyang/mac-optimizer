@@ -1,6 +1,6 @@
 # Mac 一键优化 · 开发交接
 
-更新：2026-11-06 · 当前代码版本 **2.8.0（27）** · 最低系统 macOS 13（2.8 内容见文末「2.8 精致化」）
+更新：2026-11-12 · 当前代码版本 **2.14.0（38，开发中）**，上一发布 2.13.1（37） · 最低系统 macOS 13（各版本内容见文末分节，最新在最后）
 
 本文面向接手开发的人：先讲怎么跑起来，再讲 2.5 改了什么、设计令牌在哪、键盘与全局热键怎么接、测试与截图怎么处理，最后是还没做完/需要真机确认的事。
 
@@ -15,7 +15,7 @@
 ./measure.sh        # 菜单栏常驻 / 面板打开时的 CPU 与内存（需真机，见 §7）
 ```
 
-- 纯 `swiftc`，没有 Xcode 工程。**新增 .swift 文件必须同时加进 `build.sh` 的 `SRC`**，否则不会编译。
+- 纯 `swiftc`，没有 Xcode 工程。2.14 起 `build.sh` 自动收集目录下全部 `*.swift`（排除 `ChargeHelper.swift`、`icon.swift`、`MeasureWindows.swift`），新增文件不用再登记；两个架构并行编译。**新文件按功能命名**（例如 `ChargeSummary.swift`），不要再新建 `V2xx.swift`。
 - 本机 Swift 6.4 编译时 SwiftUI 宏插件受限，`build.sh` 需要 `SWIFTFLAGS=-disable-sandbox`；`test.sh` 会继承这个环境变量：
   ```bash
   SWIFTFLAGS=-disable-sandbox ./test.sh
@@ -31,6 +31,7 @@
 | 交互 | `--uitest` → `uiChecks` | 辅助功能树找控件并点击；`V25.ui` 覆盖设置页与搜索 |
 | 截图 | `--snapshot` → `snapshots` | 浅/深色、默认/最小窗口；`MOTests.contrast` 取样检查文字对比度，`MOTests.fits` 检查布局（2.13 起：标了摘要区的页面「摘要一屏可见、详情可局部滚动」，没标的仍要整页放得下；都不许出现滚动条）；`MOTests.golden` 与 `goldens/` 比对 |
 | 字号 | `fontlint.sh`（`test.sh` 在自检后调用） | 2.13：说明文字 ≥ 12 pt；10–11 pt 只允许用于单位/时间，行尾注明 `// 单位` 或 `// 时间`，纯图标注明 `// 图标` |
+| 状态 | `statelint.sh`（`test.sh` 在字号检查后调用） | 2.14：列出的页面里「正在… / 暂无 / 没有检测到」和整页转圈必须用 `StateLine`；新页面接入后把文件加进脚本的 `FILES` |
 
 `test.sh` 会逐个检查 `build-test/shots/*.png` 是否齐全，新增截图名要同步加进 `test.sh` 的清单。
 
@@ -48,7 +49,7 @@
 | `accent2` | 青蓝，只给图表数据线；不再出现在图标、CPU 数字、侧栏 |
 | 状态色 | `good` / `warn` / `bad` 单独一套，只表示正常、注意、危险；图标底色用 `statusTint()` |
 | 材质 | `Vibrancy`（`NSVisualEffectView`，`.behindWindow`）；主窗口 `isOpaque=false` + `backgroundColor=.clear`。**测试模式自动退回实色**，否则离屏截图会拍成空白 |
-| 字号 | 4 档：`DS.title()` 17 / `DS.body()` 13 / `DS.sub()` 11 / `DS.cap()` 10，见 `DS.fontSizes` |
+| 字号 | `DS.title()` 17 / `DS.body()` 13 / `DS.sub()`、`DS.cap()` 12（2.13 起说明字不小于 12，原 11 / 10 已废止），见 `DS.fontSizes` |
 | 圆角 | 3 种：`DS.r.card` 10 / `DS.r.control` 6 / `DS.r.pill` 999。`CDS` 旧令牌指向同一套，别再各写一份 |
 | 描边 | 卡片阴影全部换成 1px `DS.border` 细描边；`.card()` 是唯一入口 |
 | 图标 | `IconBadge`：彩色小方块 + 白色 SF Symbol；有 App 图标时用 `RowIcon` |
@@ -318,3 +319,18 @@
 - **字号**：`DS.sub`、`DS.cap`、`DS.eyebrow` 都是 12；源码里 10–11 pt 的说明文字全部改到 12。`fontlint.sh` 守住。
 - **内边距**：带标题 `Card` 的 `DS.titledCardPadding` 统一到 16（2.12 因电池页最小窗口超出 28 pt 退回 12，电池页改成摘要 + 详情后放开）。
 - 黄金图：实时监控与面板结构改变，`./test.sh --approve` 重拍后再跑一遍验证。
+
+
+## 2026-11-12 · 2.14.0（38）补齐页面体验（分支 v2.14，未发布）
+
+对应 `docs/BACKLOG.md` 的 2.14 小节（含测试门槛与页面状态矩阵）。新文件按功能命名：`ChargeSummary.swift`、`DisplayKind.swift`、`SplitRatioEditor.swift`、`CleanFooter.swift`、`PageExperienceTests.swift`、`statelint.sh`。
+
+- **电池页目标 / 实际**：`ChargeSummary.make(phase:st:reading:)` 是唯一判断，电池页摘要 `ChargeSummaryRow` 与充电卡 `cardLine(enabled:)` 共用。暂停原因只在 `adapterMode` 且上限启用时出现；防抖秒数取 `ChargeConst.displayDebounce`。没装助手时不显示助手的旧状态。
+- **显示器**：`DisplayInfo.kindLabel / titleWithKind`，`DisplayKindTag` 放在分辨率卡标题旁。
+- **分区百分比**：`SplitCustom` 改为百分比（合计 100、单栏 ≥ 10%）。`SplitPrefs.custom` 先读 `split.customPct`，没有再把 2.10–2.13 的 `split.custom`（1–9 权重）换算出来；保存只写新键，旧键保留便于回退；选模板或关闭分区时两个键一起清。`moveDivider`（键盘，5% 刻度 / ⇧ 1%）、`dragDivider`（拖动，吸附 5% / ⌥ 不吸附）、`set(_:column:to:)`（输入框，相邻栏补差，放不下返回原因）都是纯函数。
+  - 编辑器拖动时只改 `@State live`，松手才保存：保存会让分区页 `.id(tick)` 重建，拖动中保存会打断手势。
+  - 项目里有自己的 `DragGesture`（`V210Drag.swift` 的状态机），SwiftUI 手势要写 `SwiftUI.DragGesture`。
+- **清理页**：`PageScaffold` 新增可选 `footer:`（旧写法不变）。底栏 `CleanFooter` 背后铺 `PinnedFooterMarkerView`，截图测试据此核对最小窗口长清单时底栏在窗口内。清理记录与恢复在改动记录页 `CleanRecordsCard`；旧 ChangeLog 里「去清理预览恢复」的说明由 `ChangesPage.restoreText` 改指新位置。
+- **统一状态**：`ToolOperation.verified / stateKind`；工具页加载、操作结果、更新时间；网络延迟 / DNS / 助手提示；分区未授权与无显示器；设置页全局快捷键注册失败（`CommandPalette.hotKeyFailed`）与登录项失败（`Actions.setLogin` 返回原因）；卸载提示 `UninstallTab.noteKind`。
+- **其他**：进程名缓存（`Readers.topProcesses`、`ProcName.appName`）按进程号 + 启动时间核对。
+- 截图新增 `clean214-long-*`、`charge214-summary-*`（已加进 `test.sh` 清单）。分区、清理、改动页结构变化会让相关截图变化；面板与实时监控黄金图不应变化。
