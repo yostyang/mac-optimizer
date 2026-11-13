@@ -459,8 +459,17 @@ final class Monitor: ObservableObject {
     func sampleNow(full: Bool = true) { q.async { self.sample(forceFull: full) } }
 
     private func sample(forceFull: Bool = false) {
-        let full = forceFull || DispatchQueue.main.sync { self.detail }
-        var x = DispatchQueue.main.sync { self.s }
+        // 输入在主线程快照后再回 q 采样：两端都是 async，任何一端卡住都不会死锁
+        DispatchQueue.main.async {
+            let full = forceFull || self.detail
+            let wantNet = !full && BatteryAlerts.shared.settings.menuIndicator == "net"
+            let prev = self.s
+            let alerts = self.alertsEnabled
+            self.q.async { self.sampleBody(full: full, wantNet: wantNet, prev: prev, alerts: alerts) }
+        }
+    }
+    private func sampleBody(full: Bool, wantNet: Bool, prev: Snapshot, alerts: Bool) {
+        var x = prev
         x.cpu = Readers.cpuUsage()
         x.uptime = Readers.uptime()
         Readers.memory(into: &x)
@@ -478,8 +487,8 @@ final class Monitor: ObservableObject {
             x.top = Readers.topProcesses()
             if tick % 5 == 1 { Readers.disk(into: &x); Readers.battery(into: &x); x.devices = Readers.devices() }
         } else if x.diskTotalGB == 0 { Readers.disk(into: &x) }
-        if !full && DispatchQueue.main.sync(execute: { BatteryAlerts.shared.settings.menuIndicator == "net" }) { Readers.network(into: &x) }
-        if !full && alertsEnabled && tick % 6 == 1 { Readers.disk(into: &x); Readers.battery(into: &x) }
+        if wantNet { Readers.network(into: &x) }
+        if !full && alerts && tick % 6 == 1 { Readers.disk(into: &x); Readers.battery(into: &x) }
         // 2.8 功率趋势：后台每 30 秒读一次电池（只读 IORegistry 一个对象，开销很小）；前台沿用每 10 秒
         else if !full && tick % 6 == 1 { Readers.battery(into: &x) }
         let full2 = full
