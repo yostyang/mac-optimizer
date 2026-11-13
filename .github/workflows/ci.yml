@@ -7,6 +7,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: 选最新 Xcode（runner 默认工具链过旧，部分表达式类型检查超时）
+        run: |
+          ls /Applications | grep -i xcode
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)/Contents/Developer"
+          swiftc --version
       - name: 编译通用二进制（无证书时自动临时签名，不打包 DMG）
         run: NODMG=1 ./build.sh
       - name: 字号检查
