@@ -652,6 +652,8 @@ enum MOTests {
         check(waitUntil(2) { StatusBar.shared.popover.isShown }, "点击菜单栏图标打开面板")
         check(waitUntil(2) { mon.interval == Monitor.detailInterval }, "面板打开后 2 秒采样", "\(mon.interval)")
         check(waitUntil(6) { !mon.s.top.isEmpty && mon.s.diskTotalGB > 0 }, "面板数据已填充")
+        // 面板是 .transient：数据等待期间窗口失焦会被系统关闭并把内容控制器置空；关掉就重开再核对
+        if !StatusBar.shared.popover.isShown, let b = StatusBar.shared.item?.button { StatusBar.shared.show(from: b); settle(0.5) }
         check(StatusBar.shared.popover.contentViewController?.view is NSHostingView<PanelView>, "面板内容为实时面板")
         sec("退出进程（需确认，正常退出）")
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/sleep"); p.arguments = ["600"]; try! p.run()

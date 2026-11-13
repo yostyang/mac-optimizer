@@ -243,32 +243,37 @@ struct DisplayPage: View {
         }.accessibilityElement(children: .combine)
     }
     func hwRow(_ title: String, code: VCP, values: [UInt8], current: Int?, display: DisplayInfo) -> some View {
-        let names = DDCNames.shared
-        return VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title).font(DS.sub(.medium))
                 Text(String(format: "VCP 0x%02X", code.rawValue)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
                 Spacer()
-                if let cur = current, values.contains(UInt8(clamping: cur)) {
-                    Button("命名当前…") {
-                        let v = UInt8(clamping: cur)
-                        if let n = DDCNames.prompt("给「\(names.label(display.key, code.rawValue, v).0)」命名", names.name(display.key, code.rawValue, v) ?? "") {
-                            names.set(display.key, code.rawValue, v, n)
-                        }
-                    }.buttonStyle(.plain).font(DS.cap(.medium)).foregroundColor(accentText).accessibilityIdentifier("disp.name.\(code.rawValue)")
-                } else if current == nil {
-                    Text("当前值读不到").font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
-                }
+                hwCurrent(title, code, values, current, display)
             }
-            FlowRow(spacing: 6) { ForEach(values, id: \.self) { value in
-                let label = names.label(display.key, code.rawValue, value)
-                let incompatible = dm.isIncompatible(display, code, Int(value))
-                ChoiceChip(text: label.0, on: current == Int(value), sub: incompatible ? "⚠︎ 可能不兼容" : String(format: "0x%02X", value)) { dm.setDDC(display.id, code, Int(value)) }
-                    .help(label.1 + (incompatible ? "；这台显示器上次声明支持，但写入后回读未生效。可点击重试。" : ""))
-                    .accessibilityLabel(title + " " + label.0 + "，" + label.1 + (incompatible ? "，上次写入未生效，可重试" : ""))
-                    .accessibilityIdentifier(code == .colorPreset ? "disp.color.\(value)" : "disp.mode.\(value)")
-            } }
+            FlowRow(spacing: 6) { ForEach(values, id: \.self) { hwChip(title, code, $0, current, display) } }
         }
+    }
+    @ViewBuilder func hwCurrent(_ title: String, _ code: VCP, _ values: [UInt8], _ current: Int?, _ display: DisplayInfo) -> some View {
+        let names = DDCNames.shared
+        if let cur = current, values.contains(UInt8(clamping: cur)) {
+            Button("命名当前…") {
+                let v = UInt8(clamping: cur)
+                if let n = DDCNames.prompt("给「\(names.label(display.key, code.rawValue, v).0)」命名", names.name(display.key, code.rawValue, v) ?? "") {
+                    names.set(display.key, code.rawValue, v, n)
+                }
+            }.buttonStyle(.plain).font(DS.cap(.medium)).foregroundColor(accentText).accessibilityIdentifier("disp.name.\(code.rawValue)")
+        } else if current == nil {
+            Text("当前值读不到").font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
+        }
+    }
+    func hwChip(_ title: String, _ code: VCP, _ value: UInt8, _ current: Int?, _ display: DisplayInfo) -> some View {
+        let names = DDCNames.shared
+        let label = names.label(display.key, code.rawValue, value)
+        let incompatible = dm.isIncompatible(display, code, Int(value))
+        return ChoiceChip(text: label.0, on: current == Int(value), sub: incompatible ? "⚠︎ 可能不兼容" : String(format: "0x%02X", value)) { dm.setDDC(display.id, code, Int(value)) }
+            .help(label.1 + (incompatible ? "；这台显示器上次声明支持，但写入后回读未生效。可点击重试。" : ""))
+            .accessibilityLabel(title + " " + label.0 + "，" + label.1 + (incompatible ? "，上次写入未生效，可重试" : ""))
+            .accessibilityIdentifier(code == .colorPreset ? "disp.color.\(value)" : "disp.mode.\(value)")
     }
     func confirmInput(_ id: CGDirectDisplayID, _ v: UInt8) {
         let a = NSAlert(); a.messageText = "切换到 \(DDCCaps.inputName(v))？"; a.informativeText = "画面会切到显示器的另一路输入，这台 Mac 的画面将不再显示在该显示器上。"

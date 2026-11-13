@@ -280,8 +280,9 @@ struct DisplaySettings: Codable, Equatable {
     /// 距下一个切换点的秒数（只在切换点触发一次，不轮询）
     func secondsToNextSwitch(from d: Date, cal: Calendar = .current) -> TimeInterval {
         let c = cal.dateComponents([.hour, .minute, .second], from: d)
-        let now = Double((c.hour ?? 0) * 3600 + (c.minute ?? 0) * 60 + (c.second ?? 0))
-        let pts = [Double(dayStart * 60), Double(nightStart * 60)].map { $0 > now ? $0 - now : $0 + 86400 - now }
+        let now = Double(c.hour ?? 0) * 3600 + Double(c.minute ?? 0) * 60 + Double(c.second ?? 0)
+        let ends = [Double(dayStart * 60), Double(nightStart * 60)]
+        let pts = ends.map { $0 > now ? $0 - now : $0 + 86400 - now }
         return max(1, pts.min() ?? 3600)
     }
 }
@@ -350,7 +351,9 @@ final class ScreenTime: ObservableObject {
     /// 今天（含正在进行的这一段）
     var today: Double { var s = store; if let a = since { s.add(from: a, to: now()) }; return s.days[UsageStore.dayKey(now())] ?? 0 }
     var week: [(String, Double)] { var s = store; if let a = since { s.add(from: a, to: now()) }; return s.last7(now: now()) }
+    #if MO_TESTS
     func inject(_ s: UsageStore, now n: Date) { store = s; since = nil; now = { n } }
+    #endif
 }
 
 // MARK: - 管理器

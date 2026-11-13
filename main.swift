@@ -624,16 +624,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var window: NSWindow!
     func applicationDidFinishLaunching(_ n: Notification) {
         let args = CommandLine.arguments
+        #if MO_TESTS
         if args.contains("--test-prime-parent-ax") { exit(MOTests.primeParentAX()) }
+        #endif
         if args.contains("--read-capabilities") { HardwareCapabilities.printSnapshot(); exit(0) }
         if args.contains("--read-classic-batteries") { RealBTSource.printClassicSnapshot(); exit(0) }
         if args.contains("--read-keychron-battery") { KeychronHID.printSnapshot(); exit(0) }
         if !args.contains("--selftest") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
         if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
+        #if MO_TESTS
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
+        #endif
         // 拖拽落区实验：从测试副本直接运行，不能触碰充电助手的注册
+        #if MO_TESTS
         let dragSpike = args.firstIndex(of: "--dragspike")
+        #else
+        let dragSpike: Int? = nil
+        #endif
         if !args.contains("--snapshot") && !args.contains("--uitest") && !args.contains("--measure-hold-panel") && dragSpike == nil && HelperCheck.autoRepairAllowed(bundlePath: Bundle.main.bundlePath) { ChargeClient.shared.repairAfterUpdate() }
+        #if MO_TESTS
         if let i = dragSpike {
             let path = args.count > i + 1 ? args[i + 1] : NSTemporaryDirectory() + "mo-dragspike.log"
             FileManager.default.createFile(atPath: path, contents: nil)
@@ -643,7 +652,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 fh?.seekToEndOfFile(); fh?.write((f.string(from: Date()) + " " + line + "\n").data(using: .utf8)!)
             }
             DragZones.shared.start()
-        } else if UserDefaults.standard.bool(forKey: DragZones.prefKey) && !args.contains("--snapshot") && !args.contains("--uitest") { DragZones.shared.start() }
+        }
+        #endif
+        if dragSpike == nil && UserDefaults.standard.bool(forKey: DragZones.prefKey) && !args.contains("--snapshot") && !args.contains("--uitest") { DragZones.shared.start() }
         let size = Layout.defaultSize(for: NSScreen.main)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         w.contentMinSize = NSSize(width: min(Layout.minSize.width, size.width), height: min(Layout.minSize.height, size.height))
@@ -664,7 +675,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UIState.shared.openMain = { [weak self] in self?.showMain() }
         mon.onSample = { BatteryAlerts.shared.handle($0); V19Store.shared.handle($0) }
         EnergyTracker.shared.onDrain = { BatteryAlerts.shared.drain($0, $1) }
+        #if MO_TESTS
         if args.contains("--snapshot") || args.contains("--uitest") { w.contentView = NSHostingView(rootView: RootView()); MOTests.runUI(args: args, window: w); return }
+        #endif
         UNUserNotificationCenter.current().delegate = self
         mon.alertsEnabled = V19Store.shared.settings.alertsOn
         mon.start()

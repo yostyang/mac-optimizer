@@ -4,8 +4,14 @@ set -e
 # SWIFTFLAGS：可选的额外编译参数（例如在受限沙盒里编译时传 -disable-sandbox）
 SWIFTFLAGS="${SWIFTFLAGS:-}"
 cd "$(dirname "$0")"
-# 主程序 = 目录下全部 .swift，除了助手入口和两个独立小工具；新增文件不用再手动登记
+# 主程序 = 目录下全部 .swift，除了助手入口和两个独立小工具；新增文件不用再手动登记。
+# 发布版再排除 *Tests.swift：测试入口与替换口不进发布包；测试包用 MOTEST=1 编译并定义 MO_TESTS。
 SRC=$(ls *.swift | grep -vxE 'ChargeHelper\.swift|icon\.swift|MeasureWindows\.swift' | tr '\n' ' ')
+if [ -n "${MOTEST:-}" ]; then
+  SWIFTFLAGS="-D MO_TESTS${SWIFTFLAGS:+ $SWIFTFLAGS}"
+else
+  SRC=$(printf '%s' "$SRC" | tr ' ' '\n' | grep -vx '.*Tests\.swift' | tr '\n' ' ')
+fi
 HSRC="ChargeCore.swift ChargeHelper.swift DNSCore.swift"
 # 两个架构并行编译；任一失败即停止
 swiftc $SWIFTFLAGS -O -parse-as-library -swift-version 5 -target arm64-apple-macos13 $SRC -o mo_arm & PA=$!
