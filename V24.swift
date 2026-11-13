@@ -299,7 +299,9 @@ final class TrafficHistory: ObservableObject {
         series(.hour1, now: now).suffix(n).map { $0.down ?? 0 }
     }
     var hasData: Bool { !minutes.isEmpty || !hours.isEmpty }
+    #if MO_TESTS
     func inject(minutes: [TMinute], minuteApps: [TMinuteApps], hours: [THour]) { self.minutes = minutes; self.minuteApps = minuteApps; self.hours = hours }
+    #endif
 }
 
 // MARK: - 后台采样器（默认每 60 秒一次；按应用面板打开时每 2 秒一次）
@@ -368,9 +370,11 @@ final class AppTraffic: ObservableObject {
     }
     func flush() { if history.dirty && !MOTests.active { history.save() } }
     /// 测试注入
+    #if MO_TESTS
     func injectLive(_ apps: [AppBytes], forwarder: AppBytes?, total: (Double, Double)?, tun: Bool, series: [(Double, Double)]) {
         live = apps; liveForwarder = forwarder; liveTotal = total; tunOn = tun; liveSeries = series; updated = Date()
     }
+    #endif
 }
 
 // MARK: - 网络卡片数据：Wi-Fi（CoreWLAN）、公网 IP、ChatGPT
@@ -567,7 +571,9 @@ final class SpeedTest24: ObservableObject {
     }
     /// 取消：只结束本应用自己启动的测速子进程
     func cancel() { if let p = proc, p.isRunning { p.terminate() } }
+    #if MO_TESTS
     func inject(_ r: NQResult?, down: [Double], up: [Double], phase: Phase) { result = r; self.down = down; self.up = up; self.phase = phase; finished = Date() }
+    #endif
 }
 
 // MARK: - 卸载应用（含残留）

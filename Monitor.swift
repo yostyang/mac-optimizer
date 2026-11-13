@@ -503,7 +503,9 @@ final class Monitor: ObservableObject {
     }
     var onSample: ((Snapshot) -> Void)?
     /// 测试用：直接注入数据
+    #if MO_TESTS
     func inject(_ x: Snapshot, cpu: [Double], gpu: [Double], up: [Double], down: [Double]) { s = x; cpuHist = cpu; gpuHist = gpu; upHist = up; downHist = down }
+    #endif
 }
 
 // MARK: - 常亮 / 麦克风 / 截图

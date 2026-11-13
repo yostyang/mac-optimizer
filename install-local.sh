@@ -9,6 +9,8 @@ V="$1"
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" -c "Set :CFBundleVersion $B" Info.plist; }
 . ./appstate.sh; mo_record
 MO_NO_RELAUNCH=1 ./test.sh || { echo "❌ 测试没通过，不安装"; mo_relaunch; exit 1; }
+# test.sh 验证的是带测试代码的包；装到本机前重新出发布包（不含测试入口与替换口）
+NODMG=1 ./build.sh
 osascript -e 'quit app "Mac一键优化"' || true
 for i in $(seq 1 20); do pgrep -x MacOptimizer >/dev/null || break; sleep 0.5; done
 if pgrep -x MacOptimizer >/dev/null; then echo "Mac一键优化没有正常退出，停止安装"; exit 1; fi

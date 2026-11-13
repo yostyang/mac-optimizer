@@ -48,12 +48,12 @@
 | 发布脚本走 PR | 已开发 | `release.sh`：`gh` 改为 PATH 优先、`~/.local/bin/gh` 兜底；发布前要求已跟踪文件干净（不再 `git add -A`）；版本号写入后、提交前任一步失败由 `trap` 恢复 `Info.plist`；只提交 `Info.plist`，Release 建在版本提交的 SHA 上。 |
 | 宣传视频移出 git | 已开发 | 两个 mp4（29 MB）作为附件挂到 v2.13.1 Release（URL 永久有效），`docs/index.html` 视频源改为下载链接；海报图（共 100 KB）仍在仓库里。未改历史，`.git` 里已有体积不回收。 |
 | 最小 CI | 已开发（第一步） | `.github/workflows/ci.yml`：push/PR 时在 macos-15 跑 `NODMG=1 ./build.sh` + `fontlint.sh` + `statelint.sh`。自检子集（不依赖硬件）待第二步，界面/截图测试仍只在本机跑。 |
-| 测试代码不进发布包 | 待定 | `-D MO_TESTS` 编两份，或与 A04 SwiftPM 迁移合并决策（SwiftPM 的 testTarget 天然分离）。 |
+| 测试代码不进发布包 | 已开发 | `build.sh` 发布版排除 `*Tests.swift`（26 个文件）；`MOTEST=1 ./build.sh` 出测试包并定义 `MO_TESTS`。生产代码靠 `MOTestsStub.swift` 提供 `MOTests.active = false`（-O 下分支消除）；`--selftest/--uitest/--snapshot/--dragspike/--test-prime-parent-ax` 入口和 5 个 `inject` 注入口用 `#if MO_TESTS` 包住。`test.sh` 改跑测试包；`install-local.sh`/`release.sh` 测完后重新出发布包再安装/发布。`--measure-hold-panel/--open-panel/--background/--charge/--read-*` 是发布包功能，保留。保留项：属性型替换口（`sink`、`FixRunner.confirm`、`confirmQuit`）在生产代码里有调用点，不包条件编译。 |
 
 ### 2.15 未做（排期外）
 
 - A04 目录拆分 / SwiftPM / 减少单例与全局可变状态 / 严格并发：改动面大，等功能稳定期。
-- R01 公证与 Developer ID：依赖 Apple 开发者账号购买决策。
+- R01 公证与 Developer ID：用户 2026-11-13 决定不做。
 - `Battery.swift` / `Display.swift` 中剩余的低频 `main.sync`（带主线程快速路径）。
 
 ## 2.13 结构与密度（P1，已发布 v2.13.1）

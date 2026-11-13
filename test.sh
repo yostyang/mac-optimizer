@@ -27,7 +27,7 @@ if pgrep -x MacOptimizer >/dev/null; then
 fi
 reuse_ok() {
   [ "$REUSE" = 1 ] && [ -f build/source.sha256 ] && [ -f build/binaries.sha256 ] &&
-    [ -f build/swiftflags.txt ] && [ "$(cat build/swiftflags.txt)" = "${SWIFTFLAGS:-}" ] &&
+    [ -f build/swiftflags.txt ] && [ "$(cat build/swiftflags.txt)" = "-D MO_TESTS${SWIFTFLAGS:+ $SWIFTFLAGS}" ] &&
     shasum -a 256 -c build/source.sha256 >/dev/null 2>&1 &&
     shasum -a 256 -c build/binaries.sha256 >/dev/null 2>&1 &&
     codesign --verify --strict "build/Mac一键优化.app" >/dev/null 2>&1
@@ -35,7 +35,7 @@ reuse_ok() {
 if reuse_ok; then
   echo "复用已核对源码、参数、二进制和签名的测试包" | tee "$OUT/build.log"
 else
-  ./build.sh > "$OUT/build.log" 2>&1 || { tail -30 "$OUT/build.log"; echo "❌ 编译失败"; mo_relaunch; exit 1; }
+  MOTEST=1 ./build.sh > "$OUT/build.log" 2>&1 || { tail -30 "$OUT/build.log"; echo "❌ 编译失败"; mo_relaunch; exit 1; }
 fi
 BIN="$PWD/build/Mac一键优化.app/Contents/MacOS/MacOptimizer"
 "$BIN" --selftest > "$OUT/selftest.log" 2>&1; S=$?

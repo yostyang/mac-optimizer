@@ -17,6 +17,8 @@ RESTORE=1
 trap '[ "$RESTORE" = 1 ] && git checkout -- Info.plist 2>/dev/null; exit 1' ERR INT TERM
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" -c "Set :CFBundleVersion $B" Info.plist
 ./test.sh || { echo "❌ 测试没通过，停止发布"; exit 1; }
+# test.sh 验证的是带测试代码的包；发布前重新出发布包（不含测试入口与替换口），再核对助手与安装
+./build.sh
 osascript -e 'quit app "Mac一键优化"' || true
 for i in $(seq 1 20); do pgrep -x MacOptimizer >/dev/null || break; sleep 0.5; done
 pgrep -x MacOptimizer >/dev/null && { echo "Mac一键优化没有正常退出，停止发布"; exit 1; }

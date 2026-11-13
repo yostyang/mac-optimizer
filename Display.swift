@@ -350,7 +350,9 @@ final class ScreenTime: ObservableObject {
     /// 今天（含正在进行的这一段）
     var today: Double { var s = store; if let a = since { s.add(from: a, to: now()) }; return s.days[UsageStore.dayKey(now())] ?? 0 }
     var week: [(String, Double)] { var s = store; if let a = since { s.add(from: a, to: now()) }; return s.last7(now: now()) }
+    #if MO_TESTS
     func inject(_ s: UsageStore, now n: Date) { store = s; since = nil; now = { n } }
+    #endif
 }
 
 // MARK: - 管理器
