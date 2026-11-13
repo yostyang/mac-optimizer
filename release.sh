@@ -1,13 +1,22 @@
 #!/bin/bash
 # 发布：必须先通过 test.sh，然后改版本号、重新编译签名、安装、打包、提交、推送、建 GitHub Release
-# 用法：./release.sh 1.3 "发布说明"
+# 用法：./release.sh 2.15.0 "发布说明"
+# 只提交 Info.plist 版本号；其余改动应当已经随 PR 合并进当前分支
 set -euo pipefail
 cd "$(dirname "$0")"
 V="$1"; NOTES="${2:-}"
 [[ "$V" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "版本号格式不对：$V"; exit 1; }
+GH="$(command -v gh || true)"; [ -x "$GH" ] || GH="$HOME/.local/bin/gh"
+[ -x "$GH" ] || { echo "找不到 gh（PATH 和 ~/.local/bin/gh 都没有）"; exit 1; }
+# 除 Info.plist 外，已跟踪文件必须是干净的：历史上有用 git add -A 把无关文件一起提交的问题
+DIRTY=$(git status --porcelain --untracked-files=no | grep -v ' Info\.plist$' || true)
+[ -z "$DIRTY" ] || { echo "工作区还有 Info.plist 之外的改动，请先提交或清理："; echo "$DIRTY"; exit 1; }
 B=$(( $(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Info.plist) + 1 ))
+# 版本号写入后，提交成功前任一步失败都恢复原值
+RESTORE=1
+trap '[ "$RESTORE" = 1 ] && git checkout -- Info.plist 2>/dev/null; exit 1' ERR INT TERM
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" -c "Set :CFBundleVersion $B" Info.plist
-./test.sh || { echo "❌ 测试没通过，停止发布"; git checkout Info.plist; exit 1; }
+./test.sh || { echo "❌ 测试没通过，停止发布"; exit 1; }
 osascript -e 'quit app "Mac一键优化"' || true
 for i in $(seq 1 20); do pgrep -x MacOptimizer >/dev/null || break; sleep 0.5; done
 pgrep -x MacOptimizer >/dev/null && { echo "Mac一键优化没有正常退出，停止发布"; exit 1; }
@@ -24,9 +33,13 @@ if [ -n "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" ]
   for n in $(seq 1 45); do sleep 2; [ "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" = "$B" ] && "/Applications/Mac一键优化.app/Contents/MacOS/MacOptimizer" --charge status >/dev/null 2>&1 && break; done
   [ "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" = "$B" ] && echo "充电助手已随新版本重启" || { echo "⚠️ 充电助手没有随新版本重启，停止发布"; exit 1; }
 fi
-git add -A && git commit -qm "v$V" && git push -q
+git commit -qm "v$V" -- Info.plist
+git push -q origin HEAD
+SHA=$(git rev-parse HEAD)
+RESTORE=0
+trap - ERR INT TERM
 SUMMARY=$(cat build-test/summary.txt)
-~/.local/bin/gh release create "v$V" "/tmp/Mac-Optimizer-$V.dmg" --repo yostyang/mac-optimizer --title "Mac一键优化 $V" --notes "$NOTES
+"$GH" release create "v$V" "/tmp/Mac-Optimizer-$V.dmg" --repo yostyang/mac-optimizer --title "Mac一键优化 $V" --target "$SHA" --notes "$NOTES
 
 ---
 自动化测试（发布前通过）：
