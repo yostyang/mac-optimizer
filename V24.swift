@@ -577,61 +577,6 @@ final class SpeedTest24: ObservableObject {
 }
 
 // MARK: - 卸载应用（含残留）
-struct UninstallItem: Identifiable, Equatable { var id: String { path }; var path: String; var kind: String; var size: Int64; var selected = true }
-struct UninstallEntry: Codable, Equatable { var original: String; var trashed: String? }
-struct UninstallRecord: Codable, Identifiable, Equatable { var id = UUID(); var date: Date; var app: String; var bundleID: String; var entries: [UninstallEntry]; var restored = false }
-enum UninstallLogic {
-    /// 返回不能卸载的原因；nil 表示可以
-    static func blockReason(bundleID: String, path: String, whitelist: [String]) -> String? {
-        let p = URL(fileURLWithPath: path).standardizedFileURL.path
-        if bundleID.isEmpty { return "读不到这个应用的标识（Bundle ID），为避免误删不处理" }
-        if bundleID.hasPrefix("com.apple.") || p.hasPrefix("/System/") { return "系统自带应用，不提供卸载" }
-        if bundleID == "com.yost.macoptimizer" { return "不能卸载本应用自己" }
-        if CleanLogic.isWhitelisted(p, whitelist: whitelist) { return "该应用在白名单里" }
-        if !p.hasSuffix(".app") { return "不是应用包" }
-        return nil
-    }
-    /// 残留路径类别（参考 Mole 的思路自写）：只按 Bundle ID 精确匹配；应用名只用于少数常见目录且名称足够具体。
-    /// 共享的 Group Containers 不默认归属某个应用，不列入。
-    static func candidates(bundleID: String, name: String, home: String) -> [(String, String)] {
-        let L = home + "/Library"
-        var out: [(String, String)] = [
-            (L + "/Application Support/" + bundleID, "应用数据"), (L + "/Caches/" + bundleID, "缓存"),
-            (L + "/Preferences/" + bundleID + ".plist", "偏好设置"), (L + "/Saved Application State/" + bundleID + ".savedState", "窗口状态"),
-            (L + "/Containers/" + bundleID, "沙盒容器"), (L + "/Application Scripts/" + bundleID, "应用脚本"),
-            (L + "/HTTPStorages/" + bundleID, "网络存储"), (L + "/HTTPStorages/" + bundleID + ".binarycookies", "Cookie"),
-            (L + "/Cookies/" + bundleID + ".binarycookies", "Cookie"), (L + "/WebKit/" + bundleID, "网页数据"),
-            (L + "/Logs/" + bundleID, "日志"), (L + "/Caches/com.crashlytics.data/" + bundleID, "崩溃数据")
-        ]
-        let generic: Set<String> = ["app", "apps", "helper", "update", "updater", "data", "cache", "google", "microsoft", "apple", "adobe", "mac", "macos"]
-        if name.count >= 4, !generic.contains(name.lowercased()) {
-            out += [(L + "/Application Support/" + name, "应用数据"), (L + "/Caches/" + name, "缓存"), (L + "/Logs/" + name, "日志")]
-        }
-        let fm = FileManager.default
-        for (dir, kind) in [(L + "/Preferences/ByHost", "偏好设置"), (L + "/LaunchAgents", "登录启动项")] {
-            for f in (try? fm.contentsOfDirectory(atPath: dir)) ?? [] where f.hasPrefix(bundleID + ".") && f.hasSuffix(".plist") { out.append((dir + "/" + f, kind)) }
-        }
-        return out
-    }
-    static func size(_ path: String) -> Int64 {
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { return 0 }
-        if !isDir.boolValue { return (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0 }
-        return CleanLogic.scanDirSize(path)
-    }
-    static func scan(appPath: String, bundleID: String, name: String, home: String, whitelist: [String]) -> [UninstallItem] {
-        var seen = Set<String>(), items: [UninstallItem] = []
-        items.append(UninstallItem(path: appPath, kind: "应用本体", size: size(appPath)))
-        seen.insert(appPath)
-        for (p, k) in candidates(bundleID: bundleID, name: name, home: home) {
-            let std = URL(fileURLWithPath: p).standardizedFileURL.path
-            guard FileManager.default.fileExists(atPath: std), seen.insert(std).inserted else { continue }
-            guard !CleanLogic.isWhitelisted(std, whitelist: whitelist) else { continue }
-            items.append(UninstallItem(path: std, kind: k, size: size(std)))
-        }
-        return items
-    }
-}
 final class Uninstaller: ObservableObject {
     static var shared = Uninstaller()
     @Published var appPath = ""; @Published var appName = ""; @Published var bundleID = ""
@@ -687,7 +632,10 @@ final class Uninstaller: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             var entries: [UninstallEntry] = [], fails: [String] = []
             for it in sel {
-                if CleanLogic.isWhitelisted(it.path, whitelist: wl) || (it.kind != "应用本体" && CleanLogic.isProtected(it.path) && !it.path.hasPrefix(self.home + "/Library/")) { fails.append(it.path); continue }
+                let valid = it.kind == "应用本体"
+                    ? CleanLogic.canonical(it.path) == CleanLogic.canonical(self.appPath)
+                    : UninstallLogic.validLeftover(it.path, home: self.home) && !CleanLogic.isProtected(it.path)
+                if !valid || CleanLogic.isWhitelisted(it.path, whitelist: wl) { fails.append(it.path); continue }
                 do { let t = try move(URL(fileURLWithPath: it.path)); entries.append(UninstallEntry(original: it.path, trashed: t?.path)) }
                 catch { fails.append(it.path) }
             }

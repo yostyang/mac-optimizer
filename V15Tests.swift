@@ -148,8 +148,8 @@ extension MOTests {
         sec("DNS 一键修复（模拟 networksetup，不改真实 DNS）")
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("mo-dns-\(getpid()).json"); try? FileManager.default.removeItem(at: tmp)
         let mr = MockRunner(), fx = DNSFixer(runner: mr, backupURL: tmp)
-        check(fx.services().map(\.name) == ["AX88772D", "Thunderbolt Bridge", "Wi-Fi"], "列出启用的网络服务（跳过已停用）")
-        check(fx.activeServices().map(\.name) == ["Wi-Fi"], "只改正在使用的网络")
+        check((try? fx.services().map(\.name)) == ["AX88772D", "Thunderbolt Bridge", "Wi-Fi"], "列出启用的网络服务（跳过已停用）")
+        check((try? fx.activeServices().map(\.name)) == ["Wi-Fi"], "只改正在使用的网络")
         mr.dns["Wi-Fi"] = ["8.8.8.8"]
         var res = fx.setAli(); check(res.0 && mr.dns["Wi-Fi"] == DNSConst.ali && mr.dns["AX88772D"] == ["192.168.0.1"], "设为 223.5.5.5 / 223.6.6.6")
         check(mr.calls.contains { $0 == ["/usr/bin/dscacheutil", "-flushcache"] } && mr.calls.contains { $0 == ["/usr/bin/killall", "-HUP", "mDNSResponder"] }, "清除 DNS 缓存")
