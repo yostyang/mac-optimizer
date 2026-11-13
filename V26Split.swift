@@ -158,20 +158,26 @@ struct SplitPrefs {
     func set(_ t: SplitTemplate?, for uuid: String) {
         var m = (d.dictionary(forKey: key) as? [String: String]) ?? [:]
         m[uuid] = t?.rawValue; d.set(m, forKey: key)
-        var c = (d.dictionary(forKey: customKey) as? [String: [Int]]) ?? [:]
-        if c.removeValue(forKey: uuid) != nil { d.set(c, forKey: customKey) }
+        for k in [customKey, legacyCustomKey] {
+            var c = (d.dictionary(forKey: k) as? [String: [Int]]) ?? [:]
+            if c.removeValue(forKey: uuid) != nil { d.set(c, forKey: k) }
+        }
     }
-    // 2.10 自定义比例：每块屏幕 2–4 栏，每栏权重 1–9；与固定模板二选一
-    private let customKey = "split.custom"
+    // 自定义比例：每块屏幕 2–4 栏，与固定模板二选一。
+    // 2.14 起存百分比（split.customPct）；2.10–2.13 的 1–9 权重（split.custom）读取时换算，旧键不删，便于回退旧版。
+    private let customKey = "split.customPct", legacyCustomKey = "split.custom"
     func custom(_ uuid: String) -> [Int]? {
-        (d.dictionary(forKey: customKey) as? [String: [Int]])?[uuid].flatMap { SplitCustom.valid($0) ? $0 : nil }
+        if let p = (d.dictionary(forKey: customKey) as? [String: [Int]])?[uuid], SplitCustom.valid(p) { return p }
+        guard let w = (d.dictionary(forKey: legacyCustomKey) as? [String: [Int]])?[uuid],
+              SplitCustom.columns.contains(w.count), w.allSatisfy({ (1...9).contains($0) }) else { return nil }
+        return SplitCustom.percents(w.map { CGFloat($0) })
     }
-    func setCustom(_ w: [Int], for uuid: String) {
-        guard SplitCustom.valid(w) else { return }
+    func setCustom(_ p: [Int], for uuid: String) {
+        guard SplitCustom.valid(p) else { return }
         var m = (d.dictionary(forKey: key) as? [String: String]) ?? [:]
         m[uuid] = nil; d.set(m, forKey: key)
         var c = (d.dictionary(forKey: customKey) as? [String: [Int]]) ?? [:]
-        c[uuid] = w; d.set(c, forKey: customKey)
+        c[uuid] = p; d.set(c, forKey: customKey)
     }
     /// 这块屏幕当前生效的各栏权重（固定模板或自定义）；未启用返回 nil
     func weights(_ uuid: String) -> [CGFloat]? { template(uuid)?.weights ?? custom(uuid)?.map { CGFloat($0) } }
@@ -344,12 +350,9 @@ struct SplitPage: View {
         VStack(alignment: .leading, spacing: 12) {
             PageHeader(title: "桌面分区", sub: "为每块屏幕选模板，再用 ⌘K 把前台窗口放进分区") { EmptyView() }
             if !trusted {
-                HStack {
-                    Image(systemName: "lock.shield").foregroundColor(.orange)
-                    Text("需要“辅助功能”权限才能移动窗口；未授权时分区命令不可用。").font(.callout)
-                    Spacer()
-                    Button("打开系统设置") { SplitController.openAXSettings() }.accessibilityIdentifier("split.grant")
-                }.padding(10).background(RoundedRectangle(cornerRadius: DS.r.card).fill(Color.orange.opacity(0.1)))
+                StateLine(kind: .unknown, text: "需要“辅助功能”权限才能移动窗口", detail: "未授权时分区命令不可用；授权后回到这里即可使用。",
+                          actions: [StateAction(title: "打开系统设置", symbol: "gearshape") { SplitController.openAXSettings() }], id: "split.grant")
+                    .padding(10).background(RoundedRectangle(cornerRadius: DS.r.card).fill(Color.orange.opacity(0.1)))
             }
             HStack(alignment: .top, spacing: 12) {
                 VStack(spacing: 2) {
@@ -361,7 +364,7 @@ struct SplitPage: View {
                 }.frame(width: 220).accessibilityElement(children: .contain).accessibilityIdentifier("split.list")
                 if let d = ds.first(where: { $0.uuid == (sel ?? ds.first?.uuid) }) {
                     detail(d).id(tick)
-                } else { Text("没有检测到显示器").foregroundColor(DS.text.secondary) }
+                } else { StateLine(kind: .empty, text: "没有检测到显示器", actions: [.refresh { tick += 1 }], id: "split.state") }
             }
             Spacer()
         }.padding(20)
@@ -387,7 +390,7 @@ struct SplitPage: View {
                 .font(DS.sub()).foregroundColor(DS.text.secondary)
             Divider()
             Text("把窗口放进分区").font(DS.sub(.semibold))
-            Text("选好模板后，切换到要摆放的应用窗口，按 ⌘K，选择目标分区。只移动你选中的窗口，完成后可撤销。")
+            Text("选好模板或自定义比例后，切到要摆放的窗口，按 ⌘K 选目标分区；也可以打开下面的开关，按住 ⇧ 把窗口拖进分区。只移动你选中的窗口，完成后可撤销。")
                 .font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("split.howto")
             SplitDragToggle()

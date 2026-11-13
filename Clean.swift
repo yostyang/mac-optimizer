@@ -239,7 +239,7 @@ final class CleanStore: ObservableObject {
                 for record in completed {
                     ChangeLog.shared.add(kind: .clean, title: "清理到废纸篓：" + (record.path as NSString).lastPathComponent,
                                          detail: record.path + "（" + CleanLogic.fmtSize(record.size) + "）", reversible: record.trashPath != nil,
-                                         restoreNote: record.trashPath != nil ? "在「清理预览」的操作记录里点恢复" : "从废纸篓手动放回原位置")
+                                         restoreNote: record.trashPath != nil ? CleanRecordsCard.restoreHint : "从废纸篓手动放回原位置")
                 }
                 self.note = "已移到废纸篓 \(completed.count) 项" + (errors.isEmpty ? "，可从废纸篓放回" : "；\(errors.count) 项未完成，已保留，可检查后重试")
                 self.trashing = false; self.saveRecords()
@@ -261,40 +261,39 @@ final class CleanStore: ObservableObject {
 struct CleanPage: View {
     @ObservedObject var store = CleanStore.shared
     @State private var newWhite = ""
-    @State private var showConfirm = false
     @State private var tab = 0
-    var selectedSize: Int64 { store.items.filter { $0.selected }.reduce(0) { $0 + $1.size } }
     var body: some View {
-        PageScroll {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("清理预览").font(DS.title())
-                        Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(DS.text.secondary)
-                    }
-                    Spacer()
-                    SegmentedTrack {
-                        Button("清理") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("clean.tab.0")
-                        Button("卸载应用") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("clean.tab.1")
-                    }
-                    if tab == 0 {
-                    Button(store.scanning ? "扫描中…" : "开始扫描") { store.scan() }.buttonStyle(PillButton()).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.scan")
-                    Button("找大文件") { store.scanLargeFiles() }.buttonStyle(PillButton(filled: false)).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.large")
-                    if store.scanning { Button("取消") { store.cancelled = true }.buttonStyle(PillButton(filled: false)) }
-                    }
+        // 2.14：标题与扫描按钮固定在顶部，清单局部滚动，底栏固定显示已选汇总和主按钮；清理记录与恢复在「改动与提醒」
+        PageScaffold(spacing: 14, padding: 28) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("清理预览").font(DS.title())
+                    Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(DS.text.secondary)
                 }
+                Spacer()
+                SegmentedTrack {
+                    Button("清理") { tab = 0 }.buttonStyle(PillButton(filled: tab == 0)).accessibilityIdentifier("clean.tab.0")
+                    Button("卸载应用") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("clean.tab.1")
+                }
+                if tab == 0 {
+                Button(store.scanning ? "扫描中…" : "开始扫描") { store.scan() }.buttonStyle(PillButton()).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.scan")
+                Button("找大文件") { store.scanLargeFiles() }.buttonStyle(PillButton(filled: false)).disabled(store.scanning || store.trashing).accessibilityIdentifier("clean.large")
+                if store.scanning { Button("取消") { store.cancelled = true }.buttonStyle(PillButton(filled: false)) }
+                }
+            }
+        } details: {
+            VStack(alignment: .leading, spacing: 14) {
                 if tab == 1 { UninstallTab() } else {
-                if !store.note.isEmpty { Text(store.note).font(.system(size: 12)).foregroundColor(store.failures.isEmpty ? DS.text.secondary : DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("clean.result") }
                 if !store.saveError.isEmpty {
-                    StateLine(kind: .failed, text: store.saveError, id: "clean.save.error")
-                    Button("重试保存") { store.saveMeta() }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("clean.save.retry")
+                    StateLine(kind: .failed, text: store.saveError, actions: [.retry { store.saveMeta() }], id: "clean.save.error")
                 }
                 Card(title: "清理清单", icon: "trash") {
                     if store.items.isEmpty {
-                        Text(store.scanning ? "正在扫描…" : "点“开始扫描”查看缓存、日志、安装包和开发构建产物。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
-                        Text("“找大文件”仅查看下载目录；卸载应用和残留在「卸载应用」标签。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                        if store.scanning { StateLine(kind: .loading, text: "正在扫描缓存、日志、安装包和开发构建产物", id: "clean.state") }
+                        else {
+                            StateLine(kind: store.note.hasPrefix("已移到") ? .done : .empty, text: store.note.isEmpty ? "还没有扫描" : store.note, detail: "点“开始扫描”查看缓存、日志、安装包和开发构建产物；“找大文件”仅查看下载目录；卸载应用和残留在「卸载应用」标签。", id: "clean.state")
+                        }
                     } else {
-                        Text("已选 \(store.items.filter { $0.selected }.count) 项 · 共 \(CleanLogic.fmtSize(selectedSize))").font(.system(size: 12, weight: .medium))
                         ForEach(store.items.indices, id: \.self) { i in
                             HStack(spacing: 8) {
                                 Toggle("", isOn: $store.items[i].selected).toggleStyle(.switch).controlSize(.small).labelsHidden().disabled(store.trashing)
@@ -308,16 +307,9 @@ struct CleanPage: View {
                                 Text(CleanLogic.fmtSize(store.items[i].size)).font(.system(size: 12, weight: .medium)).monospacedDigit()
                             }
                         }
-                        Button(store.trashing ? "处理中…" : (store.failures.isEmpty ? "移到废纸篓（\(store.items.filter { $0.selected }.count) 项）" : "重试所选未完成项")) { showConfirm = true }.buttonStyle(PillButton()).disabled(store.items.filter { $0.selected }.isEmpty || store.trashing || store.scanning).accessibilityIdentifier("clean.trash")
-                            .alert("移到废纸篓？", isPresented: $showConfirm) {
-                                Button("移到废纸篓", role: .destructive) { store.trashSelected() }
-                                Button("取消", role: .cancel) {}
-                            } message: {
-                                Text("只会移到废纸篓，不会直接删除，之后还能从废纸篓恢复。")
-                            }
                     }
                 }
-                Card(title: "白名单与操作记录", icon: "shield") {
+                Card(title: "白名单", icon: "shield") {
                     HStack(spacing: 8) {
                         TextField("输入要保护的路径，点添加", text: $newWhite).textFieldStyle(.roundedBorder)
                         Button("添加白名单") { if store.addWhitelist(newWhite) { newWhite = "" } }.buttonStyle(PillButton(filled: false)).disabled(store.trashing).accessibilityIdentifier("clean.whitelist.add")
@@ -325,15 +317,15 @@ struct CleanPage: View {
                     Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                     if store.whitelist.isEmpty { StateLine(kind: .empty, text: "暂无自定义白名单", id: "clean.whitelist.state") }
                     ForEach(store.whitelist, id: \.self) { w in Text(w).font(.system(size: 12)).lineLimit(1) }
-                    if !store.records.isEmpty {
-                        Divider()
-                        ForEach(store.records.suffix(10)) { r in CleanRecordRow(record: r, store: store) }
-                        if !store.restoreNote.isEmpty { StateLine(kind: store.restoreNote.hasPrefix("已") ? .done : .failed, text: store.restoreNote, id: "clean.restore.state") }
-                        Text("只有还在废纸篓里的项可以恢复；原位置已有同名文件时不覆盖，会改名放回。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
+                }
+                if !store.records.isEmpty {
+                    Button { Nav.shared.sel = .changes } label: { Label("清理记录与恢复在「改动与提醒」（\(store.records.count) 条）", systemImage: "arrow.right.circle") }
+                        .buttonStyle(.plain).font(DS.sub(.medium)).foregroundColor(accentText).accessibilityIdentifier("clean.records.link")
                 }
                 }
-            }.padding(28)
+            }
+        } footer: {
+            if tab == 0 && (!store.items.isEmpty || store.trashing) { CleanFooter(store: store) }
         }
     }
 }

@@ -36,19 +36,23 @@ enum OperationCheck {
 final class ToolOperation: ObservableObject {
     @Published private(set) var busy = false
     @Published private(set) var note = ""
+    /// 最近一次结果：true 已核对完成，false 未能确认，nil 还没有结果
+    @Published private(set) var verified: Bool?
     var verificationTimeout: TimeInterval = 8
+    /// 统一状态（2.14）：进行中 / 已完成 / 未能确认
+    var stateKind: StateKind { busy ? .loading : (verified == true ? .done : .unknown) }
 
     @discardableResult
     func perform(_ row: Row, stats: CleanStats = .shared,
                  completion: @escaping (Bool, String) -> Void = { _, _ in }) -> Bool {
         guard !busy, row.actionTitle != nil, let action = row.action else { return false }
-        busy = true
+        busy = true; verified = nil
         note = "正在执行：" + row.title
         DispatchQueue.global(qos: .userInitiated).async {
             action()
             DispatchQueue.main.async {
                 guard let verify = row.verify else {
-                    self.busy = false
+                    self.busy = false; self.verified = false
                     self.note = "已发起：" + row.title + "，请在系统设置或刷新后核对结果"
                     completion(false, self.note)
                     return
@@ -56,7 +60,7 @@ final class ToolOperation: ObservableObject {
                 self.note = "正在核对：" + row.title
                 // 登录项回读会执行 osascript；不能把同步系统调用放进主线程轮询。
                 OperationCheck.wait(timeout: self.verificationTimeout, conditionQueue: .global(qos: .utility), until: verify) { done in
-                    self.busy = false
+                    self.busy = false; self.verified = done
                     self.note = OperationCheck.message(title: row.title, verified: done)
                     if done { stats.addOptimized(1) }
                     completion(done, self.note)

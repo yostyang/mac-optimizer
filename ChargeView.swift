@@ -231,22 +231,14 @@ struct ChargeCard: View {
         if k.led { a.append("MagSafe 灯") }
         return a.joined(separator: " · ")
     }
-    var stateText: String {
-        let s = c.st
-        if !s.settings.enabled { return "未启用：按系统默认充电" }
-        if s.dockProtected == true && s.caps.adapterMode { return "已暂停：保护扩展坞供电" }
-        if s.displayPaused == true && s.caps.adapterMode { return s.externalDisplay == true ? "已暂停：接了外接显示器" : "外接显示器已拔掉，稍后恢复上限" }
-        if s.topUp { return "临时充到 100%（拔掉电源或充满后恢复上限）" }
-        if s.adapterCut { return "已到上限，正在用电池供电（降到 \(s.settings.limit - max(s.settings.sail, 1))% 再接通电源）" }
-        if s.inhibited { return "已保持在上限，暂停充电" }
-        return s.plugged ? "充电中，到 \(s.settings.limit)% 停止" : "电池供电"
-    }
+    /// 与电池页顶部共用 ChargeSummary 的判断（2.14）
+    var summary: ChargeSummary { ChargeSummary.make(phase: c.phase, st: c.st, reading: ChargeSummary.reading(Monitor.shared.s)) }
     @ViewBuilder var controls: some View {
-        let s = c.st
+        let s = c.st, sum = summary
         HStack {
             Toggle("启用充电上限", isOn: Binding(get: { s.settings.enabled }, set: { c.setLimit(s.settings.limit, enabled: $0) })).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("charge.enabled")
             Spacer()
-            Text(stateText).font(.system(size: 12)).foregroundColor(s.adapterCut || s.inhibited ? DS.text.good : DS.text.secondary).lineLimit(2).multilineTextAlignment(.trailing)
+            Text(sum.cardLine(enabled: s.settings.enabled)).font(.system(size: 12)).foregroundColor(sum.holding ? DS.text.good : (sum.pause != nil ? DS.text.warn : DS.text.secondary)).lineLimit(2).multilineTextAlignment(.trailing)
         }.font(.system(size: 12))
         Group {
             HStack(spacing: 6) {

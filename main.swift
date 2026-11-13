@@ -435,6 +435,7 @@ struct ToolPage: View {
     @StateObject private var operation = ToolOperation()
     @State private var rows: [Row] = []
     @State private var loading = true
+    @State private var loadedAt: Date?
     @State private var sel = 0
     var current: Row? { rows.indices.contains(sel) ? rows[sel] : nil }
     var body: some View {
@@ -445,7 +446,8 @@ struct ToolPage: View {
                     .disabled(operation.busy)
             }
             if loading {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                StateLine(kind: .loading, text: "正在读取「\(feature.title)」", id: "tool.state").padding(.top, 8)
+                Spacer()
             } else if rows.isEmpty {
                 EmptyState(symbol: "checkmark.seal.fill", title: "一切正常", sub: "没有需要处理的项目")
             } else {
@@ -500,10 +502,10 @@ struct ToolPage: View {
                 }
                 Spacer(minLength: 0)
                 if !operation.note.isEmpty {
-                    Text(operation.note).font(DS.sub()).foregroundColor(DS.text.secondary)
-                        .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("tool.operation.status")
+                    StateLine(kind: operation.stateKind, text: operation.note,
+                              actions: operation.stateKind == .unknown ? [.refresh { loading = true; reload() }] : [], id: "tool.operation.status")
                 }
-                Text("列表共 \(rows.count) 项 · ↑↓ 选择").font(DS.cap()).foregroundColor(DS.text.secondary)
+                Text("列表共 \(rows.count) 项 · ↑↓ 选择" + (loadedAt.map { " · 更新于 " + Fmt.ago($0) } ?? "")).font(DS.cap()).foregroundColor(DS.text.secondary)
             } else {
                 EmptyState(symbol: feature.icon, title: "选择一项")
             }
@@ -523,7 +525,7 @@ struct ToolPage: View {
         let id = feature.id
         DispatchQueue.global().async {
             let r = Loaders.rows(id)
-            DispatchQueue.main.async { rows = r; loading = false; sel = min(sel, max(0, r.count - 1)) }
+            DispatchQueue.main.async { rows = r; loading = false; loadedAt = Date(); sel = min(sel, max(0, r.count - 1)) }
         }
     }
 }

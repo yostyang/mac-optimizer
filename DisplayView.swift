@@ -62,7 +62,7 @@ struct DisplayPage: View {
                         Button("色彩模式") { tab = 1 }.buttonStyle(PillButton(filled: tab == 1)).accessibilityIdentifier("disp.tab.1")
                     }
                     if dm.displays.count > 1 {
-                        Picker("", selection: $sel) { ForEach(dm.displays) { Text($0.name).tag($0.id) } }.labelsHidden().frame(width: 200)
+                        Picker("", selection: $sel) { ForEach(dm.displays) { Text($0.titleWithKind).tag($0.id) } }.labelsHidden().frame(width: 200)
                     }
                     Button { dm.refresh(); dm.probeDDC() } label: { Label(dm.probing ? "读取中…" : "刷新", systemImage: "arrow.clockwise") }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("disp.refresh")
                 }
@@ -94,7 +94,7 @@ struct DisplayPage: View {
             if let d = cur {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(d.name).font(.system(size: 13, weight: .semibold))
+                        HStack(spacing: 6) { Text(d.name).font(.system(size: 13, weight: .semibold)); DisplayKindTag(builtin: d.builtin) }
                         Text("\(d.current.label) · \(d.current.refreshLabel)" + (d.current.hidpi ? " · HiDPI" : "") + "  （实际像素 \(d.current.pixelWidth)×\(d.current.pixelHeight)）").font(.system(size: 12)).foregroundColor(DS.text.secondary).monospacedDigit()
                     }
                     Spacer()
@@ -173,7 +173,7 @@ struct DisplayPage: View {
     var colorCard: some View {
         Card(title: "色彩模式", icon: "paintpalette") {
             if let display = cur {
-                Text("仅控制 " + display.name + "，其他显示器不受影响").font(DS.sub()).foregroundColor(DS.text.secondary)
+                Text("仅控制 " + display.titleWithKind + "，其他显示器不受影响").font(DS.sub()).foregroundColor(DS.text.secondary)
                 // ① 系统 ICC
                 group("1", "系统色彩描述文件（ICC）", "只改这台 Mac 输出时的颜色换算，显示器本身的设置不变。")
                 let profile = dm.profileStates[display.id]

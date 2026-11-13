@@ -63,7 +63,8 @@ struct NetworkPage: View {
     var pingCard: some View {
         Card(title: "延迟与丢包", icon: "waveform.path") {
             if nd.targets.isEmpty {
-                Text(nd.running ? "正在测试…" : "每个目标发 5 个包，约 2 秒。").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                if nd.running { StateLine(kind: .loading, text: "正在测试延迟与丢包", id: "net.ping.state") }
+                else { StateLine(kind: .empty, text: "还没有诊断", detail: "每个目标发 5 个包，约 2 秒。", actions: [.refresh { nd.run() }], id: "net.ping.state") }
             }
             ForEach(nd.targets) { t in
                 HStack(spacing: 8) {
@@ -126,10 +127,14 @@ struct NetworkPage: View {
                     if dns.status?.backup != nil { Button("恢复原 DNS") { dns.restore() }.buttonStyle(PillButton(filled: false)).disabled(dns.busy).accessibilityIdentifier("dns.restore") }
                     if dns.busy { ProgressView().controlSize(.small) }
                 } else {
-                    Text("需要先在「电池 › 充电控制」安装助手（一次授权，充电和 DNS 共用）。").font(.system(size: 12)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true)
+                    StateLine(kind: .unknown, text: "需要先安装后台助手", detail: "在「电池 › 充电控制」安装一次，充电和 DNS 共用同一次授权。",
+                              actions: [StateAction(title: "去电池页", symbol: "arrow.right") { showDetails = false; Nav.shared.sel = .battery }], id: "dns.helper.state")
                 }
             }
-            if !dns.note.isEmpty { Text(dns.note).font(.system(size: 12)).foregroundColor(dns.note.hasPrefix("已") ? DS.text.good : DS.text.bad) }
+            if !dns.note.isEmpty {
+                StateLine(kind: dns.busy ? .loading : (dns.note.hasPrefix("已") ? .done : .failed), text: dns.note,
+                          actions: !dns.busy && !dns.note.hasPrefix("已") ? [.refresh { dns.refresh() }] : [], id: "dns.note")
+            }
         }
     }
     var runningVPNs: [String] { NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }.filter { $0.contains("VPN") || $0.contains("鹊桥") } }

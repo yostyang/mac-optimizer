@@ -218,11 +218,13 @@ struct ChangesPage: View {
     @ObservedObject var v19 = V19Store.shared
     @ObservedObject var dns = DNSClient.shared
     @ObservedObject var charge = ChargeClient.shared
+    @ObservedObject var clean = CleanStore.shared
     @State private var restoreNote = ""
     @State private var restoreSucceeded = false
     var body: some View {
-        PageScroll {
-            VStack(alignment: .leading, spacing: 14) {
+        // 2.14：标题固定，下方局部滚动；清理记录与恢复从清理页挪到这里
+        PageScaffold(spacing: 14, padding: 28) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("改动与提醒").font(DS.title())
@@ -235,6 +237,10 @@ struct ChangesPage: View {
                 } else {
                     Button("去电池页安装充电助手") { Nav.shared.sel = .battery }.buttonStyle(PillButton(filled: false))
                 }
+            }
+        } details: {
+            VStack(alignment: .leading, spacing: 14) {
+                CleanRecordsCard(store: clean)
                 Card(title: "主动提醒（只在异常时）", icon: "bell") {
                     Toggle("开启异常提醒（默认关闭）", isOn: Binding(get: { v19.settings.alertsOn }, set: { v19.setAlertsEnabled($0) })).accessibilityIdentifier("v19.alertsOn")
                     Text("阈值：CPU 连续 5 次采样都高于 90% 才提醒一次，之后 1 小时内不重复弹；磁盘可用低于 10% 或低于 20 GB 提醒；电池健康从 80% 以上掉到 80% 以下提醒。阈值附近抖动不会反复弹。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
@@ -266,7 +272,7 @@ struct ChangesPage: View {
                                             log.restore(r, dns: dns) { success, note in restoreSucceeded = success; restoreNote = note }
                                         }.buttonStyle(PillButton(filled: false)).disabled(dns.busy).accessibilityIdentifier("changes.restore")
                                     } else {
-                                        Text(r.restoreNote).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                                        Text(ChangesPage.restoreText(r)).font(.system(size: 12)).foregroundColor(DS.text.secondary)
                                     }
                                     if r.kind == .clean {
                                         Button("打开废纸篓") { NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory() + "/.Trash")) }.buttonStyle(PillButton(filled: false))
@@ -276,10 +282,16 @@ struct ChangesPage: View {
                             Divider()
                         }
                     }
-                    if !restoreNote.isEmpty { Text(restoreNote).font(.system(size: 12)).foregroundColor(restoreSucceeded ? DS.text.good : DS.text.warn) }
-                    Text("恢复不了的项不会假装恢复：清理类请从废纸篓手动放回，退出应用类请重新打开该应用").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    if !restoreNote.isEmpty {
+                        StateLine(kind: dns.busy ? .loading : (restoreSucceeded ? .done : .failed), text: restoreNote, id: "changes.restore.state")
+                    }
+                    Text("恢复不了的项不会假装恢复：清理类在上方「清理记录」恢复或从废纸篓手动放回，退出应用类请重新打开该应用").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-            }.padding(28)
+            }
         }.onAppear { v19.refreshPermission() }
+    }
+    /// 2.13 及以前的清理记录写的是「在清理预览的操作记录里点恢复」，入口已挪到本页
+    static func restoreText(_ r: ChangeRecord) -> String {
+        r.kind == .clean && r.restoreNote.contains("「清理预览」的操作记录") ? CleanRecordsCard.restoreHint : r.restoreNote
     }
 }

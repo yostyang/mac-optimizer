@@ -125,15 +125,17 @@ enum TrafficDedup {
 
 /// 进程归属：Helper 进程算到所在 App 名下
 enum ProcName {
-    private static var cache: [Int32: String] = [:]
+    /// 带启动时间：进程号被复用时重新解析
+    private static var cache: [Int32: (start: Date?, name: String)] = [:]
     static func appName(pid: Int32, fallback: String) -> String {
-        if let c = cache[pid] { return c }
+        let start = startTime(pid)
+        if let c = cache[pid], c.start == start { return c.name }
         let p = PidPath.path(pid)
         var n = fallback.trimmingCharacters(in: CharacterSet(charactersIn: " ."))
         if !p.isEmpty { let o = ProcDescribe.owner(path: p); if o.bundlePath != nil { n = o.name } }
         if let a = NSRunningApplication(processIdentifier: pid), a.activationPolicy == .regular, let ln = a.localizedName { n = ProcDescribe.short(ln) }
         if cache.count > 500 { cache = [:] }
-        cache[pid] = n; return n
+        cache[pid] = (start, n); return n
     }
     static func startTime(_ pid: Int32) -> Date? {
         var info = proc_bsdinfo()
