@@ -88,6 +88,8 @@ enum MOTests {
     // MARK: 指标与逻辑自检
     static func selftest() -> Bool {
         active = true
+        do { try SafetyCoreTests.run { check($0, $1) } }
+        catch { check(false, "安全回归执行失败", error.localizedDescription) }
         sec("指标读取")
         var s = Snapshot(); Readers.staticInfo(into: &s)
         check(!s.chip.isEmpty, "芯片型号", s.chip); check(s.ramGB > 0, "内存容量", "\(s.ramGB) GB"); check(s.pCores > 0, "核心数", "\(s.pCores)P+\(s.eCores)E")

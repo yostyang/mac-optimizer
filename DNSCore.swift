@@ -140,14 +140,22 @@ final class RealRunner: CommandRunner {
 }
 
 final class DNSFixer {
+    enum ReadError: LocalizedError {
+        case failed(String)
+        var errorDescription: String? { if case .failed(let message) = self { return message }; return nil }
+    }
     static let ns = "/usr/sbin/networksetup"
     let runner: CommandRunner
     let backupURL: URL?
     init(runner: CommandRunner, backupURL: URL?) { self.runner = runner; self.backupURL = backupURL }
 
     /// 已启用的网络服务（名称 + 设备），按服务顺序
-    func services() -> [(name: String, device: String)] {
-        let out = runner.run(Self.ns, ["-listnetworkserviceorder"]).out
+    func services() throws -> [(name: String, device: String)] {
+        let result = runner.run(Self.ns, ["-listnetworkserviceorder"])
+        guard result.code == 0, !result.out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ReadError.failed("无法读取网络服务，未修改 DNS")
+        }
+        let out = result.out
         var res: [(String, String)] = []; var pending: String?
         for raw in out.components(separatedBy: "\n") {
             let l = raw.trimmingCharacters(in: .whitespaces)
@@ -163,12 +171,20 @@ final class DNSFixer {
         return res
     }
     /// 正在使用的服务：设备有 IPv4 地址
-    func activeServices() -> [(name: String, device: String)] {
-        services().filter { !$0.device.isEmpty && runner.run("/usr/sbin/ipconfig", ["getifaddr", $0.device]).out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+    func activeServices() throws -> [(name: String, device: String)] {
+        try services().filter {
+            guard !$0.device.isEmpty else { return false }
+            let address = runner.run("/usr/sbin/ipconfig", ["getifaddr", $0.device])
+            return address.code == 0 && Self.isIP(address.out.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
     }
-    func servers(_ svc: String) -> [String] {
-        let out = runner.run(Self.ns, ["-getdnsservers", svc]).out
-        let ips = out.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter(DNSFixer.isIP)
+    func servers(_ svc: String) throws -> [String] {
+        let result = runner.run(Self.ns, ["-getdnsservers", svc])
+        guard result.code == 0 else { throw ReadError.failed("无法读取 \(svc) 的原 DNS，未修改设置") }
+        let out = result.out.trimmingCharacters(in: .whitespacesAndNewlines)
+        if out == "There aren't any DNS Servers set on \(svc)." { return [] }
+        let ips = out.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard !ips.isEmpty, ips.allSatisfy(Self.isIP) else { throw ReadError.failed("\(svc) 的 DNS 返回格式异常，未修改设置") }
         return ips
     }
     static func isIP(_ s: String) -> Bool {
@@ -176,11 +192,26 @@ final class DNSFixer {
         return inet_pton(AF_INET, s, &a) == 1 || inet_pton(AF_INET6, s, &b) == 1
     }
     func loadBackup() -> [DNSServiceState]? {
-        guard let u = backupURL, let d = try? Data(contentsOf: u) else { return nil }
-        return try? JSONDecoder().decode([DNSServiceState].self, from: d)
+        try? readBackup()
+    }
+    private func readBackup() throws -> [DNSServiceState]? {
+        guard let u = backupURL else { return nil }
+        do {
+            let d = try Data(contentsOf: u)
+            return try JSONDecoder().decode([DNSServiceState].self, from: d)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+        catch { throw ReadError.failed("无法读取 DNS 备份，原文件已保留：\(error.localizedDescription)") }
+    }
+    private func saveBackup(_ backup: [DNSServiceState]) throws {
+        guard let u = backupURL else { throw ReadError.failed("无法保存原 DNS，已取消修改") }
+        try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(backup).write(to: u, options: .atomic)
     }
     func status() -> DNSStatus {
-        DNSStatus(services: activeServices().map { DNSServiceState(service: $0.name, device: $0.device, servers: servers($0.name)) }, backup: loadBackup())
+        do {
+            let current = try activeServices().map { DNSServiceState(service: $0.name, device: $0.device, servers: try servers($0.name)) }
+            return DNSStatus(services: current, backup: try readBackup())
+        } catch { return DNSStatus(backup: loadBackup(), lastError: error.localizedDescription) }
     }
     private func set(_ svc: String, _ servers: [String]) -> Bool {
         runner.run(Self.ns, ["-setdnsservers", svc] + (servers.isEmpty ? ["Empty"] : servers)).code == 0
@@ -191,28 +222,33 @@ final class DNSFixer {
     }
     /// 设为阿里 DNS：第一次改之前保存原值（已经有备份就不覆盖，保证恢复的是最初的设置）
     func setAli() -> (Bool, String) {
-        let act = activeServices()
-        guard !act.isEmpty else { return (false, "没有正在使用的网络") }
-        var backup = loadBackup() ?? []
-        for s in act where !backup.contains(where: { $0.service == s.name }) {
-            backup.append(DNSServiceState(service: s.name, device: s.device, servers: servers(s.name)))
-        }
-        if let u = backupURL {
-            try? FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
-            guard (try? JSONEncoder().encode(backup).write(to: u, options: .atomic)) != nil else { return (false, "无法保存原 DNS，已取消修改") }
-        }
-        var failed: [String] = []
-        for s in act where !set(s.name, DNSConst.ali) { failed.append(s.name) }
-        flush()
-        return failed.isEmpty ? (true, "") : (false, "以下网络设置失败：" + failed.joined(separator: "、"))
+        do {
+            let act = try activeServices()
+            guard !act.isEmpty else { return (false, "没有正在使用的网络") }
+            var backup = try readBackup() ?? []
+            for s in act where !backup.contains(where: { $0.service == s.name }) {
+                backup.append(DNSServiceState(service: s.name, device: s.device, servers: try servers(s.name)))
+            }
+            try saveBackup(backup)
+            var failed: [String] = []
+            for s in act where !set(s.name, DNSConst.ali) { failed.append(s.name) }
+            flush()
+            return failed.isEmpty ? (true, "") : (false, "以下网络设置失败：" + failed.joined(separator: "、"))
+        } catch { return (false, error.localizedDescription) }
     }
     func restore() -> (Bool, String) {
-        guard let b = loadBackup() else { return (false, "没有保存的原 DNS") }
-        let known = Set(services().map(\.name))
-        var failed: [String] = []
-        for s in b where known.contains(s.service) && !set(s.service, s.servers) { failed.append(s.service) }
-        flush()
-        if failed.isEmpty, let u = backupURL { try? FileManager.default.removeItem(at: u) }
-        return failed.isEmpty ? (true, "") : (false, "以下网络恢复失败：" + failed.joined(separator: "、"))
+        do {
+            guard let b = try readBackup(), !b.isEmpty else { return (false, "没有保存的原 DNS") }
+            let known = Set(try services().map(\.name))
+            var remaining: [DNSServiceState] = []
+            for s in b {
+                guard known.contains(s.service), set(s.service, s.servers),
+                      let actual = try? servers(s.service), actual == s.servers else { remaining.append(s); continue }
+            }
+            flush()
+            if remaining.isEmpty, let u = backupURL { try FileManager.default.removeItem(at: u) }
+            else { try saveBackup(remaining) }
+            return remaining.isEmpty ? (true, "") : (false, "以下网络尚未恢复，备份已保留：" + remaining.map(\.service).joined(separator: "、"))
+        } catch { return (false, error.localizedDescription) }
     }
 }

@@ -1,4 +1,4 @@
-# 最小 CI：编译 + 两个源码检查。界面/截图测试依赖真机硬件与已授权助手，仍在本机跑 test.sh。
+# 最小 CI：隔离逻辑回归、编译和两个源码检查。界面/截图测试依赖真机硬件与已授权助手，仍在本机跑 test.sh。
 name: ci
 on: [push, pull_request]
 jobs:
@@ -12,6 +12,8 @@ jobs:
           ls /Applications | grep -i xcode
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)/Contents/Developer"
           swiftc --version
+      - name: 清理、卸载、DNS 与发布回滚的隔离回归
+        run: ./safety-tests.sh
       - name: 编译通用二进制（无证书时自动临时签名，不打包 DMG）
         run: NODMG=1 ./build.sh
       - name: 字号检查

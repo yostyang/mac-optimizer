@@ -88,6 +88,9 @@ struct NetworkPage: View {
     var dnsCard: some View {
         Card(title: "DNS 检测", icon: "server.rack") {
             let svcs = dns.status?.services ?? nd.services
+            if let error = dns.status?.lastError, !error.isEmpty {
+                StateLine(kind: .failed, text: error, actions: [.refresh { dns.refresh() }], id: "dns.read.error")
+            }
             if !svcs.isEmpty {
                 ForEach(svcs, id: \.service) { s in
                     HStack { Text(s.service).font(.system(size: 12)); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1) }

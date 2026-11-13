@@ -11,6 +11,7 @@
 ```bash
 ./build.sh          # 通用二进制 + 签名；NODMG=1 只出 .app
 ./test.sh           # 自检 → 界面测试 → 离屏截图（含黄金图比对）
+./safety-tests.sh    # 清理/卸载/DNS 纯逻辑与发布回滚，隔离运行且不改真实系统状态
 ./test.sh --approve # 界面改版后重拍黄金图，随后必须再跑一次 ./test.sh 验证
 ./measure.sh        # 菜单栏常驻 / 面板打开时的 CPU 与内存（需真机，见 §7）
 ```

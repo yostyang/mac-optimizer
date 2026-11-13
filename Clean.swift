@@ -7,97 +7,6 @@ import SwiftUI
 import AppKit
 import Foundation
 
-struct CleanItem: Identifiable, Equatable {
-    var id: String { path }
-    var category: String
-    var path: String
-    var size: Int64
-    var selected = false
-    var isApp = false
-    var bundleID = ""
-}
-struct CleanRecord: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var date: Date
-    var path: String
-    var size: Int64
-    var trashed: Bool
-    var trashPath: String? = nil
-    var restored: Bool? = nil
-}
-enum CleanLogic {
-    static let maxFilesPerRoot = 5000
-    static let maxDepth = 4
-    static func home() -> String { NSHomeDirectory() }
-    // 默认保护：系统、应用本身、用户文档类目录一律不出现在清理清单里
-    static func isProtected(_ path: String) -> Bool {
-        let h = home()
-        let p = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
-        let roots = ["/System", "/Library", "/Applications/Mac一键优化.app"] + ["Documents", "Desktop", "Pictures", "Music", "Movies"].map { h + "/" + $0 }
-        return p == "/" || p == h || roots.contains { p == $0 || p.hasPrefix($0 + "/") }
-    }
-    static func isWhitelisted(_ path: String, whitelist: [String]) -> Bool {
-        whitelist.contains { path == $0 || path.hasPrefix($0 + "/") }
-    }
-    static func fmtSize(_ bytes: Int64) -> String {
-        if bytes >= 1_073_741_824 { return String(format: "%.2f GB", Double(bytes) / 1_073_741_824) }
-        if bytes >= 1_048_576 { return String(format: "%.1f MB", Double(bytes) / 1_048_576) }
-        if bytes >= 1024 { return String(format: "%.0f KB", Double(bytes) / 1024) }
-        return "\(bytes) B"
-    }
-    // 卸载残留路径清单（按应用名和 Bundle ID 推导，不扫描全盘）
-    static func leftoversFor(appName: String, bundleID: String) -> [String] {
-        let h = home()
-        let base = appName.replacingOccurrences(of: ".app", with: "")
-        var out: [String] = []
-        if !bundleID.isEmpty {
-            out += [h + "/Library/Application Support/\(bundleID)", h + "/Library/Caches/\(bundleID)", h + "/Library/Preferences/\(bundleID).plist", h + "/Library/Saved Application State/\(bundleID).savedState"]
-        }
-        out += [h + "/Library/Application Support/\(base)", h + "/Library/Caches/\(base)", h + "/Library/Preferences/\(base).plist"]
-        return Array(Set(out)).sorted()
-    }
-    // 扫描单个根目录：只算该目录下文件大小，限深度、限文件数、可取消（isCancelled 闭包）
-    static func scanRoot(_ root: String, category: String, isCancelled: () -> Bool) -> [CleanItem] {
-        var items: [CleanItem] = []
-        var count = 0
-        let fm = FileManager.default
-        guard let en = fm.enumerator(atPath: root) else { return [] }
-        for case let rel as String in en {
-            if isCancelled() || count >= maxFilesPerRoot { break }
-            let depth = rel.components(separatedBy: "/").count
-            if depth > maxDepth { en.skipDescendants(); continue }
-            let full = (root as NSString).appendingPathComponent(rel)
-            var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: full, isDirectory: &isDir), !isDir.boolValue else { continue }
-            let size = (try? fm.attributesOfItem(atPath: full)[.size] as? Int64) ?? 0
-            count += 1
-            items.append(CleanItem(category: category, path: full, size: size))
-        }
-        return items
-    }
-    static func scanDirSize(_ path: String) -> Int64 {
-        var total: Int64 = 0
-        var count = 0
-        let fm = FileManager.default
-        guard let en = fm.enumerator(atPath: path) else { return 0 }
-        for case let rel as String in en {
-            if count >= maxFilesPerRoot { break }
-            let full = (path as NSString).appendingPathComponent(rel)
-            var isDir: ObjCBool = false
-            if fm.fileExists(atPath: full, isDirectory: &isDir), !isDir.boolValue {
-                total += (try? fm.attributesOfItem(atPath: full)[.size] as? Int64) ?? 0
-                count += 1
-            }
-        }
-        return total
-    }
-    // 空间分析：只扫指定根、限深度、限数量，按大小倒序
-    static func largeFiles(root: String, minSize: Int64, maxCount: Int, isCancelled: () -> Bool) -> [CleanItem] {
-        let all = scanRoot(root, category: "大文件", isCancelled: isCancelled)
-        return all.filter { $0.size >= minSize }.sorted { $0.size > $1.size }.prefix(maxCount).map { $0 }
-    }
-}
-
 final class CleanStore: ObservableObject {
     static let shared = CleanStore()
     @Published var items: [CleanItem] = []
@@ -156,6 +65,7 @@ final class CleanStore: ObservableObject {
         guard !scanning, !trashing else { return }
         failures = [:]
         scanning = true; cancelled = false; note = ""
+        let whitelist = self.whitelist
         DispatchQueue.global(qos: .userInitiated).async {
             let h = NSHomeDirectory()
             let roots: [(String, String)] = [
@@ -173,27 +83,30 @@ final class CleanStore: ObservableObject {
                 for sub in subs.prefix(200) {
                     if self.cancelled { break }
                     let full = (root as NSString).appendingPathComponent(sub)
-                    if CleanLogic.isProtected(full) || CleanLogic.isWhitelisted(full, whitelist: self.whitelist) { continue }
-                    let size = CleanLogic.scanDirSize(full)
+                    if CleanLogic.isProtected(full) || CleanLogic.isWhitelisted(full, whitelist: whitelist) { continue }
+                    let size = CleanLogic.scanDirSize(full, isCancelled: { self.cancelled })
                     if size > 0 { found.append(CleanItem(category: cat, path: full, size: size)) }
                 }
             }
             // 安装包与开发构建产物：只看下载目录和已知 DerivedData，不扫全盘
             let dl = h + "/Downloads"
-            if let subs = try? FileManager.default.contentsOfDirectory(atPath: dl) {
+            if !self.cancelled, let subs = try? FileManager.default.contentsOfDirectory(atPath: dl) {
                 for sub in subs where sub.hasSuffix(".dmg") || sub.hasSuffix(".pkg") {
+                    if self.cancelled { break }
                     let full = (dl as NSString).appendingPathComponent(sub)
                     let size = (try? FileManager.default.attributesOfItem(atPath: full)[.size] as? Int64) ?? 0
-                    if size > 0 && !CleanLogic.isWhitelisted(full, whitelist: self.whitelist) {
+                    if size > 0 && !CleanLogic.isWhitelisted(full, whitelist: whitelist) {
                         found.append(CleanItem(category: "安装包", path: full, size: size))
                     }
                 }
             }
             let dd = h + "/Library/Developer/Xcode/DerivedData"
-            if let subs = try? FileManager.default.contentsOfDirectory(atPath: dd) {
+            if !self.cancelled, let subs = try? FileManager.default.contentsOfDirectory(atPath: dd) {
                 for sub in subs {
+                    if self.cancelled { break }
                     let full = (dd as NSString).appendingPathComponent(sub)
-                    let size = CleanLogic.scanDirSize(full)
+                    if CleanLogic.isProtected(full) || CleanLogic.isWhitelisted(full, whitelist: whitelist) { continue }
+                    let size = CleanLogic.scanDirSize(full, isCancelled: { self.cancelled })
                     if size > 0 { found.append(CleanItem(category: "开发构建产物", path: full, size: size)) }
                 }
             }

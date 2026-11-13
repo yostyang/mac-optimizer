@@ -272,7 +272,7 @@ final class DNSClient: ObservableObject {
                         proxy.dnsStatus { data in
                             DispatchQueue.main.async {
                                 guard self.actionID == id else { return }
-                                guard let current = try? JSONDecoder().decode(DNSStatus.self, from: data) else {
+                                guard let current = try? JSONDecoder().decode(DNSStatus.self, from: data), current.lastError.isEmpty else {
                                     finish(false, "操作已发起，但无法读取 DNS 结果，请刷新后核对"); return
                                 }
                                 self.status = current
@@ -311,5 +311,5 @@ final class DNSClient: ObservableObject {
     }
     func setAli(completion: ((Bool, String) -> Void)? = nil) { act(restoring: false, completion: completion) }
     func restore(completion: ((Bool, String) -> Void)? = nil) { act(restoring: true, completion: completion) }
-    var isAli: Bool { guard let s = status, !s.services.isEmpty else { return false }; return s.services.allSatisfy { $0.servers == DNSConst.ali } }
+    var isAli: Bool { guard let s = status, s.lastError.isEmpty, !s.services.isEmpty else { return false }; return s.services.allSatisfy { $0.servers == DNSConst.ali } }
 }
