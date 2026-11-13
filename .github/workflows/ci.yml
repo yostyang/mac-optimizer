@@ -1,0 +1,15 @@
+# 最小 CI：编译 + 两个源码检查。界面/截图测试依赖真机硬件与已授权助手，仍在本机跑 test.sh。
+name: ci
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 编译通用二进制（无证书时自动临时签名，不打包 DMG）
+        run: NODMG=1 ./build.sh
+      - name: 字号检查
+        run: ./fontlint.sh
+      - name: 页面状态检查
+        run: ./statelint.sh
