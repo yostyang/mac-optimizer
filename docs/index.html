@@ -691,14 +691,14 @@ footer{position:relative;z-index:2;border-top:1px solid var(--line-2);padding:34
       </div>
       <div class="film">
         <video id="promo-video" controls muted playsinline preload="none" width="1920" height="1080" poster="media/mac-optimizer-promo-poster.jpg" aria-label="Mac 一键优化宣传片（45 秒，中文）" data-i-aria="film_label" aria-describedby="promo-caption">
-          <source src="media/mac-optimizer-promo-45s.mp4" type="video/mp4">
-          <a href="media/mac-optimizer-promo-45s.mp4" data-i="film_fallback">单独打开视频</a>
+          <source src="https://github.com/yostyang/mac-optimizer/releases/download/v2.13.1/mac-optimizer-promo-45s.mp4" type="video/mp4">
+          <a href="https://github.com/yostyang/mac-optimizer/releases/download/v2.13.1/mac-optimizer-promo-45s.mp4" data-i="film_fallback">单独打开视频</a>
         </video>
         <button type="button" class="film-start" id="promo-start" aria-label="播放 45 秒宣传片" data-i-aria="film_play" hidden><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m8 4 12 8-12 8z"/></svg></button>
       </div>
       <div class="film-foot">
         <p id="promo-caption" data-i="film_caption">从实时监控到充电保护、桌面分区和清理恢复，一次看完。点击播放，默认静音，可随时开启声音。</p>
-        <a href="media/mac-optimizer-promo-45s.mp4" data-i="film_fallback">单独打开视频</a>
+        <a href="https://github.com/yostyang/mac-optimizer/releases/download/v2.13.1/mac-optimizer-promo-45s.mp4" data-i="film_fallback">单独打开视频</a>
       </div>
       <p id="promo-error" class="film-error" role="status" hidden data-i="film_error">视频暂时无法播放，请稍后重试，或点击“单独打开视频”。</p>
     </div>
@@ -1092,7 +1092,7 @@ function syncFilmLanguage(language){
   if(!film || language === filmLanguage) return;
   filmLanguage = language;
   var suffix = language === "en" ? "-en" : "";
-  var videoPath = "media/mac-optimizer-promo-45s" + suffix + ".mp4";
+  var videoPath = "https://github.com/yostyang/mac-optimizer/releases/download/v2.13.1/mac-optimizer-promo-45s" + suffix + ".mp4";
   film.pause();
   film.muted = true;
   film.defaultMuted = true;
