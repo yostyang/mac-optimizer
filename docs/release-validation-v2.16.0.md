@@ -2,7 +2,7 @@
 
 日期：2026-11-14（Asia/Shanghai）。版本 **2.16.0（42）**，基线 **2.15.1（41，`e98c967a73905d52bd1704e237593994382a9644`）**。
 
-- 分支：`feature/2.16.0`，改动尚未提交、未打包、未发布。
+- 已合并到 `main`（提交 `6e0924e5ba84dff5a7486776ba9827284c3775a9`），发布 [v2.16.0](https://github.com/yostyang/mac-optimizer/releases/tag/v2.16.0)，并标记为最新版本。
 - 验证机器：Apple 芯片 MacBook Pro，macOS **27.2.1（26B131）**。
 - 本文件只记录本机可以复现的结果；没有远程 CI，也没有在 macOS 13 / 14 或 Intel 真机上运行。
 
@@ -32,12 +32,24 @@ SWIFTFLAGS=-disable-sandbox ./test.sh
 - 另 1 项是测试断言过时：2.16 按 N5 要求在外设读不到电量时于「电量未取得」后补原因，旧断言用全等比较。改为前缀匹配，仍严格要求不说 0%。
 - 修复后界面交互从 202 通过 / 3 失败变为 205 通过 / 0 失败，其余三项结果不变。
 
+## 发布后的 CI 修复
+
+- 推送后，仓库的最小 CI（macos-15，Swift 6.2.4 / Xcode 26.3）在 `NODMG=1 ./build.sh` 这一步失败：`V28Panel.swift:69:25: error: the compiler is unable to type-check this expression in reasonable time`。出问题的是 `DeviceRing.body`——N5 加的读数时效让虚线环、低电量角标和 `.help(...)` 挤在同一个不可拆的视图表达式里，本机编译器过得去，但求解耗时贴着上限，换编译器就超时。
+- 修法只拆分、不改行为：`dial`（圆环 / 虚线环）、`lowMark`（低电量角标）、`hint`（悬停提示）各自成为独立成员，`shown` 改成计算属性；提示文案逐字不变（过期时仍只说「读数已过期」，只有未取得时才带原因），图元、辅助功能标识符与朗读内容都不变。
+- 拆分后重跑 `SWIFTFLAGS=-disable-sandbox ./test.sh`，自检、界面、截图、对比度、字号与状态检查全绿，截图与基准图无差异。
+
 ## 过程中遇到的环境限制
 
 - 通过自动化代理（Codex）在项目里执行 `swiftc` 类型检查可行（`build-tc.sh`，只有 `V17Tests.swift:15` 一条既有的变量未修改警告），但代理进程无法向 WindowServer 注册，直接运行 App 会在 `_RegisterApplication` 处 `SIGABRT`，`open -W` 也等不到窗口。因此自检、界面、截图三段只能在本机 Terminal 会话里跑。
 - 锁屏时「测试窗口就绪（活动应用、活动窗口、未遮挡、辅助功能树非空）」必然失败，`build-test/env.log` 会记录 `"CGSSessionScreenIsLocked"=Yes`、前台为 `loginwindow`。这是前置条件，不是产品缺陷；本文的最终结果取自解锁并加 `caffeinate` 的一次运行。
 
+## 发布产物
+
+- 主程序与充电助手均为 `arm64 + x86_64`，目标 macOS 13，`codesign --verify --strict` 通过；签名沿用本机固定证书 `FileButler Local Signing`，助手 cdhash 未变（`7fa85c04f483b64d`），升级不需要重新允许后台项目。
+- 文件：`Mac-Optimizer-2.16.0.dmg`，**6,825,626 字节**；SHA-256：`2a7bf76bd80db82a62c52584029c506878fdeae7a5dadfaf3a7053102b91ebd6`。Release 同时提供 `.sha256` 文件，GitHub 记录的 digest 与本机哈希一致。
+- 发布元数据：标签 `v2.16.0`，目标提交 `6e0924e`，非草稿、非预发布，已设为 Latest。
+
 ## 待补
 
 - Keychron K3 Pro 的读数真机对照（放电后确认 3 号报告中的电量字节）仍按 BACKLOG 的 N5 条目单独跟进，不影响本版验收。
-- 正式发布还需提交、出通用包（arm64 + x86_64）、签名核验与 DMG 哈希，按 `release.sh` 流程执行；应用仍使用本地固定签名，未经过 Apple 公证。
+- 本机安装的仍是 2.15.1；如需升级，运行 `./install-local.sh`。应用未经过 Apple 公证，首次打开按 README 的说明放行。

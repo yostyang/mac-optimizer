@@ -66,31 +66,53 @@ struct DeviceRing: View {
     var reason = ""
     var freshness: ReadingFreshness = .fresh
     var size: CGFloat = 40
+
+    /// 只有读到新鲜或缓存的读数才显示数值；过期与未取得都画虚线环，绝不显示成 0%。
+    private var shown: Int? { (freshness == .fresh || freshness == .cached) ? percent : nil }
+
     var body: some View {
-        let shown = (freshness == .fresh || freshness == .cached) ? percent : nil
         ZStack {
-            if let p = shown {
-                let lv = BatteryLevel.of(p)
-                Circle().stroke(lv.graphic.opacity(0.18), lineWidth: 3.5)
-                Circle().trim(from: 0, to: CGFloat(max(0, min(100, p))) / 100)
-                    .stroke(lv.graphic, style: StrokeStyle(lineWidth: 3.5, lineCap: .round)).rotationEffect(.degrees(-90))
-            } else {
-                Circle().stroke(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
-            }
-            Image(systemName: symbol).font(.system(size: size * 0.32, weight: .medium)).foregroundColor(shown == nil ? DS.text.secondary : .primary)   // 图标
+            dial
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.32, weight: .medium))   // 图标
+                .foregroundColor(shown == nil ? DS.text.secondary : .primary)   // 图标
         }
         .frame(width: size, height: size)
-        .overlay(alignment: .topTrailing) {
-            if let p = shown, BatteryLevel.of(p) != .normal {
-                LowBatteryMark(level: BatteryLevel.of(p), showText: false)
-                    .background(Circle().fill(DS.card).padding(-1)).offset(x: 4, y: -3)
-            }
-        }
-        .help(name + "：" + (shown.map { "\($0)%" + (BatteryLevel.of($0).label.map { "，" + $0 } ?? "") + (freshness == .cached ? "（缓存）" : "") }
-                             ?? (freshness == .expired ? "读数已过期" : "未取得" + (reason.isEmpty ? "" : "（\(reason)）"))))
+        .overlay(alignment: .topTrailing) { lowMark }
+        .help(hint)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(BatterySpeech.label(name: name, percent: percent, freshness: freshness, reason: reason))
         .accessibilityIdentifier("panel.device." + name)
+    }
+
+    @ViewBuilder private var dial: some View {
+        if let p = shown {
+            let lv = BatteryLevel.of(p)
+            Circle().stroke(lv.graphic.opacity(0.18), lineWidth: 3.5)
+            Circle().trim(from: 0, to: CGFloat(max(0, min(100, p))) / 100)
+                .stroke(lv.graphic, style: StrokeStyle(lineWidth: 3.5, lineCap: .round)).rotationEffect(.degrees(-90))
+        } else {
+            Circle().stroke(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+        }
+    }
+
+    @ViewBuilder private var lowMark: some View {
+        if let p = shown, BatteryLevel.of(p) != .normal {
+            LowBatteryMark(level: BatteryLevel.of(p), showText: false)
+                .background(Circle().fill(DS.card).padding(-1)).offset(x: 4, y: -3)
+        }
+    }
+
+    /// 悬停提示：能读到就说百分比、状态与来源；读不到就说清是过期还是未取得，并带上原因。
+    private var hint: String {
+        if let p = shown {
+            var s = "\(p)%"
+            if let l = BatteryLevel.of(p).label { s += "，" + l }
+            if freshness == .cached { s += "（缓存）" }
+            return name + "：" + s
+        }
+        if freshness == .expired { return name + "：读数已过期" }
+        return reason.isEmpty ? name + "：未取得" : name + "：未取得（\(reason)）"
     }
 }
 
