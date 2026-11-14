@@ -28,7 +28,7 @@ struct PanelTile<Viz: View>: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
                 Image(systemName: symbol).font(DS.cap(.semibold)).foregroundColor(tint).accessibilityHidden(true)
-                Text(title).font(DS.sub(.semibold)).foregroundColor(tint)
+                Text(title).font(DS.sub(.semibold)).foregroundColor(tint).contrastTarget("panel.tile.title")
                 Spacer(minLength: 2)
                 if let badge {
                     Text(badge).font(DS.num(12, .semibold)).foregroundColor(DS.text.tone(badgeTint)).lineLimit(1)
@@ -39,7 +39,7 @@ struct PanelTile<Viz: View>: View {
             HStack(alignment: .center, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     if let value {
-                        Text(value).font(DS.num(20, .semibold)).foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(value).font(DS.num(20, .semibold)).foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7).contrastTarget("panel.tile.value", .largeText)
                     } else {
                         Unavailable(reason: unavailable).font(DS.num(20, .semibold))
                     }
@@ -47,7 +47,7 @@ struct PanelTile<Viz: View>: View {
                 }.layoutPriority(1)
                 viz.frame(maxWidth: .infinity).frame(height: 16).accessibilityHidden(true)
             }
-            Text(footer).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.85)
+            Text(footer).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.85).contrastTarget("panel.tile.footer")
         }
         .padding(.horizontal, DS.tilePadding).padding(.vertical, 7)
         .frame(maxWidth: .infinity, minHeight: PanelLayout.tileHeight, maxHeight: PanelLayout.tileHeight, alignment: .topLeading)
@@ -58,28 +58,38 @@ struct PanelTile<Viz: View>: View {
     }
 }
 
-/// 外设电量圆环：读不到电量时画虚线环 +「—」，绝不显示成 0%
+/// 外设电量圆环：读不到或已过期时画虚线环，绝不显示成 0%；低电量在环右上角加警示图标（不只靠颜色）
 struct DeviceRing: View {
     let symbol: String
     let name: String
     let percent: Int?
     var reason = ""
+    var freshness: ReadingFreshness = .fresh
     var size: CGFloat = 40
     var body: some View {
+        let shown = (freshness == .fresh || freshness == .cached) ? percent : nil
         ZStack {
-            if let p = percent {
-                Circle().stroke(batteryColor(p).opacity(0.18), lineWidth: 3.5)
+            if let p = shown {
+                let lv = BatteryLevel.of(p)
+                Circle().stroke(lv.graphic.opacity(0.18), lineWidth: 3.5)
                 Circle().trim(from: 0, to: CGFloat(max(0, min(100, p))) / 100)
-                    .stroke(batteryColor(p), style: StrokeStyle(lineWidth: 3.5, lineCap: .round)).rotationEffect(.degrees(-90))
+                    .stroke(lv.graphic, style: StrokeStyle(lineWidth: 3.5, lineCap: .round)).rotationEffect(.degrees(-90))
             } else {
                 Circle().stroke(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
             }
-            Image(systemName: symbol).font(.system(size: size * 0.32, weight: .medium)).foregroundColor(percent == nil ? DS.text.secondary : .primary)
+            Image(systemName: symbol).font(.system(size: size * 0.32, weight: .medium)).foregroundColor(shown == nil ? DS.text.secondary : .primary)   // 图标
         }
         .frame(width: size, height: size)
-        .help(name + "：" + (percent.map { "\($0)%" } ?? "未取得" + (reason.isEmpty ? "" : "（\(reason)）")))
+        .overlay(alignment: .topTrailing) {
+            if let p = shown, BatteryLevel.of(p) != .normal {
+                LowBatteryMark(level: BatteryLevel.of(p), showText: false)
+                    .background(Circle().fill(DS.card).padding(-1)).offset(x: 4, y: -3)
+            }
+        }
+        .help(name + "：" + (shown.map { "\($0)%" + (BatteryLevel.of($0).label.map { "，" + $0 } ?? "") + (freshness == .cached ? "（缓存）" : "") }
+                             ?? (freshness == .expired ? "读数已过期" : "未取得" + (reason.isEmpty ? "" : "（\(reason)）"))))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(name + "，" + (percent.map { "电量 \($0)%" } ?? "电量未取得"))
+        .accessibilityLabel(BatterySpeech.label(name: name, percent: percent, freshness: freshness, reason: reason))
         .accessibilityIdentifier("panel.device." + name)
     }
 }
@@ -157,7 +167,7 @@ struct PanelContent: View {
         let h = s.health, v = Self.verdict(h.score)
         let sampled = s.uptime > 0
         return HStack(spacing: 8) {
-            Image(systemName: sampled ? v.symbol : "hourglass").font(.system(size: 20, weight: .semibold))
+            Image(systemName: sampled ? v.symbol : "hourglass").font(.system(size: 20, weight: .semibold))   // 图标
                 .foregroundColor(sampled ? v.tint : DS.text.secondary).frame(width: 24).accessibilityHidden(true)
             Text(sampled ? "\(h.score)" : Fmt.dash).font(DS.num(28, .bold)).foregroundColor(.primary)
             VStack(alignment: .leading, spacing: 0) {
@@ -271,7 +281,7 @@ struct PanelContent: View {
 
     // MARK: 电池宽卡
     /// 已连接的蓝牙外设（含读不到电量的，用虚线环表示「未取得」）
-    var peripherals: [BTDevice] { bt.devices.filter(\.connected) }
+    var peripherals: [BTDisplay] { bt.displays().filter(\.connected) }
     func batteryCard(_ s: Snapshot) -> some View {
         let flow = PowerFlowCalc.fromSnapshot(s)
         let mins = PowerFlowCalc.minutesToFull(percent: s.battery, fullMah: s.fullMah, voltageV: s.batteryVoltageV, chargeWatts: flow.chargeWatts)
@@ -290,7 +300,9 @@ struct PanelContent: View {
                 VStack(alignment: .leading, spacing: 3) {
                     if let b = s.battery {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text("\(b)%").font(DS.num(24, .semibold)).foregroundColor(b <= 20 ? batteryColor(b) : .primary)
+                            Text("\(b)%").font(DS.num(24, .semibold)).foregroundColor(BatteryLevel.of(b).text)
+                                .accessibilityLabel(BatterySpeech.label(name: "这台 Mac", percent: b, freshness: .fresh))
+                            LowBatteryMark(level: BatteryLevel.of(b))
                             Text(flow.supplyText).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
                         }
                         Text(powerLine(flow, mins)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8)
@@ -301,7 +313,7 @@ struct PanelContent: View {
                 }
                 Spacer(minLength: 4)
                 HStack(spacing: 8) {
-                    ForEach(peripherals.prefix(3)) { d in DeviceRing(symbol: d.kind, name: d.name, percent: d.percent, reason: d.reason, size: 38) }
+                    ForEach(peripherals.prefix(3)) { d in DeviceRing(symbol: d.kind, name: d.name, percent: d.percent, reason: d.reason, freshness: d.freshness, size: 38) }
                 }
             }
         }

@@ -15,7 +15,7 @@ enum Fmt {
     }
     static func mem(_ mb: Double) -> String { mb >= 1024 ? String(format: "%.1f GB", mb / 1024) : String(format: "%.0f MB", mb) }
     static func temp(_ t: Double?) -> String { t.map { String(format: "%.0f°C", $0) } ?? "温度不可读" }
-    static func pressure(_ p: Int) -> (String, Color) { p >= 4 ? ("紧张", .red) : (p >= 2 ? ("偏高", .orange) : ("正常", good)) }
+    static func pressure(_ p: Int) -> (String, Color) { p >= 4 ? ("紧张", bad) : (p >= 2 ? ("偏高", warn) : ("正常", good)) }
     static func energy(_ j: Double) -> String { j >= 3600 ? String(format: "%.1f Wh", j / 3600) : (j >= 36 ? String(format: "%.0f mWh", j / 3.6) : String(format: "%.1f mWh", j / 3.6)) }
 }
 
@@ -23,7 +23,8 @@ enum Fmt {
 func levelColor(_ frac: Double, hi: Double = 0.85, mid: Double = 0.6) -> Color { frac >= hi ? bad : (frac >= mid ? warn : accent2) }
 /// 图标底色：正常 / 注意 / 危险，只用状态色，不和品牌紫抢眼
 func statusTint(_ frac: Double, hi: Double = 0.85, mid: Double = 0.6) -> Color { frac >= hi ? bad : (frac >= mid ? warn : good) }
-func batteryColor(_ p: Int) -> Color { p <= 10 ? .red : (p <= 20 ? .orange : good) }
+/// 电量图形色：与菜单栏图标、外设、面板同一判断（BatteryLevel，2.16 N2）；文字请用 BatteryLevel.of(p).text
+func batteryColor(_ p: Int) -> Color { BatteryLevel.of(p).graphic }
 
 // MARK: - 小组件
 struct Spark: View {
@@ -252,42 +253,6 @@ struct MetricTiles: View {
     }
 }
 
-struct BatteryTile: View {
-    let s: Snapshot
-    var body: some View {
-        let flow = PowerFlowCalc.fromSnapshot(s)
-        let mins = PowerFlowCalc.minutesToFull(percent: s.battery, fullMah: s.fullMah, voltageV: s.batteryVoltageV, chargeWatts: flow.chargeWatts)
-        Tile(icon: s.charging ? "battery.100.bolt" : "battery.75", title: "电池", tint: batteryColor(s.battery ?? 100), trailing: s.batteryHealth.map { "健康度 \($0)%" } ?? "") {
-            if let b = s.battery {
-                HStack(alignment: .center, spacing: 10) {
-                    BigValue(value: "\(b)", unit: "%")
-                    Bar(frac: Double(b) / 100, color: batteryColor(b), height: 8)
-                }
-                Text(stateText).font(.system(size: 12)).foregroundColor(DS.text.secondary)
-                // 面板紧凑条（单行版，与电池页功率标签同一口径，面板高度检查上限 1000pt，单行更安全）
-                HStack(spacing: 8) {
-                    if s.charging, let mm = mins { Text("预计 \(fmtMinutes(mm)) 充满（估算）").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
-                    Text("充电 \(fmtW(flow.chargeWatts))").font(.system(size: 12)).foregroundColor(DS.text.secondary)
-                    Text("系统 \(fmtW(flow.systemWatts))").font(.system(size: 12)).foregroundColor(DS.text.secondary)
-                }.accessibilityIdentifier("panel.battery.compact")
-            } else { Text("没有内置电池").font(.system(size: 12)).foregroundColor(DS.text.secondary) }
-            let devs = BTBattery.shared.withBattery.isEmpty ? s.devices : BTBattery.shared.withBattery.map { DeviceBattery(name: $0.name, percent: $0.percent ?? 0, kind: $0.kind) }
-            if !devs.isEmpty {
-                HStack(spacing: 10) {
-                    ForEach(devs.prefix(4)) { d in
-                        HStack(spacing: 3) { Image(systemName: d.kind).font(.system(size: 12)); Text("\(d.percent)%").font(.system(size: 12, weight: .medium)).monospacedDigit() }.foregroundColor(batteryColor(d.percent))
-                    }
-                }
-            }
-        }
-    }
-    var stateText: String {
-        var t = s.charging ? "正在充电" : (s.onAC ? "已接电源 · 暂停充电（系统电池保护）" : "使用电池")
-        if !s.onAC, let r = s.timeRemaining { t += " · 约剩 \(r / 60) 小时 \(r % 60) 分" }
-        if let c = s.cycles { t += " · 循环 \(c) 次" }
-        return t
-    }
-}
 
 enum IconCache {
     private static var c: [Int32: NSImage?] = [:]
@@ -336,7 +301,7 @@ struct ProcList: View {
                 HStack(spacing: 8) {
                     if let ic = IconCache.icon(p.id) { Image(nsImage: ic).resizable().frame(width: 16, height: 16) }
                     else { IconBadge(symbol: "gearshape", tint: Color(nsColor: .secondaryLabelColor), size: 16, selected: on) }
-                    Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? .white : .primary)
+                    Text(p.name).font(DS.sub()).lineLimit(1).foregroundColor(on ? DS.text.onSelection : .primary).contrastTarget(on ? "proc.name.selected" : "proc.name")
                     Spacer(minLength: 4)
                     Text(String(format: "%.1f%%", p.cpu)).font(DS.num(12, .medium))
                         .foregroundColor(on ? DS.text.onSelection : DS.text.tone(ProcessCPU.color(p.cpu))).frame(width: 40, alignment: .trailing)
@@ -673,7 +638,7 @@ struct CleanHint: View {
     var body: some View {
         ZStack {
             Color.black
-            Text("擦屏模式 · 按 Esc 退出 · \(seconds) 秒后自动结束").font(.system(size: 13, weight: .medium)).foregroundColor(.white.opacity(0.55)).opacity(shown ? 1 : 0)
+            Text("擦屏模式 · 按 Esc 退出 · \(seconds) 秒后自动结束").font(DS.body(.medium)).foregroundColor(.white.opacity(0.55)).opacity(shown ? 1 : 0)
         }.onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { withAnimation(.easeOut(duration: 0.8)) { shown = false } } }
     }
 }
@@ -682,12 +647,12 @@ struct GlowAlert: View {
     @State private var pulse = false
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 0).strokeBorder(LinearGradient(colors: [.red, .orange, .red], startPoint: .top, endPoint: .bottom), lineWidth: pulse ? 34 : 16)
+            RoundedRectangle(cornerRadius: 0).strokeBorder(LinearGradient(colors: [bad, warn, bad], startPoint: .top, endPoint: .bottom), lineWidth: pulse ? 34 : 16)
                 .blur(radius: 22).opacity(pulse ? 0.95 : 0.55)
             VStack(spacing: 10) {
-                Image(systemName: "battery.0").font(.system(size: 17)).foregroundColor(.red)
-                Text("电量仅剩 \(level)%").font(.system(size: 17, weight: .bold))
-                Text("请尽快接上电源 · 按 Esc 关闭").font(.system(size: 13)).foregroundColor(DS.text.secondary)
+                Image(systemName: BatteryLevel.of(level).symbol ?? "battery.0").font(.system(size: 17)).foregroundColor(BatteryLevel.of(level).graphic)   // 图标
+                Text("电量仅剩 \(level)%").font(DS.title(.bold))
+                Text("请尽快接上电源 · 按 Esc 关闭").font(DS.body()).foregroundColor(DS.text.secondary)
                 Button("知道了") { Overlay.close() }.buttonStyle(PillButton())
             }.padding(28).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.regularMaterial))
         }.onAppear { withAnimation(.easeInOut(duration: 1).repeatForever()) { pulse = true } }
@@ -761,7 +726,7 @@ final class StatusBar: NSObject, NSPopoverDelegate {
             NSColor.labelColor.withAlphaComponent(0.55).setStroke()
             let bp = NSBezierPath(roundedRect: body, xRadius: 3, yRadius: 3); bp.lineWidth = 1; bp.stroke()
             NSBezierPath(roundedRect: NSRect(x: 27.5, y: 5, width: 2, height: 4), xRadius: 1, yRadius: 1).fill()
-            let c: NSColor = p <= 10 ? .systemRed : (p <= 20 ? .systemOrange : (charging ? .systemGreen : NSColor(red: 0.18, green: 0.70, blue: 0.96, alpha: 1)))
+            let c: NSColor = BatteryLevel.of(p).graphicNS   // 2.16 N2：与页面、外设和合并图标同一状态色
             c.setFill()
             NSBezierPath(roundedRect: NSRect(x: 2, y: 3, width: max(2, 23 * CGFloat(p) / 100), height: 8), xRadius: 1.5, yRadius: 1.5).fill()
             let t = NSAttributedString(string: "\(p)", attributes: [.font: NSFont.systemFont(ofSize: 8.5, weight: .bold), .foregroundColor: NSColor.white, .strokeColor: NSColor.black.withAlphaComponent(0.35), .strokeWidth: -2])

@@ -82,12 +82,12 @@ extension BTParse {
         for i in out.indices where KeychronHID.candidate(out[i]) {
             let a = address(out[i].address)
             if let r = hid.first(where: { $0.addresses.contains(a) }) {
-                out[i].percent = r.percent; out[i].source = "键盘自报电量（HID）"; out[i].reason = ""
+                out[i].percent = r.percent; out[i].source = "键盘自报电量（HID）"; out[i].reason = ""; out[i].reasonKind = nil
             } else {
                 switch access {
-                case .granted: out[i].reason = "已有输入监控权限，但键盘没有返回可核对的电量"
-                case .denied: out[i].reason = "需要在系统设置里允许「输入监控」，才能读取键盘自报的电量"
-                case .notAsked: out[i].reason = "点「读取 Keychron 电量」并允许「输入监控」后可读取"
+                case .granted: out[i].reason = "已有输入监控权限，但键盘没有返回可核对的电量"; out[i].reasonKind = .noReport
+                case .denied: out[i].reason = "需要在系统设置里允许「输入监控」，才能读取键盘自报的电量"; out[i].reasonKind = .unauthorized
+                case .notAsked: out[i].reason = "点「读取 Keychron 电量」并允许「输入监控」后可读取"; out[i].reasonKind = .unauthorized
                 }
             }
         }

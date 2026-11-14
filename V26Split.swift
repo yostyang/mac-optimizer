@@ -39,6 +39,20 @@ enum SplitLayout {
             return flipped ? [lower, upper] : [upper, lower]   // flipped：y 向下的坐标系里 minY 才是上面
         }
     }
+    /// 2.16：每栏按 [上, 下] 百分比拆分（空 = 不拆分）；50 / 50 时与上面的平分结果一致
+    static func rects(weights w: [CGFloat], rowPercents rp: [[Int]], in r: CGRect, gap g: CGFloat = gap, flipped: Bool = false) -> [CGRect] {
+        rects(weights: w, in: r, gap: g).enumerated().flatMap { i, col -> [CGRect] in
+            guard rp.indices.contains(i), rp[i].count == 2, rp[i][0] + rp[i][1] > 0 else { return [col] }
+            let avail = col.height - g
+            let top = (avail * CGFloat(rp[i][0]) / CGFloat(rp[i][0] + rp[i][1])).rounded(.down)
+            if flipped {   // y 向下：minY 一侧是上面
+                return [CGRect(x: col.minX, y: col.minY, width: col.width, height: top),
+                        CGRect(x: col.minX, y: col.minY + top + g, width: col.width, height: avail - top)]
+            }
+            return [CGRect(x: col.minX, y: col.maxY - top, width: col.width, height: top),
+                    CGRect(x: col.minX, y: col.minY, width: col.width, height: avail - top)]
+        }
+    }
     /// 某一栏的第一个区在整个序列里的序号
     static func firstZone(ofColumn c: Int, rows: [Int]) -> Int { rows.prefix(c).reduce(0, +) }
     /// 区 → 矩形；两栏模板里“中区”不存在，右区 = 最后一栏
@@ -162,11 +176,13 @@ struct SplitPrefs {
             var c = (d.dictionary(forKey: k) as? [String: [Int]]) ?? [:]
             if c.removeValue(forKey: uuid) != nil { d.set(c, forKey: k) }
         }
+        removeV2(uuid)
     }
     // 自定义比例：每块屏幕 2–4 栏，与固定模板二选一。
     // 2.14 起存百分比（split.customPct）；2.10–2.13 的 1–9 权重（split.custom）读取时换算，旧键不删，便于回退旧版。
     private let customKey = "split.customPct", legacyCustomKey = "split.custom"
     func custom(_ uuid: String) -> [Int]? {
+        if let v = v2(uuid) { return v.columnPercents }   // 2.16：带版本的新数据优先
         if let p = (d.dictionary(forKey: customKey) as? [String: [Int]])?[uuid], SplitCustom.valid(p) { return p }
         guard let w = (d.dictionary(forKey: legacyCustomKey) as? [String: [Int]])?[uuid],
               SplitCustom.columns.contains(w.count), w.allSatisfy({ (1...9).contains($0) }) else { return nil }
@@ -174,23 +190,88 @@ struct SplitPrefs {
     }
     func setCustom(_ p: [Int], for uuid: String) {
         guard SplitCustom.valid(p) else { return }
+        // 2.16：已有的上下比例按栏保留，新增的栏不拆分。
+        // 必须在改写栏宽之前取旧比例：v2 只在 columnPercents 与 split.customPct 一致时才算数，
+        // 先写宽度会让旧 v2 失效，读出来就成了「都不拆分」。
+        let old = rowPercents(uuid)
         var m = (d.dictionary(forKey: key) as? [String: String]) ?? [:]
         m[uuid] = nil; d.set(m, forKey: key)
         var c = (d.dictionary(forKey: customKey) as? [String: [Int]]) ?? [:]
         c[uuid] = p; d.set(c, forKey: customKey)
+        writeV2(SplitLayoutV2(displayID: uuid, columnPercents: p, rowPercentsByColumn: p.indices.map { old.indices.contains($0) ? old[$0] : [] }))
     }
     /// 这块屏幕当前生效的各栏权重（固定模板或自定义）；未启用返回 nil
     func weights(_ uuid: String) -> [CGFloat]? { template(uuid)?.weights ?? custom(uuid)?.map { CGFloat($0) } }
     // 2.10：自定义模板里每栏是否上下平分；只对自定义比例有效
     private let rowsKey = "split.customRows"
+    /// 每栏几个区（1 或 2），由上下比例推出；固定模板一律 1
     func rows(_ uuid: String) -> [Int] {
         guard let n = weights(uuid)?.count else { return [] }
-        guard custom(uuid) != nil, let r = (d.dictionary(forKey: rowsKey) as? [String: [Int]])?[uuid], r.count == n, r.allSatisfy({ $0 == 1 || $0 == 2 }) else { return Array(repeating: 1, count: n) }
-        return r
+        let rp = rowPercents(uuid)
+        return (0..<n).map { rp.indices.contains($0) && rp[$0].count == 2 ? 2 : 1 }
     }
+    /// 2.16 N9：每栏上下比例（[上, 下]，未拆分为空）。新数据优先；没有时读 2.10–2.15 的 split.customRows（平分 → [50, 50]）
+    func rowPercents(_ uuid: String) -> [[Int]] {
+        guard let cols = custom(uuid), template(uuid) == nil else { return [] }
+        if let v = v2(uuid) { return v.rowPercentsByColumn }
+        guard let r = (d.dictionary(forKey: rowsKey) as? [String: [Int]])?[uuid], r.count == cols.count, r.allSatisfy({ $0 == 1 || $0 == 2 }) else {
+            return Array(repeating: [], count: cols.count)
+        }
+        return r.map { $0 == 2 ? [50, 50] : [] }
+    }
+    /// 旧接口：按 1 / 2 设置是否拆分。已拆分的栏保留原比例，新拆分的栏默认 50 / 50；栏数对不上按都不拆分
     func setRows(_ r: [Int], for uuid: String) {
         var m = (d.dictionary(forKey: rowsKey) as? [String: [Int]]) ?? [:]
         m[uuid] = r.map { $0 == 2 ? 2 : 1 }; d.set(m, forKey: rowsKey)
+        guard let cols = custom(uuid) else { return }
+        let old = rowPercents(uuid)
+        let rp: [[Int]] = r.count == cols.count
+            ? r.indices.map { i in r[i] == 2 ? (old.indices.contains(i) && old[i].count == 2 ? old[i] : [50, 50]) : [] }
+            : Array(repeating: [], count: cols.count)
+        writeV2(SplitLayoutV2(displayID: uuid, columnPercents: cols, rowPercentsByColumn: rp))
+    }
+    /// 设置某一栏的上下比例（nil = 不拆分）。比例不合法时不保存并返回 false
+    @discardableResult func setRowPercents(_ value: [Int]?, column i: Int, for uuid: String) -> Bool {
+        guard let cols = custom(uuid), cols.indices.contains(i) else { return false }
+        if let v = value, !SplitRows.valid(v) { return false }
+        var rp = rowPercents(uuid); if rp.count != cols.count { rp = Array(repeating: [], count: cols.count) }
+        rp[i] = value ?? []
+        writeV2(SplitLayoutV2(displayID: uuid, columnPercents: cols, rowPercentsByColumn: rp))
+        // 旧版只能表达「平分 / 不分」：旧键只写 1 / 2，不写新比例
+        var m = (d.dictionary(forKey: rowsKey) as? [String: [Int]]) ?? [:]
+        m[uuid] = rp.map { $0.count == 2 ? 2 : 1 }; d.set(m, forKey: rowsKey)
+        return rowPercents(uuid) == rp
+    }
+    /// D5：「恢复默认比例」只作用于这块屏幕：两栏 50 / 50、不上下拆分，仍保持自定义布局启用；间距与其他屏幕不动，不移动窗口
+    func resetCustom(_ uuid: String) {
+        setCustom([50, 50], for: uuid)
+        writeV2(SplitLayoutV2(displayID: uuid, columnPercents: [50, 50], rowPercentsByColumn: [[], []]))
+        var m = (d.dictionary(forKey: rowsKey) as? [String: [Int]]) ?? [:]
+        m[uuid] = [1, 1]; d.set(m, forKey: rowsKey)
+    }
+    // MARK: 2.16 带版本的分区数据（split.layout.v2：[显示器 UUID: JSON]）
+    private let v2Key = "split.layout.v2"
+    private func v2Raw(_ uuid: String) -> Data? { (d.dictionary(forKey: v2Key) as? [String: Data])?[uuid] }
+    private func decodeV2(_ uuid: String) -> SplitLayoutV2? {
+        guard let data = v2Raw(uuid), let v = try? JSONDecoder().decode(SplitLayoutV2.self, from: data), v.isValid(for: uuid) else { return nil }
+        return v
+    }
+    /// 新数据只在与 split.customPct 一致时采用：回退旧版改过宽度后再升级，以旧版最后保存的为准（上下比例回到旧键的平分）
+    func v2(_ uuid: String) -> SplitLayoutV2? {
+        guard let v = decodeV2(uuid) else { return nil }
+        if let p = (d.dictionary(forKey: customKey) as? [String: [Int]])?[uuid], p != v.columnPercents { return nil }
+        return v
+    }
+    /// 新数据存在但无法识别（版本不对、比例不合法、不是这块屏幕的）：界面提示并提供恢复默认，不静默覆盖
+    func v2Invalid(_ uuid: String) -> Bool { v2Raw(uuid) != nil && decodeV2(uuid) == nil }
+    private func writeV2(_ v: SplitLayoutV2) {
+        guard v.isValid(for: v.displayID), let data = try? JSONEncoder().encode(v) else { return }
+        var m = (d.dictionary(forKey: v2Key) as? [String: Data]) ?? [:]
+        m[v.displayID] = data; d.set(m, forKey: v2Key)   // 只改这块屏幕的条目
+    }
+    private func removeV2(_ uuid: String) {
+        var m = (d.dictionary(forKey: v2Key) as? [String: Data]) ?? [:]
+        if m.removeValue(forKey: uuid) != nil { d.set(m, forKey: v2Key) }
     }
     // 2.10：窗口之间和屏幕边缘的间距（所有屏幕共用），0–24 pt
     private let gapKey = "split.gap"
@@ -203,9 +284,14 @@ struct SplitPrefs {
     /// 这块屏幕的全部区（AppKit 坐标），唯一入口：模板或自定义比例 + 上下平分 + 间距
     func zones(_ uuid: String, in visible: CGRect) -> [CGRect]? {
         guard let ws = weights(uuid) else { return nil }
-        return SplitLayout.rects(weights: ws, rows: rows(uuid), in: visible, gap: gap)
+        return SplitLayout.rects(weights: ws, rowPercents: rowPercents(uuid), in: visible, gap: gap)
     }
     func title(_ uuid: String) -> String? { template(uuid)?.title ?? custom(uuid).map { "自定义 " + SplitCustom.title($0) } }
+    /// 布局签名：命令生成时记下，执行前核对（屏幕断连或布局变化后不执行旧区域）
+    func signature(_ uuid: String) -> String? {
+        guard let ws = weights(uuid) else { return nil }
+        return uuid + "|" + ws.map { String(Int($0 * 1000)) }.joined(separator: ",") + "|" + rowPercents(uuid).map { $0.map(String.init).joined(separator: "/") }.joined(separator: ",")
+    }
 }
 
 // MARK: - 控制器
@@ -234,7 +320,10 @@ final class SplitController: ObservableObject {
     /// 按序号放（从 0 起）：四栏时中间两栏用这个
     @discardableResult
     func place(index: Int) -> String { place(zone: nil, index: index) }
-    private func place(zone: SplitZone?, index: Int?) -> String {
+    /// 2.16：带空间名称的序号归位（名称来自与实际落区同一份布局）
+    @discardableResult
+    func place(index: Int, label: String) -> String { place(zone: nil, index: index, label: label) }
+    private func place(zone: SplitZone?, index: Int?, label name: String? = nil) -> String {
         guard driver.trusted() else { return report("需要先授予“辅助功能”权限") }
         guard let tg = captured ?? tracker.lastExternal else { return report("没有找到要移动的应用窗口") }
         captured = nil
@@ -243,7 +332,7 @@ final class SplitController: ObservableObject {
         guard let disp = display(for: cur) else { return report("没有检测到显示器") }
         guard let rs = prefs.zones(disp.uuid, in: disp.visible) else { return report("这块屏幕还没选分区模板") }
         let rows = prefs.rows(disp.uuid)
-        let label = zone?.title ?? "第 \((index ?? 0) + 1) 区"
+        let label = name ?? zone?.title ?? "第 \((index ?? 0) + 1) 区"
         // 左/中/右按栏算；某栏上下平分时指它上面的那个区
         let i: Int? = { switch zone {
             case .left: return 0
@@ -259,7 +348,7 @@ final class SplitController: ObservableObject {
         tracker.reactivate(tg)
         switch o {
         case .ok: return report("已把 \(tg.name) 放到\(label)")
-        case .sizeLimited: return report("已把 \(tg.name) 放到\(label)（尺寸受应用限制）")
+        case .sizeLimited: return report("已把 \(tg.name) 移到\(label)，但窗口没有缩到这个区的大小（尺寸受应用限制）")
         case .notMovable: return report("「\(tg.name)」的窗口不可移动")
         }
     }
@@ -278,7 +367,7 @@ final class SplitController: ObservableObject {
         return report("已把 \(tg.name) 撤销归位")
     }
     func rememberUndo(frame: CGRect, target: SplitTarget, window: AnyObject?) { undo = frame; undoTarget = target; undoWindow = window }
-    private func report(_ s: String) -> String { DispatchQueue.main.async { self.last = s }; return s }
+    func report(_ s: String) -> String { DispatchQueue.main.async { self.last = s }; return s }
 
     static func openAXSettings() {
         if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") { NSWorkspace.shared.open(u) }
@@ -286,26 +375,33 @@ final class SplitController: ObservableObject {
 
     static func commands(_ q: String) -> [CmdItem] {
         var out: [CmdItem] = []
-        for z in [SplitZone.left, .center, .right] where CmdIndex.matches(q, "放到\(z.title) 分区 分屏 窗口 split") {
-            out.append(CmdItem(id: "split.\(z.rawValue)", kind: .action, title: "放到\(z.title)", subtitle: "把前台窗口放进当前屏幕的分区",
-                               symbol: "rectangle.split.3x1", actions: [CmdAction(title: "放到\(z.title)", hint: "↵", run: {
-                                   StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(z))
-                               })]))
-        }
-        // 四栏或有上下平分的自定义模板：左/中/右够不着的区按序号放（从左到右、每栏从上到下）
         let sc = SplitController.shared
-        var extra = Set<Int>()
-        for d in sc.screens.displays where sc.prefs.custom(d.uuid) != nil {
-            let rows = sc.prefs.rows(d.uuid), total = rows.reduce(0, +)
-            var named: Set<Int> = [0, SplitLayout.firstZone(ofColumn: rows.count - 1, rows: rows)]
-            if rows.count == 3 { named.insert(SplitLayout.firstZone(ofColumn: 1, rows: rows)) }
-            extra.formUnion(Set(0..<total).subtracting(named))
-        }
-        for i in extra.sorted() where CmdIndex.matches(q, "放到第 \(i + 1) 区 第\(i + 1)区 分区 分屏 窗口 split") {
-            out.append(CmdItem(id: "split.n\(i)", kind: .action, title: "放到第 \(i + 1) 区", subtitle: "从左到右、每栏从上到下数的第 \(i + 1) 个区",
-                               symbol: "rectangle.split.3x1", actions: [CmdAction(title: "放到第 \(i + 1) 区", hint: "↵", run: {
-                                   StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(index: i))
-                               })]))
+        // 2.16 N9：按目标屏幕的实际布局列出每个区，名称用空间描述，旁边是高亮目标区的缩略图；
+        // 执行时核对屏幕与布局签名，变化了就不执行旧区域
+        if let d = sc.targetDisplay() {
+            let targets = sc.zoneTargets(for: d)
+            let rows = sc.prefs.rows(d.uuid)
+            let firstRight = rows.isEmpty ? -1 : SplitLayout.firstZone(ofColumn: rows.count - 1, rows: rows)
+            let center = rows.count == 3 ? SplitLayout.firstZone(ofColumn: 1, rows: rows) : -1
+            for t in targets {
+                // 旧说法（左区 / 中区 / 右区 / 第 n 区）仍可搜到对应的区
+                var alias = "放到第 \(t.index + 1) 区 第\(t.index + 1)区"
+                if t.index == 0 { alias += " 放到左区" }
+                if t.index == firstRight { alias += " 放到右区" }
+                if t.index == center { alias += " 放到中区" }
+                guard CmdIndex.matches(q, "放到\(t.name) \(alias) 分区 分屏 窗口 split") else { continue }
+                out.append(CmdItem(id: "split.z\(t.index)", kind: .action, title: "放到\(t.name)", subtitle: "\(d.name) · 第 \(t.index + 1) 区",
+                                   symbol: "rectangle.split.3x1", icon: t.thumb, actions: [CmdAction(title: "放到\(t.name)", hint: "↵", run: {
+                                       StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(target: t))
+                                   })]))
+            }
+        } else {
+            for z in [SplitZone.left, .center, .right] where CmdIndex.matches(q, "放到\(z.title) 分区 分屏 窗口 split") {
+                out.append(CmdItem(id: "split.\(z.rawValue)", kind: .action, title: "放到\(z.title)", subtitle: "把前台窗口放进当前屏幕的分区",
+                                   symbol: "rectangle.split.3x1", actions: [CmdAction(title: "放到\(z.title)", hint: "↵", run: {
+                                       StatusBar.shared.popover.performClose(nil); SplitHUD.show(SplitController.shared.place(z))
+                                   })]))
+            }
         }
         if CmdIndex.matches(q, "撤销归位 撤销 分区 分屏 undo") {
             out.append(CmdItem(id: "split.undo", kind: .action, title: "撤销归位", subtitle: "把上次移动的窗口放回原处",
@@ -324,13 +420,13 @@ enum SplitHUD {
     static func show(_ text: String) {
         if let sink { sink(text); return }
         let ok = text.hasPrefix("已")
-        ToastCenter.shared.show(text, symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill", tint: ok ? good : .orange)
+        ToastCenter.shared.show(text, symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill", tint: ok ? good : warn)
         if NSApp.windows.contains(where: { $0.isVisible && $0.isMainWindow && !($0 is NSPanel) }) { return }
         let p = panel ?? NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 44), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel = p
         p.level = .floating; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true; p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .transient]
-        let v = NSHostingView(rootView: Text(text).font(.system(size: 13, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 10)
+        let v = NSHostingView(rootView: Text(text).font(DS.body(.medium)).padding(.horizontal, 16).padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .windowBackgroundColor).opacity(0.96))).fixedSize())
         p.contentView = v; p.setContentSize(v.fittingSize)
         if let f = NSScreen.main?.visibleFrame { p.setFrameOrigin(NSPoint(x: f.midX - v.fittingSize.width / 2, y: f.minY + 80)) }
@@ -352,7 +448,7 @@ struct SplitPage: View {
             if !trusted {
                 StateLine(kind: .unknown, text: "需要“辅助功能”权限才能移动窗口", detail: "未授权时分区命令不可用；授权后回到这里即可使用。",
                           actions: [StateAction(title: "打开系统设置", symbol: "gearshape") { SplitController.openAXSettings() }], id: "split.grant")
-                    .padding(10).background(RoundedRectangle(cornerRadius: DS.r.card).fill(Color.orange.opacity(0.1)))
+                    .padding(10).background(RoundedRectangle(cornerRadius: DS.r.card).fill(warn.opacity(0.1)))
             }
             HStack(alignment: .top, spacing: 12) {
                 VStack(spacing: 2) {

@@ -67,16 +67,16 @@ enum DS {
 
     // 字号（2.13）：标题 17 / 正文 13 / 说明 12；10–11 pt 只用于单位和时间，需在行尾注明（fontlint.sh 检查）
     static let fontSizes: [CGFloat] = [30, 22, 17, 13, 12.5, 12, 12, 12]
-    static func title(_ w: Font.Weight = .semibold) -> Font { .system(size: 17, weight: w) }
-    static func body(_ w: Font.Weight = .regular) -> Font { .system(size: 13, weight: w) }
-    static func sub(_ w: Font.Weight = .regular) -> Font { .system(size: 12, weight: w) }
-    static func cap(_ w: Font.Weight = .medium) -> Font { .system(size: 12, weight: w) }
+    static func title(_ w: Font.Weight = .semibold) -> Font { .system(size: 17, weight: w) }   // 令牌
+    static func body(_ w: Font.Weight = .regular) -> Font { .system(size: 13, weight: w) }   // 令牌
+    static func sub(_ w: Font.Weight = .regular) -> Font { .system(size: 12, weight: w) }   // 令牌
+    static func cap(_ w: Font.Weight = .medium) -> Font { .system(size: 12, weight: w) }   // 令牌
     /// 数字：等宽，避免刷新时跳动
-    static func num(_ size: CGFloat = 13, _ w: Font.Weight = .medium) -> Font { .system(size: size, weight: w, design: .rounded).monospacedDigit() }
+    static func num(_ size: CGFloat = 13, _ w: Font.Weight = .medium) -> Font { .system(size: size, weight: w, design: .rounded).monospacedDigit() }   // 令牌
     static func hero(compact: Bool = false) -> Font { num(compact ? 22 : 30, .semibold) }
-    static func unit() -> Font { .system(size: 13, weight: .medium) }
-    static func label() -> Font { .system(size: 12.5, weight: .semibold) }
-    static func eyebrow() -> Font { .system(size: 12, weight: .semibold) }
+    static func unit() -> Font { .system(size: 13, weight: .medium) }   // 令牌
+    static func label() -> Font { .system(size: 12.5, weight: .semibold) }   // 令牌
+    static func eyebrow() -> Font { .system(size: 12, weight: .semibold) }   // 令牌
 
     enum metric {
         static let cpu = dyn(NSColor(srgbRed: 0.067, green: 0.475, blue: 0.412, alpha: 1), NSColor(srgbRed: 0.420, green: 0.792, blue: 0.714, alpha: 1))
@@ -132,18 +132,18 @@ struct MetricStat: Equatable {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(DS.label()).accessibilityHidden(true)
-                Text(title).font(DS.label())
+                Text(title).font(DS.label()).contrastTarget("tile.title")
                 Spacer(minLength: 2)
-                if !note.isEmpty { Text(note).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1).help(note) }
+                if !note.isEmpty { Text(note).font(DS.cap()).foregroundColor(DS.text.secondary).lineLimit(1).help(note).contrastTarget("tile.note") }
             }.foregroundColor(tint)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 if let value {
                     Text(value).font(textValue ? DS.title() : DS.hero(compact: compact))
-                        .foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7)
+                        .foregroundColor(valueColor).lineLimit(1).minimumScaleFactor(0.7).contrastTarget("tile.value", .largeText)
                 } else {
                     Unavailable(reason: unavailableReason).font(DS.hero(compact: compact))
                 }
-                if !unit.isEmpty { Text(unit).font(DS.unit()).foregroundColor(DS.text.secondary) }
+                if !unit.isEmpty { Text(unit).font(DS.unit()).foregroundColor(DS.text.secondary).contrastTarget("tile.unit") }
                 Spacer(minLength: 0)
             }
             if !compact {
@@ -162,9 +162,9 @@ struct MetricStat: Equatable {
             VStack(spacing: 3) {
                 ForEach(Array(stats.prefix(compact ? 1 : 2).enumerated()), id: \.offset) { _, stat in
                     HStack(spacing: 6) {
-                        Text(stat.label).foregroundColor(DS.text.secondary)
+                        Text(stat.label).foregroundColor(DS.text.secondary).contrastTarget("tile.stat")
                         Spacer(minLength: 2)
-                        Text(stat.value).monospacedDigit().foregroundColor(.primary)
+                        Text(stat.value).monospacedDigit().foregroundColor(.primary).contrastTarget("tile.stat")
                     }.font(DS.cap()).lineLimit(1).minimumScaleFactor(0.8).help(stat.label + "：" + stat.value)
                 }
             }
@@ -186,8 +186,8 @@ struct MetricStat: Equatable {
             ForEach(Array(items.prefix(4).enumerated()), id: \.offset) { index, item in
                 if index > 0 { Rectangle().fill(DS.separator).frame(width: 1, height: 28) }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(DS.text.secondary)
-                    Text(item.value).font(DS.num()).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(DS.text.secondary).contrastTarget("stat.label")
+                    Text(item.value).font(DS.num()).lineLimit(1).minimumScaleFactor(0.8).contrastTarget("stat.value")
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .combine)
             }
@@ -202,8 +202,8 @@ struct MetricStat: Equatable {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 if index > 0 { Rectangle().fill(DS.separator).frame(width: 1, height: 29) }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(DS.text.secondary)
-                    Text(item.value).font(DS.body(.medium)).lineLimit(1).minimumScaleFactor(0.75).help(item.value)
+                    Text(item.label).font(DS.eyebrow()).tracking(0.3).foregroundColor(DS.text.secondary).contrastTarget("kpi.label")
+                    Text(item.value).font(DS.body(.medium)).lineLimit(1).minimumScaleFactor(0.75).help(item.value).contrastTarget("kpi.value")
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .combine)
             }
@@ -217,7 +217,7 @@ struct MetricStat: Equatable {
     var body: some View {
         HStack(spacing: 5) {
             Circle().fill(tint).frame(width: 5, height: 5).accessibilityHidden(true)
-            Text(title).font(DS.cap(.medium)).lineLimit(1)
+            Text(title).font(DS.cap(.medium)).lineLimit(1).contrastTarget("pill.status")
         }.padding(.horizontal, 8).padding(.vertical, 5)
             .background(Capsule().fill(Color.primary.opacity(0.04)))
             .overlay(Capsule().strokeBorder(DS.border, lineWidth: 1))
@@ -260,6 +260,7 @@ struct BarListItem {
                     Text(item.0).font(DS.cap(.medium)).padding(.horizontal, 8).padding(.vertical, 4)
                         .foregroundColor(selection == item.1 ? .primary : DS.text.secondary)
                         .background(RoundedRectangle(cornerRadius: DS.r.control).fill(selection == item.1 ? DS.card : .clear))
+                        .contrastTarget(selection == item.1 ? "segment.on" : "segment.off")
                 }.buttonStyle(.plain).accessibilityAddTraits(selection == item.1 ? .isSelected : [])
             }
         }.padding(2).background(RoundedRectangle(cornerRadius: DS.r.control).fill(Color.primary.opacity(0.04)))
@@ -270,7 +271,7 @@ struct BarListItem {
     let text: String
     var body: some View {
         Text(text).font(DS.cap(.regular)).foregroundColor(DS.text.secondary)
-            .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true).contrastTarget("footnote").frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -310,7 +311,7 @@ struct IconBadge: View {
             .fill(selected ? AnyShapeStyle(Color.white.opacity(0.22)) : AnyShapeStyle(tint))
             .frame(width: size, height: size)
             .overlay(Image(systemName: symbol)
-                .font(.system(size: size * 0.5, weight: .semibold))
+                .font(.system(size: size * 0.5, weight: .semibold))   // 图标：随方块尺寸计算
                 .foregroundColor(.white))
             .accessibilityHidden(true)
     }
@@ -336,6 +337,7 @@ struct Kbd: View {
         Text(text)
             .font(DS.cap(.medium))
             .foregroundColor(on ? DS.text.onSelectionSecondary : DS.text.secondary)
+            .contrastTarget(on ? "kbd.on" : "kbd")
             .padding(.horizontal, 5).padding(.vertical, 1.5)
             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
                 .fill(on ? Color.white.opacity(0.18) : Color.primary.opacity(0.06)))
@@ -364,9 +366,11 @@ struct ListRow<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(DS.body(selected ? .medium : .regular))
                     .foregroundColor(selected ? DS.text.onSelection : .primary).lineLimit(1)
+                    .contrastTarget(selected ? "listrow.title.selected" : "listrow.title")
                 if !subtitle.isEmpty {
                     Text(subtitle).font(DS.sub())
                         .foregroundColor(selected ? DS.text.onSelectionSecondary : DS.text.secondary).lineLimit(1)
+                        .contrastTarget(selected ? "listrow.sub.selected" : "listrow.sub")
                 }
             }
             Spacer(minLength: 8)
@@ -394,7 +398,7 @@ extension ListRow where Trailing == EmptyView {
 struct SectionLabel: View {
     let text: String
     var body: some View {
-        Text(text).font(DS.cap(.semibold)).foregroundColor(DS.text.secondary)
+        Text(text).font(DS.cap(.semibold)).foregroundColor(DS.text.secondary).contrastTarget("section.label")
             .textCase(nil).padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 2)
     }
 }
@@ -411,8 +415,8 @@ struct PageHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DS.title())
-                if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary) }
+                Text(title).font(DS.title()).contrastTarget("page.title", .largeText)
+                if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary).contrastTarget("page.sub") }
             }
             Spacer(minLength: 8)
             trailing
@@ -505,8 +509,8 @@ struct EmptyState: View {
     var body: some View {
         VStack(spacing: 6) {
             IconBadge(symbol: symbol, tint: good, size: 34)
-            Text(title).font(DS.body(.medium))
-            if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary) }
+            Text(title).font(DS.body(.medium)).contrastTarget("empty.title")
+            if !sub.isEmpty { Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary).contrastTarget("empty.sub") }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

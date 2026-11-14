@@ -238,9 +238,8 @@ enum TrioIcon {
         let tinted = NSImage(size: s, flipped: false) { rr in img.draw(in: rr); color.set(); rr.fill(using: .sourceAtop); return true }
         tinted.draw(in: dst)
     }
-    static func batteryColor(_ p: Int, charging: Bool) -> NSColor {
-        p <= 10 ? .systemRed : (p <= 20 ? .systemOrange : (charging ? .systemGreen : NSColor(red: 0.18, green: 0.70, blue: 0.96, alpha: 1)))
-    }
+    /// 2.16 N2：与单独电池图标、页面和外设同一判断（BatteryLevel）；充电由闪电表示，不再单独换色
+    static func batteryColor(_ p: Int, charging: Bool) -> NSColor { BatteryLevel.of(p).graphicNS }
     /// 电池图标里画什么：数字（显示百分比时）和闪电（充电时，不论是否显示百分比、单色还是彩色）
     static func batteryMarks(charging: Bool, config c: TrioConfig) -> (number: Bool, bolt: Bool) { (c.percent, charging) }
     static func drawBattery(in r: CGRect, percent p: Int, charging: Bool, config c: TrioConfig, ink: NSColor) {
@@ -333,7 +332,7 @@ enum TrioIcon {
         return img
     }
     static func describe(battery: Int?, charging: Bool, wifi: WifiState, volume: VolumeState) -> String {
-        [battery.map { "电池 \($0)%" + (charging ? "，已接电源" : "") }, wifi.summary, "音量 " + volume.text].compactMap { $0 }.joined(separator: "；")
+        [battery.map { "电池 \($0)%" + (BatteryLevel.of($0).label.map { "，" + $0 } ?? "") + (charging ? "，已接电源" : "") }, wifi.summary, "音量 " + volume.text].compactMap { $0 }.joined(separator: "；")
     }
 }
 

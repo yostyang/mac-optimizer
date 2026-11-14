@@ -286,7 +286,7 @@ extension MOTests {
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let win = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
                 win.appearance = NSAppearance(named: ap); win.contentView = host; win.orderFrontRegardless(); settle(0.6)
-                if let rep = pngRep(host, out + "/" + tag + "-" + name + ".png") { contrast(host, rep, tag + " " + name) }
+                contrast(host, pngRep(host, out + "/" + tag + "-" + name + ".png"), tag + " " + name)
                 fits(host, tag + " " + name)
                 if tag != "apptraffic24" && tag != "tiles24" { check(size.height <= Layout.minSize.height - 100, "最小窗口高度放得下 \(tag) \(name)", "\(Int(size.height)) pt") }
                 win.orderOut(nil)

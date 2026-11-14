@@ -94,15 +94,15 @@ struct StateLine: View {
             }.frame(width: 16, height: 16).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(text).font(DS.sub(.medium)).foregroundColor(kind == .failed ? DS.text.bad : .primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .fixedSize(horizontal: false, vertical: true).contrastTarget("state.\(kind)")
                 if !detail.isEmpty {
-                    Text(detail).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(detail).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true).contrastTarget("state.detail")
                 }
                 if let updated { Text("更新于 " + Fmt.ago(updated)).font(DS.cap(.regular)).foregroundColor(DS.text.secondary) }
             }
             Spacer(minLength: 4)
             ForEach(actions) { a in
-                Button { a.run() } label: { Label(a.title, systemImage: a.symbol).font(DS.cap(.medium)) }
+                Button { a.run() } label: { Label(a.title, systemImage: a.symbol).font(DS.cap(.medium)).contrastTarget("state.action") }
                     .buttonStyle(.plain).padding(.horizontal, 8).padding(.vertical, 4)
                     .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).fill(Color.primary.opacity(0.06)))
                     .overlay(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous).strokeBorder(DS.border, lineWidth: 1))

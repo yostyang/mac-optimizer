@@ -109,7 +109,7 @@ enum V25 {
                 host.frame = NSRect(x: 0, y: 0, width: w, height: h)
                 let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: w, height: h), styleMask: [.titled], backing: .buffered, defer: false)
                 cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); MOTests.settle(1.0)
-                if let rep = MOTests.pngRep(host, out + "/\(name)-\(mode).png") { MOTests.contrast(host, rep, "\(name) \(mode)") }
+                MOTests.contrast(host, MOTests.pngRep(host, out + "/\(name)-\(mode).png"), "\(name) \(mode)")
                 if name != "tools25" { MOTests.fits(host, "\(name) \(mode)") }   // 资源排行是长列表：允许滚动，但不显示滚动条
                 cw.orderOut(nil)
             }

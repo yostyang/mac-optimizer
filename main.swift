@@ -18,6 +18,9 @@ struct Row: Identifiable {
     let actionTitle: String?
     let action: (() -> Void)?
     var verify: (() -> Bool)? = nil
+    /// 2.16 N10：稳定标识（应用用进程号 + 启动时间）；没有时用标题。刷新后按它找回选中项，不沿用行号
+    var key: String? = nil
+    var stableKey: String { key ?? "title:" + title }
 }
 
 enum LoginItems {
@@ -196,12 +199,16 @@ final class Model: ObservableObject {
 }
 
 enum Loaders {
+    /// 应用的稳定标识：进程号 + 启动时间（应用退出后再开，或进程号被复用，都算另一个对象）
+    static func appKey(_ a: NSRunningApplication) -> String {
+        "app:\(a.processIdentifier):" + (a.launchDate.map { String(Int($0.timeIntervalSince1970)) } ?? "?")
+    }
     static func rows(_ id: ToolKind) -> [Row] {
         let ps = Sys.procs()
         switch id {
         case .resources:
             return Sys.appUsage(ps).prefix(15).map { u in let a = u.app
-                return Row(icon: a.icon, title: u.name, subtitle: String(format: "内存 %.1f GB · CPU %.0f%%", u.memGB, u.cpu), actionTitle: u.name.contains("Grok") ? nil : "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
+                return Row(icon: a.icon, title: u.name, subtitle: String(format: "内存 %.1f GB · CPU %.0f%%", u.memGB, u.cpu), actionTitle: u.name.contains("Grok") ? nil : "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }, key: Loaders.appKey(a)) }
         case .startup:
             switch LoginItems.names() {
             case .success(let names): return names.map { LoginItems.row($0) }
@@ -210,7 +217,7 @@ enum Loaders {
             }
         case .browsers:
             return Sys.appUsage(ps).filter { Sys.isBrowser($0.name) }.map { u in let a = u.app
-                return Row(icon: a.icon, title: u.name, subtitle: String(format: "占用 %.1f GB 内存", u.memGB), actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
+                return Row(icon: a.icon, title: u.name, subtitle: String(format: "占用 %.1f GB 内存", u.memGB), actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }, key: Loaders.appKey(a)) }
         case .spotlight:
             let sp = Sys.cpu(["corespotlightd", "helpd", "mds_stores"], ps)
             let targets = ps.filter { ["corespotlightd", "helpd", "mds_stores"].contains($0.name) }.map(\.pid)
@@ -225,7 +232,7 @@ enum Loaders {
         case .vpn:
             let v = Sys.appUsage(ps).filter { Sys.isVPN($0.name) }
             return v.map { u in let a = u.app
-                return Row(icon: a.icon, title: u.name, subtitle: v.count > 1 ? "⚠️ 同时开着 \(v.count) 个 VPN，建议只留一个" : "运行中", actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }) }
+                return Row(icon: a.icon, title: u.name, subtitle: v.count > 1 ? "⚠️ 同时开着 \(v.count) 个 VPN，建议只留一个" : "运行中", actionTitle: "退出", action: { _ = a.terminate() }, verify: { a.isTerminated }, key: Loaders.appKey(a)) }
         case .displayPerformance:
             let ws = Sys.cpu(["WindowServer"], ps)
             let tr = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency, mo = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -257,15 +264,20 @@ let accentText = dyn(NSColor(srgbRed: 0.357, green: 0.294, blue: 0.910, alpha: 1
 let accent2 = dyn(NSColor(srgbRed: 0.18, green: 0.70, blue: 0.96, alpha: 1),
                   NSColor(srgbRed: 0.30, green: 0.76, blue: 1.0, alpha: 1))
 /// 状态色单独一套：绿 / 橙 / 红只表示正常、注意、危险
-let good = dyn(NSColor(srgbRed: 0.055, green: 0.624, blue: 0.431, alpha: 1),
-               NSColor(srgbRed: 0.204, green: 0.827, blue: 0.600, alpha: 1))
-let warn = dyn(NSColor(srgbRed: 0.698, green: 0.416, blue: 0.0, alpha: 1),
-               NSColor(srgbRed: 1.0, green: 0.702, blue: 0.251, alpha: 1))
-let bad = dyn(NSColor(srgbRed: 0.851, green: 0.231, blue: 0.231, alpha: 1),
-              NSColor(srgbRed: 1.0, green: 0.420, blue: 0.420, alpha: 1))
-func dyn(_ light: NSColor, _ dark: NSColor) -> Color {
-    Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .vibrantDark, .aqua, .vibrantLight]).map { [.darkAqua, .vibrantDark].contains($0) } == true ? dark : light })
+/// 2.16 N2：AppKit 绘制（菜单栏电池、合并图标）与 SwiftUI 共用同一组状态图形色
+let goodNS = dynNS(NSColor(srgbRed: 0.055, green: 0.624, blue: 0.431, alpha: 1),
+                   NSColor(srgbRed: 0.204, green: 0.827, blue: 0.600, alpha: 1))
+let warnNS = dynNS(NSColor(srgbRed: 0.698, green: 0.416, blue: 0.0, alpha: 1),
+                   NSColor(srgbRed: 1.0, green: 0.702, blue: 0.251, alpha: 1))
+let badNS = dynNS(NSColor(srgbRed: 0.851, green: 0.231, blue: 0.231, alpha: 1),
+                  NSColor(srgbRed: 1.0, green: 0.420, blue: 0.420, alpha: 1))
+let good = Color(nsColor: goodNS)
+let warn = Color(nsColor: warnNS)
+let bad = Color(nsColor: badNS)
+func dynNS(_ light: NSColor, _ dark: NSColor) -> NSColor {
+    NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .vibrantDark, .aqua, .vibrantLight]).map { [.darkAqua, .vibrantDark].contains($0) } == true ? dark : light }
 }
+func dyn(_ light: NSColor, _ dark: NSColor) -> Color { Color(nsColor: dynNS(light, dark)) }
 /// 页面和卡片背景：中性灰阶，深色接近图标的深蓝黑
 let pageBG = DS.window
 let cardBG = DS.card
@@ -283,13 +295,25 @@ extension View { func card() -> some View { modifier(CardBG()) } }
 struct PillButton: ButtonStyle {
     var filled = true
     func makeBody(configuration: Configuration) -> some View {
+        PillButtonBody(configuration: configuration, filled: filled)
+    }
+}
+/// 2.16：自定义 ButtonStyle 不会自动显示禁用态。禁用时改为浅底 + 次级文字（仍 ≥ 4.5:1，由 N1 检测），
+/// 不再靠调用方各自 `.opacity(0.5)`（半透明文字对比度不达标）。
+private struct PillButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let filled: Bool
+    @Environment(\.isEnabled) private var enabled
+    var body: some View {
+        let solid = filled && enabled
         configuration.label.font(DS.body(.medium))
-            .foregroundColor(filled ? .white : .primary)
+            .foregroundColor(solid ? DS.text.onSelection : (enabled ? .primary : DS.text.secondary))
+            .contrastTarget(enabled ? (filled ? "pill.filled" : "pill.plain") : "pill.disabled")
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-                .fill(filled ? AnyShapeStyle(DS.selectionFill) : AnyShapeStyle(Color.primary.opacity(0.06))))
+                .fill(solid ? AnyShapeStyle(DS.selectionFill) : AnyShapeStyle(Color.primary.opacity(enabled ? 0.06 : 0.04))))
             .overlay(RoundedRectangle(cornerRadius: DS.r.control, style: .continuous)
-                .strokeBorder(filled ? Color.clear : DS.border, lineWidth: 1))
+                .strokeBorder(solid ? Color.clear : DS.border, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.78 : 1)
     }
 }
@@ -317,7 +341,7 @@ struct CheckupCard: View {
     static let folded = 3
     var busy: Bool { m.phase == .scanning || m.phase == .fixing }
     var selected: Int { m.issues.filter { $0.on && $0.action != nil }.count }
-    var levelColor: Color { guard m.phase == .done, let v = m.verdict else { return accent }; return [good, Color.orange, Color.red][v.level.rawValue] }
+    var levelColor: Color { guard m.phase == .done, let v = m.verdict else { return accent }; return [good, warn, bad][v.level.rawValue] }
     var headline: String {
         switch m.phase {
         case .idle: return "一键体检"
@@ -344,10 +368,10 @@ struct CheckupCard: View {
                     RoundedRectangle(cornerRadius: DS.r.card, style: .continuous)
                         .fill(levelColor.opacity(0.14)).frame(width: 34, height: 34)
                     if busy { ProgressView().controlSize(.small) }
-                    else { Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundColor(levelColor) }
+                    else { Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundColor(levelColor) }   // 图标
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(headline).font(DS.title()).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("verdict.title")
+                    Text(headline).font(DS.title()).fixedSize(horizontal: false, vertical: true).contrastTarget("page.title", .largeText).accessibilityIdentifier("verdict.title")
                     Text(sub).font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
@@ -355,7 +379,7 @@ struct CheckupCard: View {
                     Button(t) { m.apply(fix) }.buttonStyle(PillButton()).accessibilityIdentifier("verdict.fix")
                 }
                 Button(m.phase == .done ? "重新体检" : "开始体检") { m.scan() }
-                    .buttonStyle(PillButton(filled: false)).disabled(busy).opacity(busy ? 0.5 : 1)
+                    .buttonStyle(PillButton(filled: false)).disabled(busy)
                     .accessibilityIdentifier("verdict.rescan")
             }
             // 问题清单：Raycast 列表样式
@@ -436,8 +460,11 @@ struct ToolPage: View {
     @State private var rows: [Row] = []
     @State private var loading = true
     @State private var loadedAt: Date?
-    @State private var sel = 0
-    var current: Row? { rows.indices.contains(sel) ? rows[sel] : nil }
+    /// 2.16 N10：按稳定标识记住选中项；刷新后找不到就清除选择并说明，不把操作转给同一行号的另一项
+    @State private var selKey: String?
+    var page: Page { .tool(feature.id) }
+    var selIndex: Int? { selKey.flatMap { k in rows.firstIndex { $0.stableKey == k } } }
+    var current: Row? { selIndex.map { rows[$0] } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PageHeader(title: feature.title, sub: feature.sub) {
@@ -454,11 +481,12 @@ struct ToolPage: View {
                 HStack(alignment: .top, spacing: 10) {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 1) {
-                            ForEach(Array(rows.enumerated()), id: \.element.id) { idx, r in
+                            ForEach(rows) { r in
+                                let on = selKey == r.stableKey
                                 ListRow(icon: r.icon, symbol: feature.icon, title: r.title, subtitle: r.subtitle,
-                                        selected: sel == idx, action: { sel = idx }) {
+                                        selected: on, action: { select(r) }) {
                                     if let t = r.actionTitle {
-                                        Text(t).font(DS.cap()).foregroundColor(sel == idx ? DS.text.onSelectionSecondary : DS.text.secondary)
+                                        Text(t).font(DS.cap()).foregroundColor(on ? DS.text.onSelectionSecondary : DS.text.secondary)
                                     }
                                 }
                             }
@@ -475,14 +503,14 @@ struct ToolPage: View {
             Shell.shared.listHandler = { e in
                 guard !rows.isEmpty else { return false }
                 switch e.keyCode {
-                case Key.down: sel = min(sel + 1, rows.count - 1); return true
-                case Key.up: sel = max(0, sel - 1); return true
-                case Key.enter, Key.keypadEnter: run(rows[min(sel, rows.count - 1)]); return true
+                case Key.down: select(rows[min((selIndex ?? -1) + 1, rows.count - 1)]); return true
+                case Key.up: select(rows[max((selIndex ?? 1) - 1, 0)]); return true
+                case Key.enter, Key.keypadEnter: if let r = current { run(r) }; return true
                 default: return false
                 }
             }
         }
-        .onDisappear { Shell.shared.listHandler = nil }
+        .onDisappear { Shell.shared.listHandler = nil; FooterContext.shared.clear(page: page) }
     }
     var detail: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -507,13 +535,32 @@ struct ToolPage: View {
                 }
                 Text("列表共 \(rows.count) 项 · ↑↓ 选择" + (loadedAt.map { " · 更新于 " + Fmt.ago($0) } ?? "")).font(DS.cap()).foregroundColor(DS.text.secondary)
             } else {
-                EmptyState(symbol: feature.icon, title: "选择一项")
+                EmptyState(symbol: feature.icon, title: "选择一项", sub: "列表共 \(rows.count) 项 · ↑↓ 选择")
             }
         }
         .padding(12).frame(maxHeight: .infinity, alignment: .topLeading).card()
     }
+    func select(_ r: Row) {
+        selKey = r.stableKey
+        publish()
+    }
+    /// 把当前选中项交给底栏：名称、类型、主操作（与详情区同一个动作）
+    func publish() {
+        guard let r = current else { FooterContext.shared.clear(page: page); return }
+        let key = r.stableKey, title = r.title
+        let primary = (r.actionTitle != nil && r.action != nil) ? CmdAction(title: (r.actionTitle ?? "") + " " + r.title, short: r.actionTitle, destructive: true, run: {
+            // 执行时按稳定标识重新取行（列表可能刚刷新过）
+            if let now = rows.first(where: { $0.stableKey == key }) { run(now) }
+        }) : nil
+        FooterContext.shared.set(FooterObject(page: page, id: key, name: title, type: feature.title + "项", primary: primary, more: [
+            CmdAction(title: "复制名称", run: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(title, forType: .string) }),
+            CmdAction(title: "刷新列表", run: { loading = true; reload() }),
+        ], verify: { rows.contains { $0.stableKey == key } ? nil : "「\(title)」已不在列表中，已取消选择" }))
+    }
     func run(_ r: Row) {
         guard !operation.busy, let t = r.actionTitle, r.action != nil else { return }
+        // 执行前再核对：选中的对象仍在当前列表里（按稳定标识，不按行号）
+        guard rows.contains(where: { $0.stableKey == r.stableKey }) else { FooterContext.shared.clear(page: page, note: "「\(r.title)」已不在列表中，没有执行"); return }
         guard FixRunner.confirm(t + "？", r.title + "。操作后会重新读取列表；未确认的结果不会计入优化统计。", t) else { return }
         ToastCenter.shared.show("正在执行：" + r.title, symbol: "clock", tint: accent)
         operation.perform(r) { verified, message in
@@ -525,7 +572,17 @@ struct ToolPage: View {
         let id = feature.id
         DispatchQueue.global().async {
             let r = Loaders.rows(id)
-            DispatchQueue.main.async { rows = r; loading = false; loadedAt = Date(); sel = min(sel, max(0, r.count - 1)) }
+            DispatchQueue.main.async {
+                rows = r; loading = false; loadedAt = Date()
+                if let k = selKey, !r.contains(where: { $0.stableKey == k }) {
+                    let name = FooterContext.shared.current(page)?.name ?? "选中的项"
+                    selKey = nil
+                    FooterContext.shared.clear(page: page, note: "「\(name)」已不在列表中，已取消选择")
+                } else if selKey == nil, let first = r.first {
+                    selKey = first.stableKey   // 首次进入默认选中第一项（沿用原行为）
+                }
+                publish()
+            }
         }
     }
 }
@@ -676,7 +733,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         mon.onSample = { BatteryAlerts.shared.handle($0); V19Store.shared.handle($0) }
         EnergyTracker.shared.onDrain = { BatteryAlerts.shared.drain($0, $1) }
         #if MO_TESTS
-        if args.contains("--snapshot") || args.contains("--uitest") { w.contentView = NSHostingView(rootView: RootView()); MOTests.runUI(args: args, window: w); return }
+        if args.contains("--snapshot") || args.contains("--uitest") {
+            #if MO_TESTS
+            MOTests.active = true   // 2.16：先置测试态再建界面，对比度布局标记从第一帧起就在
+            #endif
+            w.contentView = NSHostingView(rootView: RootView()); MOTests.runUI(args: args, window: w); return
+        }
         #endif
         UNUserNotificationCenter.current().delegate = self
         mon.alertsEnabled = V19Store.shared.settings.alertsOn

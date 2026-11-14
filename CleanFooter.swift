@@ -58,14 +58,21 @@ struct PinnedFooterMarker: NSViewRepresentable {
 struct CleanRecordsCard: View {
     static let restoreHint = "在本页上方「清理记录」里点恢复"
     @ObservedObject var store: CleanStore
+    @ObservedObject var uninstall = Uninstaller.shared
     var limit = 20
+    @State private var showAll = false
     var body: some View {
         Card(title: "清理记录", icon: "arrow.uturn.backward.circle") {
-            if store.records.isEmpty {
+            if store.records.isEmpty && uninstall.records.isEmpty {
                 StateLine(kind: .empty, text: "还没有清理记录", detail: "在「清理预览」里移到废纸篓的项会出现在这里，仍在废纸篓里的可以一键恢复。", id: "changes.clean.state")
             } else {
                 ForEach(Array(store.records.suffix(limit).reversed())) { r in CleanRecordRow(record: r, store: store) }
-                if store.records.count > limit { Text("只显示最近 \(limit) 条，共 \(store.records.count) 条").font(DS.sub()).foregroundColor(DS.text.secondary) }
+                // 2.16 N8：摘要之外的更早记录与卸载记录从「查看全部」进入，返回后回到本页
+                HStack(spacing: 8) {
+                    Text(Self.summary(clean: store.records.count, uninstall: uninstall.records.count, limit: limit)).font(DS.sub()).foregroundColor(DS.text.secondary)
+                    Spacer(minLength: 4)
+                    Button("查看全部") { showAll = true }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("changes.clean.all")
+                }
             }
             if !store.restoreNote.isEmpty {
                 StateLine(kind: store.restoreNote.hasPrefix("已") ? .done : .failed, text: store.restoreNote, id: "clean.restore.state")
@@ -73,5 +80,9 @@ struct CleanRecordsCard: View {
             Text("只有还在废纸篓里的项可以恢复；原位置已有同名文件时不覆盖，会改名放回。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("changes.clean")
+        .sheet(isPresented: $showAll) { RecordsHistoryView(clean: store, uninstall: uninstall, close: { showAll = false }) }
+    }
+    static func summary(clean: Int, uninstall: Int, limit: Int) -> String {
+        (clean > limit ? "这里显示最近 \(limit) 条清理记录，共 \(clean) 条" : "共 \(clean) 条清理记录") + (uninstall > 0 ? " · 另有 \(uninstall) 条卸载记录" : "")
     }
 }

@@ -12,8 +12,8 @@ struct NetworkPage: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("网络诊断").font(DS.title())
-                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                        Text("网络诊断").font(DS.title()).contrastTarget("page.title", .largeText)
+                        Text(nav.netTab == 0 ? "延迟、丢包、DNS 检测与一键修复（只在点击时检测）" : (nav.netTab == 1 ? "下载、上传、三种延迟与抖动，打开即测" : "按应用的真实收发字节，实时与 1 分钟～30 天历史")).font(DS.sub()).foregroundColor(DS.text.secondary)
                     }
                     Spacer()
                     // 双标签放在标题行，不另占一行：v1.7 三张新卡片叠在原诊断页上会超高 277 pt，
@@ -41,7 +41,7 @@ struct NetworkPage: View {
     var diagnosticDetails: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("诊断详情与 DNS 修复").font(DS.title())
+                Text("诊断详情与 DNS 修复").font(DS.title()).contrastTarget("page.title", .largeText)
                 Spacer()
                 Button("完成") { showDetails = false }.buttonStyle(PillButton(filled: false)).accessibilityIdentifier("net.details.close")
             }
@@ -56,8 +56,8 @@ struct NetworkPage: View {
     }
     func color(_ r: PingResult?) -> Color {
         guard let r else { return .secondary }
-        if r.loss >= 20 || r.avgMs == nil { return .red }
-        if r.loss > 0 || (r.avgMs ?? 0) > 150 { return .orange }
+        if r.loss >= 20 || r.avgMs == nil { return bad }
+        if r.loss > 0 || (r.avgMs ?? 0) > 150 { return warn }
         return good
     }
     var pingCard: some View {
@@ -70,18 +70,18 @@ struct NetworkPage: View {
                 HStack(spacing: 8) {
                     Circle().fill(color(t.result)).frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(t.name).font(.system(size: 12, weight: .medium))
-                        Text(t.host).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
+                        Text(t.name).font(DS.sub(.medium))
+                        Text(t.host).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1)
                     }
                     Spacer()
-                    Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
-                    Text("丢包 " + String(format: "%.0f%%", t.result?.loss ?? 100)).font(.system(size: 12)).foregroundColor((t.result?.loss ?? 100) > 0 ? DS.text.warn : DS.text.secondary).monospacedDigit().frame(width: 64, alignment: .trailing)
+                    Text(t.result?.avgMs.map { String(format: "%.0f ms", $0) } ?? "超时").font(DS.sub(.medium)).monospacedDigit().frame(width: 60, alignment: .trailing)
+                    Text("丢包 " + String(format: "%.0f%%", t.result?.loss ?? 100)).font(DS.sub()).foregroundColor((t.result?.loss ?? 100) > 0 ? DS.text.warn : DS.text.secondary).monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
             }
             if nd.tcpOK == true {
-                Text("TCP 能连通：上面 ping 超时 / 丢包可能是 VPN / TUN 拦截了 ICMP，不是网络本身不稳定，丢包结论仅供参考。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("TCP 能连通：上面 ping 超时 / 丢包可能是 VPN / TUN 拦截了 ICMP，不是网络本身不稳定，丢包结论仅供参考。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             } else if nd.vpnActive && nd.targets.contains(where: { ($0.result?.loss ?? 0) >= 20 }) {
-                Text("VPN / TUN 正在运行：ping 丢包仅供参考，请以实际使用为准。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("VPN / TUN 正在运行：ping 丢包仅供参考，请以实际使用为准。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -93,35 +93,35 @@ struct NetworkPage: View {
             }
             if !svcs.isEmpty {
                 ForEach(svcs, id: \.service) { s in
-                    HStack { Text(s.service).font(.system(size: 12)); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1) }
+                    HStack { Text(s.service).font(DS.sub()); Spacer(); Text(s.servers.isEmpty ? "自动（路由器分配）" : s.servers.joined(separator: ", ")).font(DS.sub(.medium)).monospacedDigit().lineLimit(1) }
                 }
             }
             if !nd.effective.isEmpty {
-                HStack { Text("系统实际使用").font(.system(size: 12)).foregroundColor(DS.text.secondary); Spacer(); Text(nd.effective.joined(separator: ", ")).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1) }
+                HStack { Text("系统实际使用").font(DS.sub()).foregroundColor(DS.text.secondary); Spacer(); Text(nd.effective.joined(separator: ", ")).font(DS.sub(.medium)).monospacedDigit().lineLimit(1) }
             }
             if !nd.resolves.isEmpty { Divider() }
             ForEach(nd.resolves) { r in
                 HStack(spacing: 8) {
                     Image(systemName: r.verdict == .ok ? "checkmark.circle.fill" : (r.verdict == .vpnFake ? "shield.lefthalf.filled" : "exclamationmark.circle.fill"))
-                        .foregroundColor(r.verdict == .ok ? DS.text.good : (r.verdict == .vpnFake ? accentText : (r.verdict == .slow ? DS.text.warn : DS.text.bad))).font(.system(size: 12))
-                    Text(r.host).font(.system(size: 12)).lineLimit(1)
+                        .foregroundColor(r.verdict == .ok ? DS.text.good : (r.verdict == .vpnFake ? accentText : (r.verdict == .slow ? DS.text.warn : DS.text.bad))).font(DS.sub())
+                    Text(r.host).font(DS.sub()).lineLimit(1)
                     Spacer()
-                    Text(r.verdict == .ok ? (r.ms.map { String(format: "%.0f ms", $0) } ?? "") : r.verdict.rawValue).font(.system(size: 12, weight: .medium)).monospacedDigit()
+                    Text(r.verdict == .ok ? (r.ms.map { String(format: "%.0f ms", $0) } ?? "") : r.verdict.rawValue).font(DS.sub(.medium)).monospacedDigit()
                 }
             }
-            if nd.resolves.isEmpty { Text("诊断时会解析几个常用网站，并用一个不存在的域名检测运营商劫持。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
+            if nd.resolves.isEmpty { Text("诊断时会解析几个常用网站，并用一个不存在的域名检测运营商劫持。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
             if nd.resolves.contains(where: { $0.verdict == .vpnFake }) {
-                Text("198.18.x.x 是 VPN 的虚拟地址（分流模式的正常现象），不是劫持。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("198.18.x.x 是 VPN 的虚拟地址（分流模式的正常现象），不是劫持。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
     var fixCard: some View {
         Card(title: "DNS 一键修复", icon: "wrench.and.screwdriver") {
-            Text("把正在使用的网络的 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6，并清除 DNS 缓存。修改前会保存原设置，随时可以恢复。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("把正在使用的网络的 DNS 改为阿里公共 DNS 223.5.5.5 / 223.6.6.6，并清除 DNS 缓存。修改前会保存原设置，随时可以恢复。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
             if !nd.vpns.isEmpty || !runningVPNs.isEmpty || nd.tun {
                 HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 12))
-                    Text("\((nd.vpns.isEmpty ? (runningVPNs.isEmpty ? ["VPN / TUN"] : runningVPNs) : nd.vpns).joined(separator: "、")) 正在运行并可能接管 DNS：先不要用 DNS 一键修复，断开 VPN 后再试，否则改动可能被 VPN 覆盖、无效。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(warn).font(.system(size: 12))   // 图标
+                    Text("\((nd.vpns.isEmpty ? (runningVPNs.isEmpty ? ["VPN / TUN"] : runningVPNs) : nd.vpns).joined(separator: "、")) 正在运行并可能接管 DNS：先不要用 DNS 一键修复，断开 VPN 后再试，否则改动可能被 VPN 覆盖、无效。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             HStack(spacing: 8) {
@@ -143,67 +143,149 @@ struct NetworkPage: View {
     var runningVPNs: [String] { NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }.filter { $0.contains("VPN") || $0.contains("鹊桥") } }
 }
 
-/// 蓝牙设备电量（电池页）：紧凑的 3 列小卡片，读不到的设备悬停可看原因
+/// 蓝牙设备电量（电池页）。2.16 N5：每台设备单独显示有效 / 缓存 / 过期 / 未取得，
+/// 原因和读取时间可以用鼠标或键盘打开（不只放在悬停提示里）。
 struct BTCard: View {
     @ObservedObject var bt = BTBattery.shared
     let macLevel: Int?
-    struct Item: Identifiable { let id: String; let icon: String; let name: String; let p: Int?; let note: String }
-    var items: [Item] {
-        var a: [Item] = []
-        if let m = macLevel { a.append(Item(id: "mac", icon: "laptopcomputer", name: "这台 Mac", p: m, note: "")) }
-        for d in bt.devices where d.connected || d.percent != nil {
-            a.append(Item(id: d.id, icon: d.kind, name: d.name, p: d.percent, note: d.percent == nil ? d.reason : (d.parts.isEmpty ? d.source : d.parts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)%" }.joined(separator: " "))))
-        }
-        return Array(a.prefix(6))
+    var now: Date? = nil
+    var items: [BTDisplay] {
+        Array(bt.displays(now: now ?? Date()).filter { $0.connected || $0.percent != nil }.prefix(6))
     }
     var body: some View {
         Card(title: "设备电量", icon: "dot.radiowaves.left.and.right") {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 6)], spacing: 4) {
-                ForEach(items) { it in chip(it) }
+            VStack(spacing: 2) {
+                if let m = macLevel { macRow(m) }
+                ForEach(items) { d in BTDeviceRow(d: d, bt: bt) }
+                if macLevel == nil && items.isEmpty {
+                    StateLine(kind: .empty, text: "没有已连接的蓝牙外设", detail: "连接后会在下一次刷新时出现（平时每 5 分钟一次）。", actions: [.refresh { bt.userAsked = true; bt.refresh() }], id: "bt.state")
+                }
             }
             HStack {
-                let unknown = bt.devices.filter { $0.connected && $0.percent == nil }
-                if !unknown.isEmpty {
-                    Text("电量未知：" + unknown.map(\.name).joined(separator: "、")).font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
-                        .help(unknown.map { $0.name + "：" + $0.reason }.joined(separator: "\n"))
-                }
-                if unknown.contains(where: KeychronHID.candidate), KeychronHID.access() != .granted {
+                if items.contains(where: { $0.keychron && $0.percent == nil }), KeychronHID.access() != .granted {
                     // 文字链接样式：和旁边的说明同高，不把最小窗口下的卡片撑高
                     Button(action: {
                         if MOTests.active { return }
                         // 第一次弹系统授权；已拒绝过就直接打开设置页
                         if KeychronHID.access() == .denied || !KeychronHID.request() { KeychronHID.openSettings() }
                         bt.refresh()
-                    }) { Text("读取 Keychron 电量").font(.system(size: 12, weight: .medium)).foregroundColor(accent) }
+                    }) { Text("读取 Keychron 电量").font(DS.sub(.medium)).foregroundColor(accentText) }
                     .buttonStyle(.plain).accessibilityIdentifier("bt.keychron.read")
                     .help("Keychron 键盘会自己上报电量，但系统不显示。读取它需要「输入监控」权限；本应用只取电量这一项，不记录任何按键。授权后如仍未显示，请退出并重新打开应用。")
                 }
                 Spacer(minLength: 4)
-                if let updated = bt.updated { Text("更新 " + updated.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundColor(DS.text.secondary) }
+                // 批次时间写成「尝试」：部分设备失败时，它不是每台设备的成功时间
+                if let updated = bt.updated { Text("最近尝试 " + updated.formatted(date: .omitted, time: .shortened)).font(DS.sub()).foregroundColor(DS.text.secondary) }   // 时间
             }
         }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 8) {
-                Toggle("低于 \(bt.settings.threshold)% 通知", isOn: $bt.settings.lowAlert).toggleStyle(.switch).controlSize(.mini).font(.system(size: 12)).accessibilityIdentifier("bt.lowAlert")
+                Toggle("低于 \(bt.settings.threshold)% 通知", isOn: $bt.settings.lowAlert).toggleStyle(.switch).controlSize(.mini).font(DS.sub()).accessibilityIdentifier("bt.lowAlert")
                 if bt.loading { ProgressView().controlSize(.mini) }
-                Button { bt.userAsked = true; bt.refresh() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 12)) }.buttonStyle(.plain).foregroundColor(accent).help("刷新（平时每 5 分钟自动刷新一次）").accessibilityIdentifier("bt.refresh")
+                Button { bt.userAsked = true; bt.refresh() } label: { Image(systemName: "arrow.clockwise").font(DS.sub()) }
+                    .buttonStyle(.plain).foregroundColor(bt.loading ? DS.text.secondary : accentText).disabled(bt.loading)
+                    .help(bt.loading ? "正在刷新…" : "刷新（平时每 5 分钟自动刷新一次）").accessibilityLabel(bt.loading ? "正在刷新设备电量" : "刷新设备电量").accessibilityIdentifier("bt.refresh")
             }.padding(.top, 13).padding(.trailing, 14)
         }
         .onAppear { if !bt.userAsked { bt.userAsked = true; bt.refresh() } }
     }
-    func chip(_ it: Item) -> some View {
-        let c = it.p.map { batteryColor($0) } ?? Color.secondary
-        return HStack(spacing: 5) {
-            Image(systemName: it.icon).font(.system(size: 12)).foregroundColor(accent).frame(width: 16)
-            Text(it.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
-            Spacer(minLength: 2)
-            Text(it.p.map { "\($0)%" } ?? "—").font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(it.p == nil ? DS.text.secondary : .primary)
+    func macRow(_ p: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "laptopcomputer").font(DS.sub()).foregroundColor(accentText).frame(width: 18).accessibilityHidden(true)
+            Text("这台 Mac").font(DS.sub()).lineLimit(1)
+            Spacer(minLength: 4)
+            BatteryLevelView(name: "这台 Mac", percent: p, freshness: .fresh)
+        }.frame(height: 22)
+    }
+}
+
+/// 外设一行：名称 + 电量（或「— · 未取得 · 查看原因」）+ 详情入口
+struct BTDeviceRow: View {
+    let d: BTDisplay
+    @ObservedObject var bt: BTBattery
+    @State private var showDetail = false
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: d.kind).font(DS.sub()).foregroundColor(accentText).frame(width: 18).accessibilityHidden(true)
+            Text(d.name).font(DS.sub()).lineLimit(1).truncationMode(.middle).layoutPriority(1)
+            if !d.parts.isEmpty {
+                Text(d.parts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)%" }.joined(separator: " ")).font(DS.cap(.regular)).foregroundColor(DS.text.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            BatteryLevelView(name: d.name, percent: d.percent, freshness: d.freshness)
+            Button { showDetail = true } label: {
+                if d.percent == nil { Text("查看原因").font(DS.sub(.medium)).foregroundColor(accentText) }
+                else { Image(systemName: "info.circle").font(DS.sub()).foregroundColor(accentText) }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(d.percent == nil ? "查看\(d.name)读不到电量的原因" : "查看\(d.name)电量的来源与时间")
+            .accessibilityIdentifier("bt.detail." + d.id)
+            .popover(isPresented: $showDetail, arrowEdge: .trailing) { BTReadingDetail(d: d, bt: bt, close: { showDetail = false }) }
         }
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(GeometryReader { g in ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.05))
-            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(c.opacity(0.22)).frame(width: g.size.width * CGFloat(Double(it.p ?? 0) / 100))
-        } })
-        .help(it.p == nil ? "\(it.name)：读不到电量（\(it.note)）" : (it.note.isEmpty ? it.name : "\(it.name) · \(it.note)"))
+        .frame(height: 22)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// 一台设备的读数详情：状态、原因、来源、最近尝试与最近成功读取，以及能执行的下一步
+struct BTReadingDetail: View {
+    let d: BTDisplay
+    @ObservedObject var bt: BTBattery
+    let close: () -> Void
+    static func time(_ t: Date?) -> String { t.map { $0.formatted(date: .omitted, time: .shortened) + "（" + Fmt.ago($0) + "）" } ?? "还没有" }
+    var statusText: String {
+        switch d.freshness {
+        case .fresh: return "有效读数"
+        case .cached: return "缓存：这次没有读到，显示的是最近一次成功读取的值（\(Int(BTBattery.cacheWindow / 60)) 分钟内有效）"
+        case .expired: return "已过期：最近一次成功读取已超过 \(Int(BTBattery.cacheWindow / 60)) 分钟，不再当作当前电量"
+        case .unknown: return d.connected ? "未取得" : "未连接"
+        }
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(d.name).font(DS.body(.semibold))
+            Text(statusText).font(DS.sub()).fixedSize(horizontal: false, vertical: true)
+            if let k = d.reasonKind {
+                HStack(alignment: .top, spacing: 6) {
+                    Text("原因").font(DS.sub()).foregroundColor(DS.text.secondary).frame(width: 72, alignment: .leading)
+                    Text(k.title + (d.reason.isEmpty || d.reason == k.title ? "" : "：" + d.reason)).font(DS.sub()).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            row("来源", d.source.isEmpty ? "—" : d.source)
+            row("最近尝试", Self.time(d.lastAttemptAt))
+            row("最近成功读取", d.lastSuccessAt == nil ? "还没有成功读取" : "读取于 " + Self.time(d.lastSuccessAt))
+            if let p = d.lastPercent, d.freshness == .expired || d.freshness == .cached { row("最近成功值", "\(p)%") }
+            if let rep = d.sourceReportedAt { row("设备上报于", Self.time(rep)) }   // 只有来源真的给出时间才显示
+            if d.keychron {
+                Footnote(text: "Keychron 电量来自键盘自报（HID 3 号报告）。已核对的型号与固件有限；没有在同一台键盘上取得两次不同电量的对照之前，不能据一次读数认定该型号可靠。")
+            }
+            HStack(spacing: 8) {
+                ForEach(actions, id: \.0) { title, run in
+                    Button(title) { run() }.buttonStyle(PillButton(filled: false)).disabled(bt.loading)
+                }
+                Spacer()
+                Button("关闭") { close() }.buttonStyle(PillButton(filled: false)).keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(14).frame(width: 340)
+        .accessibilityElement(children: .contain).accessibilityIdentifier("bt.detail.panel")
+    }
+    func row(_ k: String, _ v: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(k).font(DS.sub()).foregroundColor(DS.text.secondary).frame(width: 72, alignment: .leading)
+            Text(v).font(DS.sub()).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    /// 每种原因给实际能做的下一步：刷新、打开对应的系统设置；不支持的读取路径只给说明（上面的文字），不给假按钮
+    var actions: [(String, () -> Void)] {
+        let refresh: (String, () -> Void) = (bt.loading ? "正在刷新…" : "刷新", { bt.userAsked = true; bt.refresh() })
+        switch d.reasonKind {
+        case .notConnected?: return [("打开蓝牙设置", { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings")!) }), refresh]
+        case .unauthorized?:
+            if d.keychron { return [("打开输入监控设置", { KeychronHID.openSettings() }), refresh] }
+            return [("打开蓝牙权限设置", { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")!) }), refresh]
+        case .unsupported?: return [refresh]
+        case .readFailed?, .noReport?, nil: return [refresh]
+        }
     }
 }

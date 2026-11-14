@@ -223,7 +223,7 @@ struct ChargeCard: View {
         case .none, .needsApproval: EmptyView()
         }
     }
-    func small(_ s: String) -> some View { Text(s).font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
+    func small(_ s: String) -> some View { Text(s).font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true) }
     func capsText(_ k: ChargeCaps) -> String {
         var a: [String] = []
         a.append(k.inhibit != .none ? "暂停充电" : (k.adapter ? "断开电源实现上限" : "无"))
@@ -238,8 +238,8 @@ struct ChargeCard: View {
         HStack {
             Toggle("启用充电上限", isOn: Binding(get: { s.settings.enabled }, set: { c.setLimit(s.settings.limit, enabled: $0) })).toggleStyle(.switch).controlSize(.small).accessibilityIdentifier("charge.enabled")
             Spacer()
-            Text(sum.cardLine(enabled: s.settings.enabled)).font(.system(size: 12)).foregroundColor(sum.holding ? DS.text.good : (sum.pause != nil ? DS.text.warn : DS.text.secondary)).lineLimit(2).multilineTextAlignment(.trailing)
-        }.font(.system(size: 12))
+            Text(sum.cardLine(enabled: s.settings.enabled)).font(DS.sub()).foregroundColor(sum.holding ? DS.text.good : (sum.pause != nil ? DS.text.warn : DS.text.secondary)).lineLimit(2).multilineTextAlignment(.trailing)
+        }.font(DS.sub())
         Group {
             HStack(spacing: 6) {
                 Text("上限")
@@ -251,20 +251,20 @@ struct ChargeCard: View {
             }
             if s.dockProtected == true && s.caps.adapterMode {
                 Label("已识别 Plugable TBT4-UD5，保持扩展坞供电。断开扩展坞后，先关闭再开启上限以重新检测连接状态。", systemImage: "display")
-                    .font(.system(size: 12)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
+                    .font(DS.sub()).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
             } else if s.displayPaused == true && s.caps.adapterMode {
                 Label("接着外接显示器时不断开电源（否则显示器会掉线），先正常充电；拔掉显示器约 10 秒后自动恢复上限。", systemImage: "display")
-                    .font(.system(size: 12)).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
+                    .font(DS.sub()).foregroundColor(DS.text.warn).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("charge.paused")
             } else if s.caps.adapterMode {
                 small("本机无停充键：到上限断开电源用电池，降到下沿再接通。")
             } else if s.caps.adapter {
                 Toggle("高于上限时自动放电（插着电源也用电池）", isOn: Binding(get: { s.settings.autoDischarge }, set: { c.setDischarge($0) })).toggleStyle(.switch).controlSize(.small)
             }
-        }.font(.system(size: 12)).disabled(!s.settings.enabled).opacity(s.settings.enabled ? 1 : 0.5)
+        }.font(DS.sub()).disabled(!s.settings.enabled).opacity(s.settings.enabled ? 1 : 0.5)
         HStack(spacing: 8) {
             Button { c.topUp(!s.topUp) } label: { Label(s.topUp ? "取消充满" : "充到 100%", systemImage: "bolt.fill").lineLimit(1).fixedSize() }.buttonStyle(PillButton(filled: false)).disabled(!s.settings.enabled).accessibilityIdentifier("charge.topup")
             if s.caps.led {
-                Toggle(isOn: Binding(get: { s.settings.led }, set: { c.setLED($0) })) { Text("MagSafe 灯").lineLimit(1).fixedSize() }.toggleStyle(.switch).controlSize(.small).font(.system(size: 12))
+                Toggle(isOn: Binding(get: { s.settings.led }, set: { c.setLED($0) })) { Text("MagSafe 灯").lineLimit(1).fixedSize() }.toggleStyle(.switch).controlSize(.small).font(DS.sub())
                     .help("保持在上限时绿灯，充电时橙灯").disabled(!s.settings.enabled)
             }
             Spacer()

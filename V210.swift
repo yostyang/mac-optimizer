@@ -72,9 +72,16 @@ enum SplitCustom {
 struct SplitPreview: View {
     let weights: [CGFloat]
     var rows: [Int] = []
+    /// 2.16：有上下比例时按比例画（优先于 rows）
+    var rowPercents: [[Int]]? = nil
+    func rects(_ size: CGSize) -> [CGRect] {
+        let r = CGRect(origin: .zero, size: size)
+        if let rp = rowPercents { return SplitLayout.rects(weights: weights, rowPercents: rp, in: r, gap: 3, flipped: true) }
+        return SplitLayout.rects(weights: weights, rows: rows, in: r, gap: 3, flipped: true)
+    }
     var body: some View {
         GeometryReader { g in
-            ForEach(Array(SplitLayout.rects(weights: weights, rows: rows, in: CGRect(origin: .zero, size: g.size), gap: 3, flipped: true).enumerated()), id: \.offset) { _, r in
+            ForEach(Array(rects(g.size).enumerated()), id: \.offset) { _, r in
                 RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.35)).frame(width: r.width, height: r.height).position(x: r.midX, y: r.midY)
             }
         }.background(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
@@ -170,12 +177,16 @@ enum CleanRestore {
 extension CleanStore {
     @discardableResult func restore(_ r: CleanRecord) -> CleanRestore.Outcome {
         let o = CleanRestore.restore(r)
+        applyRestore(r, o)
+        return o
+    }
+    /// 恢复结果写回记录：只有真的移回才标记已恢复（发出请求不算成功）
+    func applyRestore(_ r: CleanRecord, _ o: CleanRestore.Outcome) {
         restoreNote = o.message
-        if case .failed = o { return o }
+        if case .failed = o { return }
         if let i = records.firstIndex(where: { $0.id == r.id }) { records[i].restored = true }
         if !saveRecords() { restoreNote += "（记录未保存：\(saveError)）" }
         ChangeLog.shared.add(kind: .clean, title: "从废纸篓恢复：" + (r.path as NSString).lastPathComponent, detail: o.message, reversible: false, restoreNote: "需要的话可重新清理")
-        return o
     }
 }
 
@@ -184,16 +195,16 @@ struct CleanRecordRow: View {
     @ObservedObject var store: CleanStore
     var body: some View {
         HStack(spacing: 8) {
-            Text((record.path as NSString).lastPathComponent).font(.system(size: 12)).lineLimit(1)
+            Text((record.path as NSString).lastPathComponent).font(DS.sub()).lineLimit(1)
             Spacer()
-            Text(CleanLogic.fmtSize(record.size)).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+            Text(CleanLogic.fmtSize(record.size)).font(DS.sub()).foregroundColor(DS.text.secondary)
             switch CleanRestore.status(record) {
             case .available:
-                Button("恢复") { store.restore(record) }.controlSize(.small).disabled(store.trashing)
+                Button(store.restoringIDs.contains(record.id) ? "恢复中…" : "恢复") { store.restoreAsync(record) }.controlSize(.small).disabled(store.trashing || store.restoringIDs.contains(record.id))
                     .accessibilityIdentifier("clean.restore." + record.id.uuidString).accessibilityLabel("恢复 " + (record.path as NSString).lastPathComponent)
-            case .restored: Text("已恢复").font(.system(size: 12)).foregroundColor(DS.text.secondary)
-            case .trashGone: Text("废纸篓里已不在").font(.system(size: 12)).foregroundColor(DS.text.secondary)
-            case .untracked: Text("需手动放回").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+            case .restored: Text("已恢复").font(DS.sub()).foregroundColor(DS.text.secondary)
+            case .trashGone: Text("废纸篓里已不在").font(DS.sub()).foregroundColor(DS.text.secondary)
+            case .untracked: Text("需手动放回").font(DS.sub()).foregroundColor(DS.text.secondary)
             }
         }
     }

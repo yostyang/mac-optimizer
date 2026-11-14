@@ -270,7 +270,7 @@ extension MOTests {
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
                 cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); settle(1.2)
-                if let rep = pngRep(host, out + "/\(name)-\(mode).png") { contrast(host, rep, "\(name) \(mode)") }
+                contrast(host, pngRep(host, out + "/\(name)-\(mode).png"), "\(name) \(mode)")
                 fits(host, "\(name) \(mode)")
                 cw.orderOut(nil)
             }

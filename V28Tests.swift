@@ -118,7 +118,8 @@ enum V28 {
             T.check(T.find1(host, id: id) != nil, "面板有 \(id)")
         }
         let ring = T.find1(host, id: "panel.device.Keychron K3 Pro").map { T.axString($0.o, "accessibilityLabel") } ?? ""
-        T.check(ring == "Keychron K3 Pro，电量未取得", "读不到电量的外设朗读为「未取得」，不说 0%", ring)
+        // 2.16：读不到时朗读会带上原因（N5 要求原因可取到），前段仍必须是「未取得」且绝不出现 0%
+        T.check(ring.hasPrefix("Keychron K3 Pro，电量未取得") && !ring.contains("0%"), "读不到电量的外设朗读为「未取得」，不说 0%", ring)
         let phone = T.find1(host, id: "panel.device.iPhone").map { T.axString($0.o, "accessibilityLabel") } ?? ""
         T.check(phone == "iPhone，电量 76%", "有电量的外设朗读百分比", phone)
         pw.orderOut(nil)
@@ -154,7 +155,7 @@ enum V28 {
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
                 cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); T.settle(1.0)
-                if let rep = T.pngRep(host, out + "/\(name)-\(mode).png") { T.contrast(host, rep, "\(name) \(mode)") }
+                T.contrast(host, T.pngRep(host, out + "/\(name)-\(mode).png"), "\(name) \(mode)")
                 T.fits(host, "\(name) \(mode)")
                 cw.orderOut(nil)
             }

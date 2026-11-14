@@ -90,7 +90,7 @@ extension MOTests {
                 let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
                 let window = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
                 window.appearance = NSAppearance(named: appearance); window.contentView = host; window.orderFrontRegardless(); settle(0.6)
-                if let bitmap = pngRep(host, out + "/" + tag + "-" + name + ".png") { contrast(host, bitmap, tag + " " + name) }
+                contrast(host, pngRep(host, out + "/" + tag + "-" + name + ".png"), tag + " " + name)
                 fits(host, tag + " " + name); window.orderOut(nil)
             }
         }

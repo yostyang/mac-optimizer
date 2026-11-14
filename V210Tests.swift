@@ -166,9 +166,9 @@ enum V210 {
         T.check(c.place(.center) == "当前模板没有中区" && c.place(index: 4) == "当前模板没有第 5 区", "四栏没有唯一的中区：给出说明")
         let shared = SplitController.shared, keepPrefs = shared.prefs, keepScreens = shared.screens
         shared.prefs = p; shared.screens = c.screens
-        T.check(SplitController.commands("放到").count == 5, "有四栏模板时命令面板多出第 2、3 区", "\(SplitController.commands("放到").map(\.title))")
+        T.check(SplitController.commands("放到").count == 4 && SplitController.commands("放到").map(\.title) == ["放到左侧 12%", "放到左中 38%", "放到右中 38%", "放到右侧 12%"], "2.16：四栏按实际布局逐区列出，名称为空间描述", "\(SplitController.commands("放到").map(\.title))")
         p.setCustom([25, 50, 25], for: "A")
-        T.check(SplitController.commands("放到").count == 3, "三栏及以下只有左中右")
+        T.check(SplitController.commands("放到").map(\.title) == ["放到左侧 1/4", "放到中间 1/2", "放到右侧 1/4"] && SplitController.commands("放到中区").count == 1, "2.16：三栏逐区列出，旧说法「中区」仍能搜到")
         // 上下平分：四栏里中间两栏各分成上下两个区（共 6 个区）
         let area = CGRect(x: 0, y: 0, width: 1632, height: 875)
         let z6 = SplitLayout.rects(weights: [1, 1, 1, 1], rows: [1, 2, 2, 1], in: area)
@@ -184,7 +184,7 @@ enum V210 {
         p.setRows([1, 2], for: "A"); T.check(p.rows("A") == [1, 1, 1, 1], "栏数对不上的设置按不分处理")
         p.setRows([1, 2, 2, 1], for: "A")
         shared.prefs = p; shared.screens = c.screens
-        T.check(SplitController.commands("放到").count == 7, "有上下平分时命令面板按序号列出其余的区", "\(SplitController.commands("放到").map(\.title))")
+        T.check(SplitController.commands("放到").count == 6 && SplitController.commands("放到第 3 区").first?.title == "放到左中 1/4 下方", "2.16：有上下平分时逐区列出（上方 / 下方）", "\(SplitController.commands("放到").map(\.title))")
         shared.prefs = keepPrefs; shared.screens = keepScreens
         let w6 = FakeWin(CGRect(x: 100, y: 100, width: 500, height: 400)); drv.focusedWin = w6
         let ax6 = z6.map { SplitLayout.toAX($0, primaryHeight: 900) }

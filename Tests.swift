@@ -5,7 +5,6 @@ import ServiceManagement
 enum MOTests {
     static var active = false
     static var pass = 0, fail = 0
-    static var contrastSkips = 0
     static func check(_ c: Bool, _ name: String, _ detail: String = "") {
         if c { pass += 1; print("  ✓ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) } else { fail += 1; print("  ✗ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) }
     }
@@ -90,6 +89,8 @@ enum MOTests {
         active = true
         do { try SafetyCoreTests.run { check($0, $1) } }
         catch { check(false, "安全回归执行失败", error.localizedDescription) }
+        sec("2.16 N1 对比度验收（取样与判定）")
+        ContrastCheck.selftest { check($0, $1, $2) }
         sec("指标读取")
         var s = Snapshot(); Readers.staticInfo(into: &s)
         check(!s.chip.isEmpty, "芯片型号", s.chip); check(s.ramGB > 0, "内存容量", "\(s.ramGB) GB"); check(s.pCores > 0, "核心数", "\(s.pCores)P+\(s.eCores)E")
@@ -167,6 +168,7 @@ enum MOTests {
         V212.tests()
         V213.tests()
         PageExperienceTests.tests()
+        V216.tests()
         sec("持久化")
         let d = UserDefaults(suiteName: "mo-selftest")!; d.removePersistentDomain(forName: "mo-selftest")
         var bs = BatterySettings(); bs.alertsOn = true; bs.lowThresholds = [3, 20, 80]; bs.sounds["low"] = "Funk"; bs.save(d)
@@ -335,6 +337,10 @@ enum MOTests {
                 let gi = args.firstIndex(of: "--goldens"); let gd = gi.flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil }
                 if let gd { try? FileManager.default.createDirectory(atPath: gd, withIntermediateDirectories: true) }
                 snapshots(out, w, goldens: gd, approve: args.contains("--approve"))
+                ContrastCheck.writeReport(out)
+                let c = ContrastCheck.counts(ContrastCheck.cases)
+                check(c.failed == 0 && c.unverified == 0 && c.passed > 0, "对比度验收汇总", ContrastCheck.summaryLine())
+                print(ContrastCheck.summaryLine())
             } else { uiChecks(w) }
             EnergyTracker.shared.stop()
             for (k, v) in zip(keys, backup) { if let v { UserDefaults.standard.set(v, forKey: k) } else { UserDefaults.standard.removeObject(forKey: k) } }
@@ -357,74 +363,15 @@ enum MOTests {
         func ch(_ v: CGFloat) -> Double { let v = Double(v); return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
         return 0.2126 * ch(c.redComponent) + 0.7152 * ch(c.greenComponent) + 0.0722 * ch(c.blueComponent)
     }
-    /// 对比度检查：用辅助功能树找到每一段文字的位置，在截图里取样，文字区域内最亮和最暗像素的对比度必须够大
-    /// （白字落在浅色卡片上这类问题对比度≈1，会直接失败）
-    /// v2.5：10pt 小字的辅助功能框比实际字墨大一圈，取样时向外扩 3px，并用 5%/95% 分位代替极值，
-    /// 避免抗锯齿边缘把对比度算低或算高。
-    static func contrast(_ v: NSView, _ rep: NSBitmapImageRep, _ name: String) {
-        func collect() -> [(String, NSRect)] {
-            var out: [(String, NSRect)] = []
-            var stack: [NSObject] = [v]; var n = 0
-            while let x = stack.popLast(), n < 30000 {
-                n += 1
-                if axString(x, "accessibilityRole") == "AXStaticText", x.responds(to: NSSelectorFromString("accessibilityFrame")),
-                   let fr = (x.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue, fr.width > 6, fr.height > 6 {
-                    out.append((axString(x, "accessibilityLabel"), fr))
-                }
-                stack.append(contentsOf: axChildren(x))
-            }
-            return out
-        }
-        let texts = collect()
-        // 注意：这里不要试图 makeKeyAndOrderFront 抢救。抢 key 会让后续所有离屏窗口的
-        // 辅助功能树一起失效（表现为整轮 40+ 次「检查 0 段文字」）。取不到就跳过并计数，
-        // 由 snapshots() 末尾的「辅助功能树可用性」统一判断是否是整体故障。
-        if texts.isEmpty {
-            contrastSkips += 1
-            info("跳过对比度 \(name)：离屏窗口没有生成辅助功能树")
-            return
-        }
-        guard let win = v.window else { return }
-        let sx = CGFloat(rep.pixelsWide) / v.bounds.width, sy = CGFloat(rep.pixelsHigh) / v.bounds.height
-        var bad: [String] = []; var minR = 99.0; var checked = 0
-        // 2.14：详情区局部滚动后，滚出可见范围的文字仍在辅助功能树里，取样会落到别的背景上；这类文字看不见，不检查
-        var scrolls: [NSScrollView] = []
-        func walk(_ x: NSView) { if let s = x as? NSScrollView { scrolls.append(s) }; x.subviews.forEach(walk) }
-        walk(v)
-        let hidden: [(doc: NSRect, clip: NSRect)] = scrolls.compactMap { s in
-            guard let doc = s.documentView else { return nil }
-            return (win.convertToScreen(doc.convert(doc.bounds, to: nil)), win.convertToScreen(s.contentView.convert(s.contentView.bounds, to: nil)))
-        }
-        for (label, fr) in texts {
-            let c = NSPoint(x: fr.midX, y: fr.midY)
-            if hidden.contains(where: { $0.doc.contains(c) && !$0.clip.contains(c) }) { continue }
-            var r = v.convert(win.convertFromScreen(fr), from: nil).intersection(v.bounds)
-            guard r.width > 4, r.height > 4 else { continue }
-            if !v.isFlipped { r.origin.y = v.bounds.height - r.maxY }
-            r = r.insetBy(dx: -2, dy: -3).intersection(v.bounds)
-            var lums: [Double] = []
-            let x0 = Int(r.minX * sx), x1 = Int(r.maxX * sx), y0 = Int(r.minY * sy), y1 = Int(r.maxY * sy)
-            for y in stride(from: max(0, y0), to: min(rep.pixelsHigh, y1), by: 1) {
-                for x in stride(from: max(0, x0), to: min(rep.pixelsWide, x1), by: 1) {
-                    if let c = rep.colorAt(x: x, y: y) { lums.append(lum(c)) }
-                }
-            }
-            guard lums.count > 24 else { continue }
-            lums.sort()
-            let lo = lums[Int(Double(lums.count - 1) * 0.05)]
-            let hi = lums[Int(Double(lums.count - 1) * 0.95)]
-            // 没有文字标签、且取样区域完全均匀：这是坐标对不上的装饰性节点（例如面板离屏时的边距），跳过
-            if label.isEmpty && hi - lo < 0.02 { continue }
-            let ratio = (hi + 0.05) / (lo + 0.05); checked += 1
-            minR = min(minR, ratio)
-            if ProcessInfo.processInfo.environment["CDEBUG"] != nil, ratio < 1.5 {
-                print("CDEBUG \(name) label=[\(label)] ax=\(Int(fr.minX)),\(Int(fr.minY)) \(Int(fr.width))x\(Int(fr.height)) px=\(x0),\(y0) \(x1-x0)x\(y1-y0) ratio=\(String(format: "%.2f", ratio)) lo=\(String(format: "%.2f", lo)) hi=\(String(format: "%.2f", hi))")
-            }
-            // 无标签的装饰性文字节点取样框常常对不准，阈值略放宽；有标签的正文仍按 1.5 检查
-            let needed = label.isEmpty ? 1.25 : 1.5
-            if ratio < needed { bad.append("\(label)(\(String(format: "%.2f", ratio)))") }
-        }
-        check(checked >= 5 && bad.isEmpty, "文字对比度 \(name)", "检查 \(checked) 段文字，最低 \(String(format: "%.2f", minR))" + (bad.isEmpty ? "" : "；看不清：" + bad.prefix(6).joined(separator: "、")))
+    /// 对比度检查（2.16 N1）：文字区域来自 `.contrastTarget` 布局标记，不再读辅助功能树。
+    /// 每次调用是一个必测用例，结果为 passed / failed / unverified，汇总写入截图目录的 contrast-report.json；
+    /// 未验收（缺必测目标、截图失败、没有测到文字）不算通过。详见 ContrastTests.swift。
+    static func contrast(_ v: NSView, _ rep: NSBitmapImageRep?, _ name: String) {
+        v.layoutSubtreeIfNeeded()
+        let r = ContrastCheck.run(v, rep, caseID: name)
+        let measured = r.targets.compactMap { $0.measuredRatio }
+        let low = measured.min().map { String(format: "最低 %.2f:1", $0) } ?? "无实测值"
+        check(r.status == .passed, "文字对比度 \(name)", "\(r.status.rawValue) · 测到 \(measured.count) 处，\(low)" + (r.reason.isEmpty ? "" : "；" + r.reason))
     }
     /// 布局检查（2.13 门槛 A）：
     /// - 页面标了摘要区（`pageSummary()`）时：摘要必须完整在可见范围内、不在滚动区域里；只有摘要下方的详情区可以局部滚动。
@@ -517,7 +464,7 @@ enum MOTests {
             let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
             let cw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
             cw.appearance = NSAppearance(named: ap); cw.contentView = host; cw.orderFrontRegardless(); settle(1.0)
-            if let rep = pngRep(host, out + "/charge-\(mode).png") { contrast(host, rep, "充电卡片 \(mode)") }
+            contrast(host, pngRep(host, out + "/charge-\(mode).png"), "充电卡片 \(mode)")
             fits(host, "充电卡片 \(mode)")
             cw.orderOut(nil)
         }
@@ -529,6 +476,7 @@ enum MOTests {
         V28.snapshots(out)
         V213.snapshots(out)
         PageExperienceTests.snapshots(out)
+        V216.snapshots(out)
         // v1.8 / v1.9 新页截图（只做布局检查，不做黄金图比对）
         // 改动记录用固定样例：不随本机真实记录的多少而变（记录多了页面本来就该滚动）
         let realChanges = ChangeLog.shared.records
@@ -574,7 +522,7 @@ enum MOTests {
             let size = host.fittingSize; host.frame = NSRect(origin: .zero, size: size)
             let pw = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: size.width, height: size.height), styleMask: [.titled], backing: .buffered, defer: false)
             pw.appearance = NSAppearance(named: ap); pw.contentView = host; pw.orderFrontRegardless(); settle(1.0)
-            if let rep = pngRep(host, out + "/panel-\(mode).png") { contrast(host, rep, "面板 \(mode)") }
+            contrast(host, pngRep(host, out + "/panel-\(mode).png"), "面板 \(mode)")
             if mode == "light" { pngRep(host, out + "/panel.png") }
             check(size.width == PanelLayout.width && size.height > 400 && size.height <= 810, "面板尺寸 \(mode)（默认内容 ≤ 810 pt）", "\(Int(size.width))×\(Int(size.height))")
             pw.orderOut(nil)
@@ -587,7 +535,7 @@ enum MOTests {
                     let tag = "\(name)-\(szName)-\(mode)"
                     let rep = pngRep(w.contentView!, out + "/\(tag).png")
                     fits(w.contentView!, tag)
-                    if szName == "default", let rep { contrast(w.contentView!, rep, tag) }
+                    contrast(w.contentView!, rep, tag)   // 2.16：默认与最小窗口都测
                     if szName == "default", mode == "light" { pngRep(w.contentView!, out + "/\(name).png") }
                 }
             }
@@ -624,13 +572,8 @@ enum MOTests {
             NSGraphicsContext.restoreGraphicsState()
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out + "/menubar-battery.png"))
         }
-        // 某些机器/会话里，离屏窗口的 SwiftUI 辅助功能树整体不生成（同一批 --uitest 却正常）。
-        // 这是测试环境限制，不是界面缺陷：明确提示并保留截图供人工核对，不把发布挡在红灯上。
-        if contrastSkips > 8 {
-            info("⚠️ 本轮有 \(contrastSkips) 次对比度检查未执行：离屏窗口没有生成辅助功能树，请人工核对浅/深色截图")
-        } else {
-            info("辅助功能树正常（跳过对比度检查 \(contrastSkips) 次）")
-        }
+        // 2.16 N1：对比度检测不再依赖辅助功能树；状态样例（选中/禁用/错误/低电量）与 AX 不可用探针
+        ContrastCheck.snapshots(out)
     }
 
     static func uiChecks(_ w: NSWindow) {
@@ -777,7 +720,7 @@ enum MOTests {
         v22UI(w)
         v23UI(w)
         v24UI(w)
-        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w); V213.ui(w); PageExperienceTests.ui(w)
+        V25.ui(w); V26.ui(w); V28.ui(w); V292.ui(w); V210.ui(w); V211.ui(w); V213.ui(w); PageExperienceTests.ui(w); V216.ui(w)
         UIState.shared.menuBar = false
         check(StatusBar.shared.item == nil && mon.interval == 0, "关闭菜单栏图标后停止采样")
         check(Actions.loginEnabled == loginBefore, "测试全程没有改动登录项")

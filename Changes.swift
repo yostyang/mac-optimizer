@@ -227,13 +227,13 @@ struct ChangesPage: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("改动与提醒").font(DS.title())
-                        Text("本 App 做过的改动集中在这里看，能恢复的恢复，不能恢复的会写清楚办法").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                        Text("改动与提醒").font(DS.title()).contrastTarget("page.title", .largeText)
+                        Text("本 App 做过的改动集中在这里看，能恢复的恢复，不能恢复的会写清楚办法").font(DS.sub()).foregroundColor(DS.text.secondary)
                     }
                     Spacer()
                 }
                 if charge.phase == .ready {
-                    Text("充电助手已安装：不会重复索要授权，也不会重复弹安装提示").font(.system(size: 12)).foregroundColor(DS.text.good).fixedSize(horizontal: false, vertical: true)
+                    Text("充电助手已安装：不会重复索要授权，也不会重复弹安装提示").font(DS.sub()).foregroundColor(DS.text.good).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Button("去电池页安装充电助手") { Nav.shared.sel = .battery }.buttonStyle(PillButton(filled: false))
                 }
@@ -243,15 +243,15 @@ struct ChangesPage: View {
                 CleanRecordsCard(store: clean)
                 Card(title: "主动提醒（只在异常时）", icon: "bell") {
                     Toggle("开启异常提醒（默认关闭）", isOn: Binding(get: { v19.settings.alertsOn }, set: { v19.setAlertsEnabled($0) })).accessibilityIdentifier("v19.alertsOn")
-                    Text("阈值：CPU 连续 5 次采样都高于 90% 才提醒一次，之后 1 小时内不重复弹；磁盘可用低于 10% 或低于 20 GB 提醒；电池健康从 80% 以上掉到 80% 以下提醒。阈值附近抖动不会反复弹。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
-                    if !v19.lastAlertText.isEmpty { Text(v19.lastAlertText).font(.system(size: 12)).foregroundColor(DS.text.warn) }
+                    Text("阈值：CPU 连续 5 次采样都高于 90% 才提醒一次，之后 1 小时内不重复弹；磁盘可用低于 10% 或低于 20 GB 提醒；电池健康从 80% 以上掉到 80% 以下提醒。阈值附近抖动不会反复弹。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    if !v19.lastAlertText.isEmpty { Text(v19.lastAlertText).font(DS.sub()).foregroundColor(DS.text.warn) }
                     HStack {
-                        Text(v19.permissionText).font(.system(size: 12)).foregroundColor(DS.text.secondary).accessibilityIdentifier("v22.notificationPermission")
+                        Text(v19.permissionText).font(DS.sub()).foregroundColor(DS.text.secondary).accessibilityIdentifier("v22.notificationPermission")
                         if v19.permissionStatus == .denied {
                             Button("打开通知设置") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!) }.buttonStyle(PillButton(filled: false))
                         }
                     }
-                    Text("提醒开启后，关闭窗口仍会监测；磁盘连续 3 次不足才提醒，恢复后才重新判断。清理始终由你预览并确认。").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("提醒开启后，关闭窗口仍会监测；磁盘连续 3 次不足才提醒，恢复后才重新判断。清理始终由你预览并确认。").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Card(title: "改动记录", icon: "list.clipboard") {
                     if log.records.isEmpty {
@@ -260,11 +260,11 @@ struct ChangesPage: View {
                         ForEach(Array(log.records.suffix(50).reversed())) { r in
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
-                                    Text(r.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    Text(r.title).font(DS.sub(.medium)).lineLimit(1)
                                     Spacer()
-                                    Text(r.kind.rawValue).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                                    Text(r.kind.rawValue).font(DS.sub()).foregroundColor(DS.text.secondary)
                                 }
-                                Text(r.detail).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(2)
+                                Text(r.detail).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(2)
                                 HStack(spacing: 8) {
                                     if r.reversible && r.kind == .dns {
                                         Button("恢复原 DNS") {
@@ -272,7 +272,7 @@ struct ChangesPage: View {
                                             log.restore(r, dns: dns) { success, note in restoreSucceeded = success; restoreNote = note }
                                         }.buttonStyle(PillButton(filled: false)).disabled(dns.busy).accessibilityIdentifier("changes.restore")
                                     } else {
-                                        Text(ChangesPage.restoreText(r)).font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                                        Text(ChangesPage.restoreText(r)).font(DS.sub()).foregroundColor(DS.text.secondary)
                                     }
                                     if r.kind == .clean {
                                         Button("打开废纸篓") { NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory() + "/.Trash")) }.buttonStyle(PillButton(filled: false))
@@ -285,7 +285,7 @@ struct ChangesPage: View {
                     if !restoreNote.isEmpty {
                         StateLine(kind: dns.busy ? .loading : (restoreSucceeded ? .done : .failed), text: restoreNote, id: "changes.restore.state")
                     }
-                    Text("恢复不了的项不会假装恢复：清理类在上方「清理记录」恢复或从废纸篓手动放回，退出应用类请重新打开该应用").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("恢复不了的项不会假装恢复：清理类在上方「清理记录」恢复或从废纸篓手动放回，退出应用类请重新打开该应用").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }.onAppear { v19.refreshPermission() }

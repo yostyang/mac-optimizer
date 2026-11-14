@@ -228,11 +228,31 @@ final class EnergyTracker: ObservableObject {
 final class BatteryAlerts: ObservableObject {
     static let shared = BatteryAlerts()
     @Published var settings = BatterySettings.load() { didSet { settings.save(); if settings.alertsOn && !oldValue.alertsOn { requestAuth() } } }
+    /// 2.16 N4：系统通知权限（只读取，不主动切换）。nil = 还没读到
+    @Published var permission: UNAuthorizationStatus?
     var engine = AlertEngine()
     private var drainLast: [String: Date] = [:]
     var sink: ((AlertEvent) -> Void)?    // 测试用
 
-    func requestAuth() { guard !MOTests.active, Bundle.main.bundleIdentifier != nil else { return }; UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in } }
+    func requestAuth() {
+        guard !MOTests.active, Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in self.refreshPermission() }
+    }
+    func refreshPermission() {
+        guard !MOTests.active, Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().getNotificationSettings { st in
+            DispatchQueue.main.async { self.permission = st.authorizationStatus }
+        }
+    }
+    /// 提醒开启时的系统权限说明：只有系统确实允许才说「已生效」
+    static func permissionNote(_ p: UNAuthorizationStatus?) -> (text: String, blocked: Bool) {
+        switch p {
+        case .authorized?, .provisional?: return ("系统通知已允许，提醒已生效", false)
+        case .denied?: return ("系统设置里没有允许本应用发通知：提醒不会弹出", true)
+        case .notDetermined?: return ("还没有获得系统通知授权：首次提醒前系统会询问", true)
+        default: return ("正在读取系统通知权限…", false)
+        }
+    }
     func handle(_ x: Snapshot) {
         let s = settings
         guard s.alertsOn else { return }

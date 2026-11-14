@@ -15,3 +15,6 @@ helper-cache/
 .tmp/
 跑测试.command
 .workbuddy-ai/
+build-tc/
+build-tc.sh
+build-tc-run.sh

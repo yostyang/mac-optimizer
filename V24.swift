@@ -585,6 +585,8 @@ final class Uninstaller: ObservableObject {
     @Published var saveError = ""
     @Published var busy = false
     @Published var records: [UninstallRecord] = []
+    /// 2.16 N8：正在恢复的卸载记录
+    @Published var restoringIDs: Set<UUID> = []
     var home = NSHomeDirectory()
     var whitelist: () -> [String] = { CleanStore.shared.whitelist }
     var isRunning: (String) -> Bool = { bid in !NSRunningApplication.runningApplications(withBundleIdentifier: bid).isEmpty }
@@ -652,14 +654,21 @@ final class Uninstaller: ObservableObject {
     }
     /// 恢复：把废纸篓里的项移回原位置；原位置已有同名文件时不覆盖
     @discardableResult func restore(_ rec: UninstallRecord) -> (ok: Int, skipped: Int) {
-        let fm = FileManager.default
+        let (ok, skipped) = Self.moveBack(rec)
+        applyRestore(rec, ok: ok, skipped: skipped)
+        return (ok, skipped)
+    }
+    /// 文件移回（不改记录，可在后台执行）：废纸篓里还在、原位置没有同名时才移
+    static func moveBack(_ rec: UninstallRecord, fm: FileManager = .default) -> (ok: Int, skipped: Int) {
         var ok = 0, skipped = 0
         for e in rec.entries {
             guard let t = e.trashed, fm.fileExists(atPath: t), !fm.fileExists(atPath: e.original) else { skipped += 1; continue }
             do { try fm.createDirectory(atPath: (e.original as NSString).deletingLastPathComponent, withIntermediateDirectories: true); try fm.moveItem(atPath: t, toPath: e.original); ok += 1 } catch { skipped += 1 }
         }
+        return (ok, skipped)
+    }
+    func applyRestore(_ rec: UninstallRecord, ok: Int, skipped: Int) {
         if let i = records.firstIndex(where: { $0.id == rec.id }) { records[i].restored = skipped == 0; saveLog() }
         note = "已恢复 \(ok) 项" + (skipped > 0 ? "；\(skipped) 项没有恢复（废纸篓里已不在，或原位置已有同名文件，未覆盖）" : "")
-        return (ok, skipped)
     }
 }

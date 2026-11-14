@@ -17,6 +17,56 @@ struct BTDevice: Identifiable, Equatable, Codable {
     var parts: [String: Int] = [:]   // AirPods：左/右/盒
     var source = ""                  // 读取方式
     var reason = ""                  // 读不到时的原因
+    var reasonKind: BTReasonKind? = nil   // 2.16 N5：原因分类（决定给刷新、设置还是说明入口）
+}
+
+/// 2.16 N5：读不到电量的原因分类
+enum BTReasonKind: String, Codable, Equatable {
+    case notConnected, unauthorized, unsupported, readFailed, noReport
+    var title: String {
+        switch self {
+        case .notConnected: return "未连接"
+        case .unauthorized: return "未授权"
+        case .unsupported: return "不支持当前读取路径"
+        case .readFailed: return "读取失败"
+        case .noReport: return "未取得有效上报"
+        }
+    }
+    /// 系统通知/蓝牙原因字符串 → 分类（GATT 不可用原因）
+    static func fromIssue(_ s: String) -> BTReasonKind {
+        if s.contains("权限") { return .unauthorized }
+        if s.contains("不支持") { return .unsupported }
+        return .readFailed
+    }
+}
+
+/// 2.16 N5：每台设备独立的读取记录（只在内存里；重启后从「未取得」开始，不补造历史）
+struct BTReadingState: Equatable {
+    var lastAttemptAt: Date?
+    var lastSuccessAt: Date?
+    var lastPercent: Int?
+    var lastSource = ""
+    /// 来源自己报告的时间：现有三种来源都不提供，保持 nil（界面只写「读取于」，不写「设备更新于」）
+    var sourceReportedAt: Date? = nil
+}
+
+/// 界面用的一台设备的当前读数（有效 / 缓存 / 过期 / 未取得），由 BTBattery.display 统一计算
+struct BTDisplay: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let kind: String
+    let connected: Bool
+    let percent: Int?            // 只有有效或缓存时才有值
+    let freshness: ReadingFreshness
+    let lastPercent: Int?        // 最近成功值（过期时只在详情里看）
+    let lastSuccessAt: Date?
+    let lastAttemptAt: Date?
+    let sourceReportedAt: Date?
+    let source: String
+    let reason: String
+    let reasonKind: BTReasonKind?
+    let parts: [String: Int]
+    var keychron: Bool { name.lowercased().contains("keychron") }
 }
 
 enum BTKind {
@@ -79,14 +129,15 @@ enum BTParse {
     static func merge(paired: [BTDevice], ioreg: [String: Int], gatt: [String: Int], gattIssue: String?, classic: [String: Int] = [:]) -> [BTDevice] {
         var list = paired
         for i in list.indices {
-            guard list[i].connected else { list[i].percent = nil; list[i].reason = "未连接"; continue }
+            guard list[i].connected else { list[i].percent = nil; list[i].reason = "未连接"; list[i].reasonKind = .notConnected; continue }
             guard list[i].percent == nil else { continue }
             if let value = classic[address(list[i].address)], (1...100).contains(value) { list[i].percent = value; list[i].source = "系统经典蓝牙读数"; continue }
             let uniqueName = list.filter { $0.name == list[i].name && $0.connected }.count == 1
             if uniqueName, let v = ioreg[list[i].name], (0...100).contains(v) { list[i].percent = v; list[i].source = "系统电量（IORegistry）"; continue }
             if uniqueName, let v = gatt[list[i].name], (0...100).contains(v) { list[i].percent = v; list[i].source = "蓝牙标准电量服务"; continue }
-            if let g = gattIssue, list[i].ble { list[i].reason = g; continue }
+            if let g = gattIssue, list[i].ble { list[i].reason = g; list[i].reasonKind = BTReasonKind.fromIssue(g); continue }
             list[i].reason = list[i].ble ? "未取得标准电量服务读数" : "未取得经典蓝牙电量，可能与型号或固件有关"
+            list[i].reasonKind = list[i].ble ? .noReport : .unsupported
         }
         // IORegistry 里有但不在配对列表的（如 USB 接收器连接的设备）
         for (n, v) in ioreg where (0...100).contains(v) && !list.contains(where: { $0.name == n }) {
@@ -192,7 +243,9 @@ struct BTSettings: Codable, Equatable {
 final class BTBattery: ObservableObject {
     static var shared = BTBattery()
     @Published var devices: [BTDevice] = []
+    /// 最近一次批量尝试完成的时间（不是每台设备的成功时间；逐设备时间见 states）
     @Published var updated: Date?
+    @Published var states: [String: BTReadingState] = [:]
     @Published var loading = false
     @Published var settings = BTSettings.load() { didSet { if persist { settings.save() } } }
     var source: BTSource = RealBTSource()
@@ -205,6 +258,8 @@ final class BTBattery: ObservableObject {
     private var alerted: Set<String> = []
     private var timer: Timer?
     static let interval: TimeInterval = 300
+    /// D3：缓存有效窗口 = 刷新间隔的两倍（当前 10 分钟）；超过后主值改为「— · 已过期」
+    static var cacheWindow: TimeInterval { interval * 2 }
     func start() {
         guard timer == nil else { return }
         refresh()
@@ -227,17 +282,45 @@ final class BTBattery: ObservableObject {
                     let access = src.keychronAccess()
                     list = BTParse.apply(hid: access == .granted ? src.keychron() : [], to: list, access: access)
                 }
-                DispatchQueue.main.async { self.devices = list; self.updated = Date(); self.loading = false; self.checkAlerts(); done?() }
+                DispatchQueue.main.async { let t = Date(); self.record(list, at: t); self.devices = list; self.updated = t; self.loading = false; self.checkAlerts(); done?() }
             }
             if needGatt { src.gatt(finish) } else { finish([:], nil) }
         }
     }
     /// 低电量：每台设备跌破阈值时提醒一次，回升 10% 后才会再次提醒
     func checkAlerts() {
-        for d in devices { guard d.connected, let p = d.percent else { continue }
+        for d in devices { guard d.connected, let p = d.percent else { continue }   // 只看本次真实读数，不按缓存或过期值提醒
             if p > settings.threshold + 10 { alerted.remove(d.id) }
             if settings.lowAlert, p <= settings.threshold, !alerted.contains(d.id) { alerted.insert(d.id); notify("\(d.name) 电量低", "剩余 \(p)%，记得充电") }
         }
     }
-    var withBattery: [BTDevice] { devices.filter { $0.percent != nil } }
+    /// 逐设备记录：只有这台设备这次真的读到了电量，才写它的成功时间（批次完成时间不冒充成功时间）
+    func record(_ list: [BTDevice], at t: Date) {
+        for d in list {
+            var st = states[d.id] ?? BTReadingState()
+            if d.connected {
+                st.lastAttemptAt = t
+                if let p = d.percent { st.lastSuccessAt = t; st.lastPercent = p; st.lastSource = d.source }
+            }
+            states[d.id] = st
+        }
+    }
+    /// 有效：本次读到；缓存：本次没读到但最近成功值在有效窗口内；过期：超过窗口；未取得 / 断连：没有可用值
+    static func display(_ d: BTDevice, state st: BTReadingState?, now: Date) -> BTDisplay {
+        var fresh: ReadingFreshness = .unknown, shown: Int? = nil
+        if d.connected {
+            if let p = d.percent { fresh = .fresh; shown = p }
+            else if let ls = st?.lastSuccessAt, let lp = st?.lastPercent {
+                if now.timeIntervalSince(ls) <= cacheWindow { fresh = .cached; shown = lp } else { fresh = .expired }
+            }
+        }
+        let source = d.percent != nil ? d.source : (st?.lastSource ?? "")
+        return BTDisplay(id: d.id, name: d.name, kind: d.kind, connected: d.connected, percent: shown, freshness: fresh,
+                         lastPercent: st?.lastPercent, lastSuccessAt: st?.lastSuccessAt, lastAttemptAt: st?.lastAttemptAt,
+                         sourceReportedAt: st?.sourceReportedAt, source: source, reason: d.reason,
+                         reasonKind: d.percent == nil ? (d.reasonKind ?? (d.connected ? .noReport : .notConnected)) : nil, parts: d.percent == nil ? [:] : d.parts)
+    }
+    func displays(now: Date = Date()) -> [BTDisplay] { devices.map { Self.display($0, state: states[$0.id], now: now) } }
+    /// 有可显示电量（有效或缓存）的设备；过期与未知不在这里出现
+    var withBattery: [BTDisplay] { displays().filter { $0.percent != nil } }
 }

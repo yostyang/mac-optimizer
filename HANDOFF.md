@@ -1,6 +1,8 @@
 # Mac 一键优化 · 开发交接
 
-更新：2026-11-14 · 当前发布版本 **2.15.1（41）**，上一发布 2.15.0（40） · 最低系统 macOS 13（各版本内容见文末分节，最新在最后）
+更新：2026-11-14 · 代码版本 **2.16.0（42，开发中）**，当前发布 2.15.1（41） · 最低系统 macOS 13（各版本内容见文末分节，最新在最后）
+
+界面规则的现行入口是 [docs/ui-spec-2.16.md](docs/ui-spec-2.16.md)：颜色、字号、内边距、布局门槛、对比度口径和 N1–N10 状态都记在那里；本文只讲怎么跑起来和每个版本的实现细节。
 
 本文面向接手开发的人：先讲怎么跑起来，再讲 2.5 改了什么、设计令牌在哪、键盘与全局热键怎么接、测试与截图怎么处理，最后是还没做完/需要真机确认的事。
 
@@ -340,3 +342,42 @@
 ## 2026-11-14 · 2.15.1（41）安全修复发布
 
 六项修复见 `docs/safety-review-fixes.md`。完整自检 990/0、交互 196/0、截图 156/0；CI 和本机升级完成。助手代码有变，真机在系统重新允许后台项目后恢复，原充电设置保留。发布与哈希回核见 `docs/release-validation-v2.15.1.md`。
+
+## 2026-11-14 · 2.16.0（42）可读性与操作闭环（分支 feature/2.16.0，未发布）
+
+依据《Mac一键优化_PRD_V2.16.0.md》的 N1–N10。规范入口是 `docs/ui-spec-2.16.md`。新文件：`ContrastGate.swift`、`ContrastTests.swift`、`BatteryLevel.swift`、`RecordsHistory.swift`、`SplitZones.swift`、`FooterContext.swift`、`V216Tests.swift`。
+
+### N1 对比度验收不依赖 AX
+- `.contrastTarget(id, role)` 在目标背后铺真实透明 `NSView`（与 2.13 `SummaryMarkerView` 同做法），只在 `MOTests.active` 时插入。`ContrastTests.swift` 遍历 NSView 层级找标记，在真实位图里取样：最多亮度档作背景，离背景最远的墨迹 90 分位作前景；透明叠加、选中底、卡片色都按实际像素算。
+- 结果三态 `passed / failed / unverified`。缺必测目标、目标被滚动裁掉、截图失败、没测到任何文字都记 `unverified`（`measuredRatio` 为空，不写 0）。汇总写入 `shots/contrast-report.json` 与 `contrast-summary.txt`；`test.sh` 要求「通过数 > 0、失败 0、未验收 0」，否则不放行。
+- 必测口径：正文 4.5:1；大字（≥ 18 pt，或 ≥ 14 pt 且 semibold）= 3:1；承载含义的图形 3:1。口径固定在 `ContrastRole`，执行时不能按结果调整。
+- 截图阶段新增 `states216-light/dark`（选中、禁用、错误、长名称、低电量、未知）和 `axless216-light/dark`（整树 `accessibilityHidden` + 故意缺 `probe.missing`，必须 `unverified` 且另两段仍测到数值）。`Test.swift` 的 `MOTests.contrast` 已从 AX 版本整体替换；旧的 `contrastSkips` 逻辑删除。
+- 截图窗口创建前先置 `MOTests.active = true`，否则第一帧没有布局标记。
+
+### N2 颜色与 N3 低电量
+- `BatteryLevel.of` 是电量状态的唯一判断（≤ 10 危险、11–20 注意）；图形 `graphic`、文字 `text`、AppKit `graphicNS` 同一判定。`main.swift` 的 `goodNS / warnNS / badNS` 与 SwiftUI `good / warn / bad` 同源；`TrioIcon.batteryColor` 改走 `BatteryLevel`。
+- 低电量标记 `LowBatteryMark`：危险是三角、注意是圆形，旁边有「电量极低 / 电量低」；朗读 `BatterySpeech.label` 含设备名、有效数值和状态，未知/过期不读成 0%，缓存读数注明。未知显示「— · 未取得」，过期主值隐藏、详情保留最近成功值。
+- 界面里剩余的系统红/橙（GlowAlert、显示器提示、网络 VPN 提示）改用 `bad / warn` 令牌；`PillButton` 禁用态不再靠 `.opacity(0.5)`，改为浅底 + `DS.text.secondary`（否则半透明文字对比度不达标）。
+
+### N4–N6
+- N4：`BatteryView` 关闭提醒时只留总开关和一句说明，阈值、充满、插拔、异常耗电、全屏与外设选项整段不渲染；`BatteryAlerts.permissionNote` 区分未决定 / 拒绝 / 允许，不允许时不显示「已生效」。
+- N5：`BTBattery` 逐设备记录 `lastAttemptAt / lastSuccessAt / lastPercent / lastSource`，`BTDisplay` 增加 `freshness`（有效 / 缓存 / 过期 / 未取得）、`reasonKind` 与 `sourceReportedAt`；缓存窗口 = `interval × 2` = 10 分钟。`BTReadingDetail` 是鼠标/键盘都能打开的弹层，按原因给刷新或系统设置入口。
+- N6：`fontlint.sh` 增加第二条检查——页面文字不得直接 `.system(size:)`，例外在行尾登记 `// 图标 / 数字 / 动态 / 单位 / 时间 / 令牌`。当前登记例外 16 处。
+
+### N8 记录完整浏览
+- `RecordsHistory.entries` 合并 `CleanStore.records` 与 `Uninstaller.records`，按本地日期分组、时间倒序；`RecordsHistoryView` 是「改动与提醒」里「查看全部」打开的独立窗口（`history.list` / `history.close`）。
+- 恢复仍走 `CleanRestore` 与卸载原有逻辑：不覆盖同名、改名放回、原目录重建；恢复中同一项禁用，成功后原地更新。不新增清空历史或批量恢复。1000 条样例（700 清理 + 300 卸载）在自检里固定生成。
+
+### N9 分区
+- 新偏好 `split.layout.v2`（`SplitLayoutV2`：`schemaVersion`、`displayID`、`columnPercents`、`rowPercentsByColumn`）。旧键不删：旧的 `customRows` 平分读成 `[50, 50]`，新比例只写 v2；旧版回退只看到它能表达的栏宽与是否平分。
+- `SplitRows`：上下各 ≥ 20%，默认 50 / 50，拖动吸附 5%（⌥ 不吸附），↑ ↓ 5%（⇧ 1%），输入框只接受 20–80 的整数。拖动只改 `@State live`，松手才保存；Esc 取消。保存失败回到上次成功值并说明。
+- `SplitPrefs.resetCustom(uuid)` 只把当前屏幕恢复两栏 50 / 50、关闭上下拆分，仍保持自定义启用；间距和其他屏幕不动。
+- `SplitNames` 生成「右侧 1/3」「左侧上方」这类名称，`SplitThumb.image` 画当前屏幕布局并高亮目标区；`SplitZoneTarget` 带布局签名，`place(target:)` 在执行前核对屏幕和签名，布局变了就不执行旧区域。
+
+### N10 底栏
+- `FooterContext` 保存当前页对象：`id` 用稳定标识（进程 = 进程号 + 启动时间；工具行 = 应用进程号 + 启动时间或标题；记录 = UUID），`verify` 在执行前再核对对象仍在。`busyID` 防止同一对象重复执行；执行中按钮显示「正在处理…」。
+- `BottomBar` 选中对象时显示「名称 · 类型」+ 主操作 + 「更多操作 ⌘K」；无选中回退到 `ContextActions.page` 最多两个；切页清本页选择。⌘K 在对象操作之后仍带当前页面与「前往」分组。
+- 实时监控 `MonitorProcesses` 可点选，↑↓ 选择、↵ 执行、Esc 清除；列表刷新后按稳定键找回，找不到就清除并说明「已不在高占用列表中」。工具页 `ToolPage` 同样从行号改为 `selKey`，刷新不会把操作转给同一行的另一个应用。
+
+### 本机验证
+`SWIFTFLAGS=-disable-sandbox ./test.sh`（macOS 27.2.1，解锁并加 `caffeinate`）：自检 1063、界面交互 205、截图 175、对比度 72 通过 0 失败 0 未验收、字号 2、页面状态 1，全部 0 失败；基准图差异 ≤ 0.13%，未重拍。回归中发现并修掉 `SplitPrefs.setCustom` 先写栏宽后读旧上下比例的问题（加栏或拖动调宽会静默清掉上下拆分），并更新一条过时的外设朗读断言。代理进程无法注册 WindowServer，GUI 用例只能在本机 Terminal 运行；锁屏会让「测试窗口就绪」前置检查失败，不作为结果。助手源码未变，复用已签名助手 `7fa85c04f483b64d`。详见 `docs/release-validation-v2.16.0.md`。

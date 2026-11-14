@@ -222,11 +222,11 @@ struct MonitorVerdict: View {
     var body: some View {
         let sampled = s.uptime > 0, v = PanelContent.verdict(s.health.score)
         HStack(spacing: 10) {
-            Image(systemName: sampled ? v.symbol : "hourglass").font(.system(size: 20, weight: .semibold))
+            Image(systemName: sampled ? v.symbol : "hourglass").font(.system(size: 20, weight: .semibold))   // 图标
                 .foregroundColor(sampled ? v.tint : DS.text.secondary).frame(width: 24).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(sampled ? v.word : "等待采样").font(DS.title()).foregroundColor(sampled ? DS.text.tone(v.tint) : DS.text.secondary)
+                    Text(sampled ? v.word : "等待采样").font(DS.title()).foregroundColor(sampled ? DS.text.tone(v.tint) : DS.text.secondary).contrastTarget("page.title", .largeText)
                     Text(sampled ? s.health.status : "").font(DS.body(.medium)).lineLimit(1)
                 }
                 Text(Self.reason(s)).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).truncationMode(.middle)
@@ -290,11 +290,52 @@ struct MonitorDetails: View {
     }
 }
 
+/// 2.16 N10：主窗口进程列表可选中；选中项按「进程号 + 启动时间」记住，底栏给出它的处理动作
 struct MonitorProcesses: View {
     @ObservedObject var m: Monitor
+    @State private var selKey: String?
+    @State private var selName = ""
+    static let limit = 8
+    var list: [ProcInfo] { Array(m.s.top.prefix(Self.limit)) }
     var body: some View {
-        ProcList(m: m, limit: 8).padding(8).frame(maxWidth: .infinity, alignment: .leading).card()
+        let keys = list.map { ProcIdentity.key($0) }
+        ProcList(m: m, limit: Self.limit, selection: selKey.flatMap { keys.firstIndex(of: $0) }, onSelect: { i in select(i) })
+            .padding(8).frame(maxWidth: .infinity, alignment: .leading).card()
             .accessibilityElement(children: .contain).accessibilityIdentifier("monitor.procs")
+            .onChange(of: keys) { now in
+                // 列表刷新后，选中的进程不在了（退出或掉出前 8），清除选择并说明；不把选择转给同一行的另一个进程
+                if let k = selKey, !now.contains(k) { selKey = nil; FooterContext.shared.clear(page: .monitor, note: "「\(selName)」已不在高占用列表中，已取消选择") }
+            }
+            .onAppear {
+                Shell.shared.listHandler = { e in
+                    let ks = list.map { ProcIdentity.key($0) }
+                    guard !ks.isEmpty else { return false }
+                    let cur = selKey.flatMap { ks.firstIndex(of: $0) }
+                    switch e.keyCode {
+                    case Key.down: select(min((cur ?? -1) + 1, ks.count - 1)); return true
+                    case Key.up: select(max((cur ?? 1) - 1, 0)); return true
+                    case Key.enter, Key.keypadEnter:
+                        guard cur != nil else { return false }
+                        FooterContext.shared.runPrimary(.monitor); return true
+                    case Key.escape:
+                        guard selKey != nil else { return false }
+                        selKey = nil; FooterContext.shared.clear(page: .monitor); return true
+                    default: return false
+                    }
+                }
+            }
+            .onDisappear { Shell.shared.listHandler = nil; selKey = nil; FooterContext.shared.clear(page: .monitor) }
+    }
+    func select(_ i: Int) {
+        guard list.indices.contains(i) else { return }
+        let p = list[i], key = ProcIdentity.key(p)
+        selKey = key; selName = p.name
+        let fix = ProcActions.fix(for: p)
+        let primary = fix.title.map { t in CmdAction(title: t, short: fix.short, destructive: true, run: { FixRunner.perform(fix) }) }
+        FooterContext.shared.set(FooterObject(page: .monitor, id: key, name: p.name, type: "进程 · PID \(p.id)", primary: primary, more: [
+            CmdAction(title: "复制进程名", run: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(p.name, forType: .string) }),
+            CmdAction(title: "复制 PID \(p.id)", run: { NSPasteboard.general.clearContents(); NSPasteboard.general.setString("\(p.id)", forType: .string) }),
+        ], verify: { ProcIdentity.check(key, pid: p.id, name: p.name) }))
     }
 }
 
@@ -307,7 +348,7 @@ struct BarButton: View {
     var body: some View {
         Button(action: run) {
             HStack(spacing: 5) {
-                Text(title).font(DS.sub(.medium)).foregroundColor(.primary).lineLimit(1)
+                Text(title).font(DS.sub(.medium)).foregroundColor(.primary).lineLimit(1).contrastTarget("bottom.action")
                 if let kbd { Kbd(text: kbd) }
             }
             .padding(.horizontal, 8).frame(height: 24)

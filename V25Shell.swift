@@ -244,7 +244,8 @@ final class Shell: ObservableObject {
         guard items.indices.contains(sel) else {
             // 空搜索：打开当前页面的分组操作列表（当前页面 → 快捷操作 → 前往）
             actionQuery = ""; actionSel = 0
-            let ctx = Self.contextItem(page: Nav.shared.sel)
+            // 2.16 N10：有选中对象时先列它的操作，后面接当前页面、快捷操作与前往
+            let ctx = FooterContext.shared.actionItem(Nav.shared.sel) ?? Self.contextItem(page: Nav.shared.sel)
             withAnimation(.easeOut(duration: DS.motionFast)) { actionsFor = ctx }
             return
         }
@@ -338,11 +339,12 @@ struct Sidebar: View {
         return Button { sel = p.id } label: {
             HStack(spacing: 8) {
                 Image(systemName: p.icon)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(DS.body(.medium))
                     .foregroundColor(on ? accentText : DS.text.secondary)
                     .frame(width: 16)
                 Text(p.title).font(DS.body(on ? .medium : .regular))
                     .foregroundColor(on ? .primary : DS.text.secondary)
+                    .contrastTarget(on ? "sidebar.item.selected" : "sidebar.item")
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8).frame(height: 28)
@@ -400,41 +402,7 @@ struct TopBar: View {
 }
 
 // MARK: - 底部操作栏
-struct BottomBar: View {
-    @ObservedObject var shell = Shell.shared
-    @ObservedObject var mon = Monitor.shared
-    @ObservedObject var nav = Nav.shared
-    @ObservedObject var charge = ChargeClient.shared
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(shell.searching ? accent : good).frame(width: 6, height: 6)
-            Text(status).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).truncationMode(.tail)
-            Spacer(minLength: 8)
-            if shell.searching {
-                hint("执行", "↵")
-            } else {
-                // 2.13：当前页面的常驻动作按钮（最多 2 个），其余在 ⌘K 分组列表里
-                ForEach(Array(ContextActions.page(nav.sel).prefix(2).enumerated()), id: \.offset) { i, a in
-                    BarButton(title: a.short ?? a.title, id: "bottom.action.\(i)", run: a.run).help(a.title)
-                }
-            }
-            BarButton(title: "全部操作", kbd: "⌘K", id: "bottom.actions") { shell.openActions() }
-                .help("当前页面、快捷操作与前往其他页面")
-        }
-        .padding(.horizontal, 16).frame(height: 36)
-        .background(Vibrancy(material: .headerView, solid: DS.window))
-        .overlay(alignment: .top) { Hairline() }
-        .accessibilityElement(children: .contain).accessibilityIdentifier("bottom.bar")
-    }
-    var status: String {
-        if shell.searching { return "\(shell.items.count) 项结果 · ↑↓ 选择，↵ 执行" }
-        let h = mon.s.health
-        return "\(pageTitle(nav.sel)) · \(h.status) · 健康分 \(h.score) · ⌘1–9 切换页面"
-    }
-    func hint(_ t: String, _ k: String) -> some View {
-        HStack(spacing: 4) { Text(t).font(DS.cap()).foregroundColor(DS.text.secondary); Kbd(text: k) }
-    }
-}
+// BottomBar 见 FooterContext.swift（2.16 N10：底栏跟随当前对象）
 
 // MARK: - 搜索结果
 struct SearchResults: View {

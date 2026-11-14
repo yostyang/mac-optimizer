@@ -19,6 +19,8 @@ final class CleanStore: ObservableObject {
     @Published var trashing = false
     @Published var failures: [String: String] = [:]
     @Published var restoreNote = ""
+    /// 2.16 N8：正在恢复的记录（按稳定 UUID），执行中同一项不能重复点
+    @Published var restoringIDs: Set<UUID> = []
     var moveToTrash: (URL) throws -> URL? = { url in
         var result: NSURL?
         try FileManager.default.trashItem(at: url, resultingItemURL: &result)
@@ -180,8 +182,8 @@ struct CleanPage: View {
         PageScaffold(spacing: 14, padding: 28) {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("清理预览").font(DS.title())
-                    Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(.system(size: 12)).foregroundColor(DS.text.secondary)
+                    Text("清理预览").font(DS.title()).contrastTarget("page.title", .largeText)
+                    Text("先扫描出清单，勾选后才动；一律进废纸篓，不直接删除").font(DS.sub()).foregroundColor(DS.text.secondary)
                 }
                 Spacer()
                 SegmentedTrack {
@@ -211,13 +213,13 @@ struct CleanPage: View {
                             HStack(spacing: 8) {
                                 Toggle("", isOn: $store.items[i].selected).toggleStyle(.switch).controlSize(.small).labelsHidden().disabled(store.trashing)
                                 VStack(alignment: .leading, spacing: 0) {
-                                    Text((store.items[i].path as NSString).lastPathComponent).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                                    Text(store.items[i].path).font(.system(size: 12)).foregroundColor(DS.text.secondary).lineLimit(1)
-                                    if let error = store.failures[store.items[i].path] { Text(error).font(.system(size: 12)).foregroundColor(DS.text.warn).lineLimit(2) }
+                                    Text((store.items[i].path as NSString).lastPathComponent).font(DS.sub(.medium)).lineLimit(1)
+                                    Text(store.items[i].path).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1)
+                                    if let error = store.failures[store.items[i].path] { Text(error).font(DS.sub()).foregroundColor(DS.text.warn).lineLimit(2) }
                                 }
                                 Spacer()
-                                Text(store.items[i].category).font(.system(size: 12)).foregroundColor(DS.text.secondary)
-                                Text(CleanLogic.fmtSize(store.items[i].size)).font(.system(size: 12, weight: .medium)).monospacedDigit()
+                                Text(store.items[i].category).font(DS.sub()).foregroundColor(DS.text.secondary)
+                                Text(CleanLogic.fmtSize(store.items[i].size)).font(DS.sub(.medium)).monospacedDigit()
                             }
                         }
                     }
@@ -227,9 +229,9 @@ struct CleanPage: View {
                         TextField("输入要保护的路径，点添加", text: $newWhite).textFieldStyle(.roundedBorder)
                         Button("添加白名单") { if store.addWhitelist(newWhite) { newWhite = "" } }.buttonStyle(PillButton(filled: false)).disabled(store.trashing).accessibilityIdentifier("clean.whitelist.add")
                     }
-                    Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(.system(size: 12)).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("默认保护：系统目录、/Applications 里的本应用、文稿、桌面、图片、音乐、影片").font(DS.sub()).foregroundColor(DS.text.secondary).fixedSize(horizontal: false, vertical: true)
                     if store.whitelist.isEmpty { StateLine(kind: .empty, text: "暂无自定义白名单", id: "clean.whitelist.state") }
-                    ForEach(store.whitelist, id: \.self) { w in Text(w).font(.system(size: 12)).lineLimit(1) }
+                    ForEach(store.whitelist, id: \.self) { w in Text(w).font(DS.sub()).lineLimit(1) }
                 }
                 if !store.records.isEmpty {
                     Button { Nav.shared.sel = .changes } label: { Label("清理记录与恢复在「改动与提醒」（\(store.records.count) 条）", systemImage: "arrow.right.circle") }
