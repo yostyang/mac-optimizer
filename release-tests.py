@@ -46,7 +46,7 @@ def main() -> None:
             workspace = root / case
             workspace.mkdir()
             (workspace / "Info.plist").write_bytes(original)
-            script = preflight + 'git commit -qm "v$V" -- Info.plist' + commit_boundary.replace("git push -q origin HEAD", "false")
+            script = preflight + 'git commit -qm "v$V" -- Info.plist' + commit_boundary.replace('git push -q origin "HEAD:$BR"', "false")
             (workspace / "release.sh").write_text(script)
             result = subprocess.run(["/bin/bash", "release.sh", "2.15.1"], cwd=workspace, env=dict(env, MO_GIT_EXIT=commit_exit), capture_output=True, text=True, timeout=10)
             assert result.returncode == 1, (case, result.stderr)
