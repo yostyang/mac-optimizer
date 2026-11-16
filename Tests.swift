@@ -4,6 +4,7 @@ import ServiceManagement
 
 enum MOTests {
     static var active = false
+    static var ciSubset = false   // --selftest-ci：跳过依赖真机硬件的段，给 CI 用
     static var pass = 0, fail = 0
     static func check(_ c: Bool, _ name: String, _ detail: String = "") {
         if c { pass += 1; print("  ✓ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) } else { fail += 1; print("  ✗ \(name)" + (detail.isEmpty ? "" : "  [\(detail)]")) }
@@ -91,47 +92,49 @@ enum MOTests {
         catch { check(false, "安全回归执行失败", error.localizedDescription) }
         sec("2.16 N1 对比度验收（取样与判定）")
         ContrastCheck.selftest { check($0, $1, $2) }
-        sec("指标读取")
-        var s = Snapshot(); Readers.staticInfo(into: &s)
-        check(!s.chip.isEmpty, "芯片型号", s.chip); check(s.ramGB > 0, "内存容量", "\(s.ramGB) GB"); check(s.pCores > 0, "核心数", "\(s.pCores)P+\(s.eCores)E")
-        check(s.osVersion.hasPrefix("macOS"), "系统版本", s.osVersion)
-        _ = Readers.cpuUsage(); var x = 0.0; for i in 0..<3_000_000 { x += Double(i % 7) }; Thread.sleep(forTimeInterval: 0.5)
-        let cpu = Readers.cpuUsage(); check(cpu > 0 && cpu <= 100, "CPU 占用", String(format: "%.1f%% (%.0f)", cpu, x.truncatingRemainder(dividingBy: 1)))
-        let l = Readers.loadAvg(); check(l.count == 3 && l.allSatisfy { $0 >= 0 && $0 < 500 }, "负载", "\(l)")
-        let up = Readers.uptime(); check(up > 0 && up < 400 * 86400, "开机时长", Fmt.uptime(up))
-        Readers.memory(into: &s); check(s.memUsedGB > 0.5 && s.memUsedGB <= s.memTotalGB, "内存已用", String(format: "%.1f / %.0f GB", s.memUsedGB, s.memTotalGB))
-        check([1, 2, 4].contains(s.memPressure), "内存压力级别", "\(s.memPressure)"); check(s.swapUsedGB >= 0, "交换", String(format: "%.2f GB", s.swapUsedGB))
-        Readers.disk(into: &s); check(s.diskTotalGB > 10 && s.diskFreeGB > 0 && s.diskFreeGB < s.diskTotalGB, "磁盘", String(format: "可用 %.0f / %.0f GB", s.diskFreeGB, s.diskTotalGB))
-        Readers.network(into: &s); Thread.sleep(forTimeInterval: 1); Readers.network(into: &s)
-        check(s.downBps >= 0 && s.upBps >= 0 && s.downBps < 5e9, "网络速率", "\(s.netKind) ↓\(Fmt.rate(s.downBps)) ↑\(Fmt.rate(s.upBps)) 代理 \(s.proxy)")
-        let g = Readers.gpuInfo()
-        if let u = g.util { check(u >= 0 && u <= 100, "GPU 占用", "\(u)%") } else { info("GPU 占用不可读（降级显示）") }
-        if let c = g.cores { check(c > 0 && c < 200, "GPU 核心", "\(c)") }
-        SMC.shared.enumerate()
-        let ct = SMC.shared.avgTemp(SMC.shared.cpuKeys) ?? HIDTemp.cpuDie()
-        if let t = ct { check(t > 10 && t < 115, "CPU 温度", String(format: "%.1f°C（%d 个传感器）", t, SMC.shared.cpuKeys.count)) } else { info("CPU 温度不可读（降级显示）") }
-        if let t = SMC.shared.avgTemp(SMC.shared.gpuKeys) { check(t > 15 && t < 115, "GPU 温度", String(format: "%.1f°C", t)) } else { info("GPU 温度不可读（降级显示）") }
-        if let f = SMC.shared.fans() { check(f.rpm.allSatisfy { $0 >= 0 && $0 < 10000 } && f.max >= f.min, "风扇", "\(f.rpm.map { Int($0) }) RPM, \(Int(f.min))–\(Int(f.max))") } else { info("无风扇或不可读") }
-        Readers.battery(into: &s)
-        if let b = s.battery {
-            check(b >= 0 && b <= 100, "电池电量", "\(b)%")
-            check((s.batteryHealth ?? 50) > 20 && (s.batteryHealth ?? 50) <= 100, "电池健康", "\(s.batteryHealth.map(String.init) ?? "nil")% \(s.fullMah)/\(s.designMah) mAh")
-            check((s.cycles ?? 0) >= 0, "循环次数", "\(s.cycles ?? -1)")
-            if let t = s.batteryTemp { check(t > 5 && t < 70, "电池温度", String(format: "%.1f°C", t)) } else { info("电池温度不可读") }
-            check(!s.batteryCondition.isEmpty, "电池状况", s.batteryCondition)
-        } else { info("没有内置电池") }
-        let ds = Readers.devices(); check(ds.allSatisfy { $0.percent >= 0 && $0.percent <= 100 }, "外设电量", ds.isEmpty ? "无公开电量的设备" : ds.map { "\($0.name) \($0.percent)%" }.joined(separator: ", "))
-        _ = Readers.topProcesses(); Thread.sleep(forTimeInterval: 1); let top = Readers.topProcesses()
-        check(!top.isEmpty && top.allSatisfy { $0.cpu >= 0 && $0.memMB >= 0 }, "高占用进程", top.map { "\($0.name) \(String(format: "%.1f", $0.cpu))%" }.joined(separator: ", "))
-        let me = Readers.selfUsage(); check(me.rssMB > 1 && me.rssMB < 2000, "自身内存", String(format: "%.1f MB", me.rssMB))
-        var ri = rusage_info_v6()
-        let rr = withUnsafeMutablePointer(to: &ri) { $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(getpid(), RUSAGE_INFO_V6, $0) } }
-        check(rr == 0 && ri.ri_energy_nj > 0, "进程能耗读取", "\(ri.ri_energy_nj) nJ")
+        if !ciSubset {  // CI 自检子集：真机硬件采样与电源断言只在本地完整自检跑
+            sec("指标读取")
+            var s = Snapshot(); Readers.staticInfo(into: &s)
+            check(!s.chip.isEmpty, "芯片型号", s.chip); check(s.ramGB > 0, "内存容量", "\(s.ramGB) GB"); check(s.pCores > 0, "核心数", "\(s.pCores)P+\(s.eCores)E")
+            check(s.osVersion.hasPrefix("macOS"), "系统版本", s.osVersion)
+            _ = Readers.cpuUsage(); var x = 0.0; for i in 0..<3_000_000 { x += Double(i % 7) }; Thread.sleep(forTimeInterval: 0.5)
+            let cpu = Readers.cpuUsage(); check(cpu > 0 && cpu <= 100, "CPU 占用", String(format: "%.1f%% (%.0f)", cpu, x.truncatingRemainder(dividingBy: 1)))
+            let l = Readers.loadAvg(); check(l.count == 3 && l.allSatisfy { $0 >= 0 && $0 < 500 }, "负载", "\(l)")
+            let up = Readers.uptime(); check(up > 0 && up < 400 * 86400, "开机时长", Fmt.uptime(up))
+            Readers.memory(into: &s); check(s.memUsedGB > 0.5 && s.memUsedGB <= s.memTotalGB, "内存已用", String(format: "%.1f / %.0f GB", s.memUsedGB, s.memTotalGB))
+            check([1, 2, 4].contains(s.memPressure), "内存压力级别", "\(s.memPressure)"); check(s.swapUsedGB >= 0, "交换", String(format: "%.2f GB", s.swapUsedGB))
+            Readers.disk(into: &s); check(s.diskTotalGB > 10 && s.diskFreeGB > 0 && s.diskFreeGB < s.diskTotalGB, "磁盘", String(format: "可用 %.0f / %.0f GB", s.diskFreeGB, s.diskTotalGB))
+            Readers.network(into: &s); Thread.sleep(forTimeInterval: 1); Readers.network(into: &s)
+            check(s.downBps >= 0 && s.upBps >= 0 && s.downBps < 5e9, "网络速率", "\(s.netKind) ↓\(Fmt.rate(s.downBps)) ↑\(Fmt.rate(s.upBps)) 代理 \(s.proxy)")
+            let g = Readers.gpuInfo()
+            if let u = g.util { check(u >= 0 && u <= 100, "GPU 占用", "\(u)%") } else { info("GPU 占用不可读（降级显示）") }
+            if let c = g.cores { check(c > 0 && c < 200, "GPU 核心", "\(c)") }
+            SMC.shared.enumerate()
+            let ct = SMC.shared.avgTemp(SMC.shared.cpuKeys) ?? HIDTemp.cpuDie()
+            if let t = ct { check(t > 10 && t < 115, "CPU 温度", String(format: "%.1f°C（%d 个传感器）", t, SMC.shared.cpuKeys.count)) } else { info("CPU 温度不可读（降级显示）") }
+            if let t = SMC.shared.avgTemp(SMC.shared.gpuKeys) { check(t > 15 && t < 115, "GPU 温度", String(format: "%.1f°C", t)) } else { info("GPU 温度不可读（降级显示）") }
+            if let f = SMC.shared.fans() { check(f.rpm.allSatisfy { $0 >= 0 && $0 < 10000 } && f.max >= f.min, "风扇", "\(f.rpm.map { Int($0) }) RPM, \(Int(f.min))–\(Int(f.max))") } else { info("无风扇或不可读") }
+            Readers.battery(into: &s)
+            if let b = s.battery {
+                check(b >= 0 && b <= 100, "电池电量", "\(b)%")
+                check((s.batteryHealth ?? 50) > 20 && (s.batteryHealth ?? 50) <= 100, "电池健康", "\(s.batteryHealth.map(String.init) ?? "nil")% \(s.fullMah)/\(s.designMah) mAh")
+                check((s.cycles ?? 0) >= 0, "循环次数", "\(s.cycles ?? -1)")
+                if let t = s.batteryTemp { check(t > 5 && t < 70, "电池温度", String(format: "%.1f°C", t)) } else { info("电池温度不可读") }
+                check(!s.batteryCondition.isEmpty, "电池状况", s.batteryCondition)
+            } else { info("没有内置电池") }
+            let ds = Readers.devices(); check(ds.allSatisfy { $0.percent >= 0 && $0.percent <= 100 }, "外设电量", ds.isEmpty ? "无公开电量的设备" : ds.map { "\($0.name) \($0.percent)%" }.joined(separator: ", "))
+            _ = Readers.topProcesses(); Thread.sleep(forTimeInterval: 1); let top = Readers.topProcesses()
+            check(!top.isEmpty && top.allSatisfy { $0.cpu >= 0 && $0.memMB >= 0 }, "高占用进程", top.map { "\($0.name) \(String(format: "%.1f", $0.cpu))%" }.joined(separator: ", "))
+            let me = Readers.selfUsage(); check(me.rssMB > 1 && me.rssMB < 2000, "自身内存", String(format: "%.1f MB", me.rssMB))
+            var ri = rusage_info_v6()
+            let rr = withUnsafeMutablePointer(to: &ri) { $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(getpid(), RUSAGE_INFO_V6, $0) } }
+            check(rr == 0 && ri.ri_energy_nj > 0, "进程能耗读取", "\(ri.ri_energy_nj) nJ")
 
-        sec("常亮")
-        KeepAwake.shared.startAssertion(); check(KeepAwake.shared.on && KeepAwake.systemSeesAssertion(), "常亮断言已生效")
-        KeepAwake.shared.stop(); check(!KeepAwake.shared.on && !KeepAwake.systemSeesAssertion(), "常亮断言已释放")
-        info("麦克风静音可控：\(Mic.available)")
+            sec("常亮")
+            KeepAwake.shared.startAssertion(); check(KeepAwake.shared.on && KeepAwake.systemSeesAssertion(), "常亮断言已生效")
+            KeepAwake.shared.stop(); check(!KeepAwake.shared.on && !KeepAwake.systemSeesAssertion(), "常亮断言已释放")
+            info("麦克风静音可控：\(Mic.available)")
+        }
 
         sec("健康分")
         var hs = Snapshot(); hs.diskTotalGB = 1000; hs.diskFreeGB = 500

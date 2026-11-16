@@ -20,3 +20,7 @@ jobs:
         run: ./fontlint.sh
       - name: 页面状态检查
         run: ./statelint.sh
+      - name: 编译测试包（含自检入口）
+        run: MOTEST=1 NODMG=1 ./build.sh
+      - name: 自检子集（跳过真机硬件段）
+        run: "build/Mac一键优化.app/Contents/MacOS/MacOptimizer --selftest-ci"

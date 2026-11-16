@@ -50,7 +50,13 @@ if [ -n "$(defaults read com.yost.macoptimizer chargeHelperBuild 2>/dev/null)" ]
 fi
 git commit -qm "v$V" -- Info.plist
 COMMITTED=1
-git push -q origin HEAD
+# 推送目标显式化：在分支上推回本分支；分离 HEAD（临时发布工作区）时要求 HEAD 是 origin/main 的后续，推回 main
+BR=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+if [ -z "$BR" ]; then
+  BR=${RELEASE_BRANCH:-main}
+  git merge-base --is-ancestor "origin/$BR" HEAD || { echo "分离 HEAD 且不是 origin/$BR 的后续，无法确定推送目标"; exit 1; }
+fi
+git push -q origin "HEAD:$BR"
 SHA=$(git rev-parse HEAD)
 SUMMARY=$(cat build-test/summary.txt)
 "$GH" release create "v$V" "/tmp/Mac-Optimizer-$V.dmg" --repo yostyang/mac-optimizer --title "Mac一键优化 $V" --target "$SHA" --notes "$NOTES

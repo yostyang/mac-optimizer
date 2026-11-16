@@ -687,9 +687,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if args.contains("--read-capabilities") { HardwareCapabilities.printSnapshot(); exit(0) }
         if args.contains("--read-classic-batteries") { RealBTSource.printClassicSnapshot(); exit(0) }
         if args.contains("--read-keychron-battery") { KeychronHID.printSnapshot(); exit(0) }
-        if !args.contains("--selftest") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
+        if !args.contains("--selftest") && !args.contains("--selftest-ci") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
         if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
         #if MO_TESTS
+        if args.contains("--selftest-ci") { MOTests.ciSubset = true; exit(MOTests.selftest() ? 0 : 1) }
         if args.contains("--selftest") { exit(MOTests.selftest() ? 0 : 1) }
         #endif
         // 拖拽落区实验：从测试副本直接运行，不能触碰充电助手的注册
