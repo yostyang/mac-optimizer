@@ -595,6 +595,7 @@ enum MOTests {
         StatusBar.shared.setup()
         check(StatusBar.shared.item != nil, "菜单栏图标已创建")
         check(waitUntil(3) { mon.interval == Monitor.lightInterval }, "未打开面板时 5 秒采样", "\(mon.interval)")
+        BatteryAlerts.shared.settings.menuIndicator = "cpu"; settle(0.3)   // 不依赖用户的存量选择（2.17 起用户可能存了 trio）
         check(waitUntil(7) { StatusBar.shared.item?.button?.title.hasSuffix("%") == true }, "菜单栏显示 CPU 百分比", StatusBar.shared.item?.button?.title ?? "")
         BatteryAlerts.shared.settings.menuIndicator = "battery"; settle(0.3)
         if mon.s.battery != nil { check(StatusBar.shared.item?.button?.image != nil && StatusBar.shared.item?.button?.title == "", "切换为电池图标") }
