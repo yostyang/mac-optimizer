@@ -750,7 +750,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         StatusBar.shared.setup()
         // 真机性能测量可保持面板打开；采样与日常启动完全相同，测量脚本负责退出。
         if args.contains("--measure-hold-panel") { StatusBar.shared.popover.behavior = .applicationDefined }
-        CommandPalette.shared.installHotKey()
+        HotKeySlot.installAll()   // 2.17：命令面板 + 音频快捷键统一走 HotKeyCenter 注册
         LaunchRestore.run(keepAwake: KeepAwake.shared, dock: DockMode.shared)
         if BatteryAlerts.shared.settings.energyTracking { EnergyTracker.shared.start() }
         BatteryAlerts.shared.$settings.map(\.energyTracking).removeDuplicates().dropFirst().sink { $0 ? EnergyTracker.shared.start() : EnergyTracker.shared.stop() }.store(in: &subs)

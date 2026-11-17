@@ -525,9 +525,6 @@ final class PaletteWindow: NSPanel {
 final class CommandPalette: NSObject {
     static let shared = CommandPalette()
     private var window: NSWindow?
-    private var hotKey: EventHotKeyRef?
-    private var handler: EventHandlerRef?
-    private var action: (() -> Void)?
     var isOpen: Bool { window?.isVisible == true }
 
     func toggle() { isOpen ? close() : open() }
@@ -559,32 +556,19 @@ final class CommandPalette: NSObject {
         return w
     }
 
-    // MARK: 全局热键（Carbon，不需要辅助功能权限）
+    // MARK: 全局热键（Carbon，不需要辅助功能权限；2.17 起注册统一走 HotKeyCenter，按键 id 分发）
     static let defCode: UInt32 = 49            // Space
     static let defMods: UInt32 = UInt32(optionKey)
     var shortcut: (code: UInt32, mods: UInt32) {
-        let d = UserDefaults.standard
-        guard d.object(forKey: "hotkey.code") != nil else { return (Self.defCode, Self.defMods) }
-        return (UInt32(d.integer(forKey: "hotkey.code")), UInt32(d.integer(forKey: "hotkey.mods")))
+        HotKeySlot.palette.stored() ?? (code: Self.defCode, mods: Self.defMods)
     }
     func saveShortcut(code: UInt32, mods: UInt32) {
-        UserDefaults.standard.set(Int(code), forKey: "hotkey.code")
-        UserDefaults.standard.set(Int(mods), forKey: "hotkey.mods")
+        HotKeySlot.palette.save(code: code, mods: mods)
         installHotKey()
     }
     func installHotKey() {
-        if let h = hotKey { UnregisterEventHotKey(h); hotKey = nil }
-        action = { [weak self] in self?.toggle() }
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        if handler == nil {
-            InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-                CommandPalette.shared.action?()
-                return noErr
-            }, 1, &spec, nil, &handler)
-        }
-        let id = EventHotKeyID(signature: OSType(0x4D4F5054), id: 1)   // 'MOPT'
         let s = shortcut
-        hotKeyStatus = RegisterEventHotKey(s.code, s.mods, id, GetApplicationEventTarget(), 0, &hotKey)
+        hotKeyStatus = HotKeyCenter.shared.register(HotKeySlot.palette.hkID, code: s.code, mods: s.mods) { [weak self] in self?.toggle() }
     }
     /// 2.14：注册结果（被其他应用占用时不是 noErr），设置页据此提示
     private(set) var hotKeyStatus: OSStatus = noErr
@@ -595,9 +579,17 @@ final class CommandPalette: NSObject {
         if mods & UInt32(optionKey) != 0 { s += "⌥" }
         if mods & UInt32(shiftKey) != 0 { s += "⇧" }
         if mods & UInt32(cmdKey) != 0 { s += "⌘" }
-        let map: [UInt32: String] = [49: "Space", 36: "Return", 48: "Tab", 53: "Esc"]
-        if let n = map[code] { s += n }
-        else if let u = UnicodeScalar(code) { s += String(Character(u)) }
+        // 2.17：ANSI 键位码 → 字符（补全字母/数字/F 键，避免录了字母键显示成别的字符）
+        let map: [UInt32: String] = [
+            49: "Space", 36: "Return", 48: "Tab", 53: "Esc", 51: "Delete",
+            0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G", 4: "H", 34: "I", 38: "J",
+            40: "K", 37: "L", 46: "M", 45: "N", 31: "O", 35: "P", 12: "Q", 15: "R", 1: "S", 17: "T",
+            32: "U", 9: "V", 13: "W", 7: "X", 16: "Y", 6: "Z",
+            18: "1", 19: "2", 20: "3", 21: "4", 23: "5", 22: "6", 26: "7", 28: "8", 25: "9", 29: "0",
+            122: "F1", 120: "F2", 99: "F3", 118: "F4", 96: "F5", 97: "F6", 98: "F7", 100: "F8",
+            101: "F9", 109: "F10", 103: "F11", 111: "F12",
+        ]
+        if let n = map[code] { s += n } else { s += "键\(code)" }
         return s
     }
 }
@@ -609,33 +601,23 @@ struct SettingsPage: View {
     @ObservedObject var ka = KeepAwake.shared
     @ObservedObject var dock = DockMode.shared
     @ObservedObject var panelPrefs = PanelPrefs.shared
-    @State private var recording = false
+    @State private var recordingSlot: HotKeySlot?
     @State private var monitor: Any?
-    @State private var label = CommandPalette.label(code: CommandPalette.shared.shortcut.code,
-                                                   mods: CommandPalette.shared.shortcut.mods)
-    @State private var hotKeyFailed = CommandPalette.shared.hotKeyFailed
+    @State private var hkTick = 0   // 录制后刷新各槽位的键位文字与失败状态
     @State private var loginError: String?
 
     var body: some View {
-        PageScroll {
+        // 2.17：快捷键行增加后页面加高，按规范改为「摘要不滚动、详情局部滚动」
+        PageScaffold(padding: 20) {
+            PageHeader(title: "设置", sub: "全局快捷键、菜单栏与启动")
+        } details: {
             VStack(alignment: .leading, spacing: 12) {
-                PageHeader(title: "设置", sub: "全局快捷键、菜单栏与启动")
                 VStack(spacing: 1) {
-                    row("键盘", "command", "全局命令面板",
-                        recording ? "按下新的快捷键…（需要 ⌘⌥⌃⇧ 中的至少一个）" : "在任何地方唤起搜索：接显示器、体检、关标签页") {
-                        HStack(spacing: 8) {
-                            Kbd(text: recording ? "…" : label)
-                            Button(recording ? "取消" : "录制") { recording ? stop() : start() }
-                                .buttonStyle(PillButton(filled: false))
-                                .accessibilityIdentifier("set.hotkey")
-                        }
+                    let _ = hkTick
+                    ForEach(HotKeySlot.allCases, id: \.self) { slot in
+                        hotkeyRow(slot)
+                        Hairline().padding(.leading, 38)
                     }
-                    if hotKeyFailed {
-                        StateLine(kind: .failed, text: "\(label) 没有注册成功，可能已被输入法或其他应用占用", detail: "换一个组合再录制；在此之前可以从菜单栏或主窗口搜索使用命令。",
-                                  actions: [StateAction(title: "重新录制", symbol: "keyboard") { start() }], id: "set.hotkey.state")
-                            .padding(.leading, 38).padding(.trailing, 8).padding(.vertical, 4)
-                    }
-                    Hairline().padding(.leading, 38)
                     row("菜单栏", "menubar.rectangle", "在菜单栏显示实时指标", "关闭后停止低频采样") {
                         Toggle("", isOn: $ui.menuBar).toggleStyle(.switch).controlSize(.small).labelsHidden()
                             .accessibilityIdentifier("set.menubar")
@@ -696,7 +678,7 @@ struct SettingsPage: View {
                     Spacer()
                     Text("品牌紫取自 App 图标；渐变只留在健康分圆环").font(DS.cap()).foregroundColor(DS.text.secondary)
                 }.padding(.top, 2)
-            }.padding(20)
+            }
         }
         .onDisappear { stop() }
     }
@@ -713,8 +695,34 @@ struct SettingsPage: View {
         }.padding(.horizontal, 8).frame(minHeight: 44)
     }
 
-    func start() {
-        recording = true
+    /// 2.17：每个快捷键槽位一行（键位徽章 + 录制/清除），注册失败时下面带状态条
+    func hotkeyRow(_ slot: HotKeySlot) -> some View {
+        let rec = recordingSlot == slot
+        return VStack(spacing: 1) {
+            row("键盘", slot.symbol, slot.title, rec ? "按下新的快捷键…（需要 ⌘⌥⌃⇧ 中的至少一个）" : slot.sub) {
+                HStack(spacing: 8) {
+                    Kbd(text: rec ? "…" : slot.label())
+                    Button(rec ? "取消" : "录制") { rec ? stop() : start(slot) }
+                        .buttonStyle(PillButton(filled: false))
+                        .accessibilityIdentifier("set.hotkey.\(slot.slug)")
+                    if slot != .palette, slot.stored() != nil {
+                        Button("清除") { slot.clear(); slot.install(); hkTick += 1 }
+                            .buttonStyle(PillButton(filled: false))
+                            .accessibilityIdentifier("set.hotkey.clear.\(slot.slug)")
+                    }
+                }
+            }
+            if HotKeyCenter.shared.failed(slot.hkID) {
+                StateLine(kind: .failed, text: "\(slot.label()) 没有注册成功，可能已被输入法或其他应用占用", detail: "换一个组合再录制；在此之前可以从菜单栏或主窗口操作。",
+                          actions: [StateAction(title: "重新录制", symbol: "keyboard") { start(slot) }], id: "set.hotkey.state.\(slot.slug)")
+                    .padding(.leading, 38).padding(.trailing, 8).padding(.vertical, 4)
+            }
+        }
+    }
+
+    func start(_ slot: HotKeySlot) {
+        stop()
+        recordingSlot = slot
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
             let f = e.modifierFlags.intersection([.command, .option, .control, .shift])
             guard !f.isEmpty else { return nil }
@@ -723,16 +731,16 @@ struct SettingsPage: View {
             if f.contains(.option) { m |= UInt32(optionKey) }
             if f.contains(.control) { m |= UInt32(controlKey) }
             if f.contains(.shift) { m |= UInt32(shiftKey) }
-            CommandPalette.shared.saveShortcut(code: UInt32(e.keyCode), mods: m)
-            label = CommandPalette.label(code: UInt32(e.keyCode), mods: m)
-            hotKeyFailed = CommandPalette.shared.hotKeyFailed
+            slot.save(code: UInt32(e.keyCode), mods: m)
+            slot.install()
+            hkTick += 1
             stop()
             return nil
         }
     }
 
     func stop() {
-        recording = false
+        recordingSlot = nil
         if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
     }
 }

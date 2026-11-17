@@ -1,15 +1,30 @@
 // 2.11 测试：菜单栏合并状态图标
 import SwiftUI
 import AppKit
+import CoreAudio
 
 final class FakeTrioSource: TrioSource {
     var w = WifiState(link: .connected, rssi: -58, name: "Home-5G")
     var v = VolumeState(level: 0.5, muted: false, settable: true)
     var askedName: [Bool] = []
+    // 2.17：模拟的音频设备与默认设备
+    var ins: [AudioDeviceInfo] = []
+    var outs: [AudioDeviceInfo] = []
+    var din: AudioDeviceID?
+    var dout: AudioDeviceID?
+    var mic = false
     func wifi(withName: Bool) -> WifiState { askedName.append(withName); var x = w; if !withName { x.name = nil }; return x }
     func volume() -> VolumeState { v }
     func setVolume(_ x: Double) { v.level = x }
     func setMuted(_ m: Bool) { v.muted = m }
+    func inputDevices() -> [AudioDeviceInfo] { ins }
+    func outputDevices() -> [AudioDeviceInfo] { outs }
+    var defaultInputID: AudioDeviceID? { din }
+    var defaultOutputID: AudioDeviceID? { dout }
+    func setDefaultInput(_ id: AudioDeviceID) -> Bool { din = id; return true }
+    func setDefaultOutput(_ id: AudioDeviceID) -> Bool { dout = id; return true }
+    func micMuted() -> Bool { mic }
+    func setMicMuted(_ m: Bool) -> Bool { mic = m; return true }
 }
 
 /// 截图用：各种设置下的图标（供人工查看）

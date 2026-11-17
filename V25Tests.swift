@@ -85,7 +85,7 @@ enum V25 {
         MOTests.sec("设置页（v2.5）")
         if let b = MOTests.find(pv, label: "设置") { b.press() }
         MOTests.check(MOTests.waitUntil(2) { Nav.shared.sel == .settings }, "侧边栏打开设置")
-        MOTests.check(MOTests.find(pv, id: "set.hotkey") != nil && MOTests.find(pv, id: "set.menubar") != nil, "设置页有快捷键录制与菜单栏开关")
+        MOTests.check(MOTests.find(pv, id: "set.hotkey.palette") != nil && MOTests.find(pv, id: "set.menubar") != nil, "设置页有快捷键录制与菜单栏开关")
         let ka = KeepAwake.shared, before = KeepAwake.shared.on
         let saved = ka.defaults.object(forKey: KeepAwake.key)
         if let toggle = MOTests.find(pv, id: "set.awake") {

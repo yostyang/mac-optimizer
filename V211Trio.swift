@@ -79,6 +79,15 @@ protocol TrioSource {
     func volume() -> VolumeState
     func setVolume(_ v: Double)
     func setMuted(_ m: Bool)
+    // 2.17：输入 / 输出设备切换
+    func inputDevices() -> [AudioDeviceInfo]
+    func outputDevices() -> [AudioDeviceInfo]
+    var defaultInputID: AudioDeviceID? { get }
+    var defaultOutputID: AudioDeviceID? { get }
+    @discardableResult func setDefaultInput(_ id: AudioDeviceID) -> Bool
+    @discardableResult func setDefaultOutput(_ id: AudioDeviceID) -> Bool
+    func micMuted() -> Bool
+    @discardableResult func setMicMuted(_ m: Bool) -> Bool
 }
 
 struct SystemTrioSource: TrioSource {
@@ -127,6 +136,15 @@ struct SystemTrioSource: TrioSource {
         guard AudioObjectHasProperty(d, &a) else { return }
         AudioObjectSetPropertyData(d, &a, 0, nil, UInt32(MemoryLayout<UInt32>.size), &x)
     }
+    // 2.17：输入 / 输出设备切换（实际读写走 AudioDevices）
+    func inputDevices() -> [AudioDeviceInfo] { AudioDevices.devices(input: true) }
+    func outputDevices() -> [AudioDeviceInfo] { AudioDevices.devices(input: false) }
+    var defaultInputID: AudioDeviceID? { AudioDevices.defaultDevice(input: true) }
+    var defaultOutputID: AudioDeviceID? { AudioDevices.defaultDevice(input: false) }
+    func setDefaultInput(_ id: AudioDeviceID) -> Bool { AudioDevices.setDefault(id, input: true) }
+    func setDefaultOutput(_ id: AudioDeviceID) -> Bool { AudioDevices.setDefault(id, input: false) }
+    func micMuted() -> Bool { Mic.muted }
+    func setMicMuted(_ m: Bool) -> Bool { Mic.setMuted(m) }
 }
 
 final class TrioModel: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -134,33 +152,71 @@ final class TrioModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var config = TrioConfig.load() { didSet { if persist { config.save() }; refresh() } }
     @Published private(set) var wifi = WifiState()
     @Published private(set) var volume = VolumeState()
+    // 2.17：输入 / 输出设备
+    @Published private(set) var inputs: [AudioDeviceInfo] = []
+    @Published private(set) var outputs: [AudioDeviceInfo] = []
+    @Published private(set) var defaultInputID: AudioDeviceID?
+    @Published private(set) var defaultOutputID: AudioDeviceID?
+    @Published private(set) var micMuted = false
     var source: TrioSource = SystemTrioSource()
     var persist = true
     private var listening: Set<AudioDeviceID> = []
     private var systemListener = false
     private var location: CLLocationManager?
 
+    var inputName: String { inputs.isEmpty ? "没有输入设备" : (inputs.first(where: { $0.id == defaultInputID })?.name ?? "未取得") }
+    var outputName: String { outputs.isEmpty ? "没有输出设备" : (outputs.first(where: { $0.id == defaultOutputID })?.name ?? "未取得") }
+
     func refresh() {
         let w = source.wifi(withName: config.wifiName), v = source.volume()
         if w != wifi { wifi = w }
         if v != volume { volume = v }
+        let ins = source.inputDevices(), outs = source.outputDevices()
+        if ins != inputs { inputs = ins }
+        if outs != outputs { outputs = outs }
+        let din = source.defaultInputID, dout = source.defaultOutputID
+        if din != defaultInputID { defaultInputID = din }
+        if dout != defaultOutputID { defaultOutputID = dout }
+        let mm = source.micMuted()
+        if mm != micMuted { micMuted = mm }
+        UIState.shared.micMuted = mm   // 快捷操作磁贴共用同一份状态
     }
     func setVolume(_ v: Double) { source.setVolume(v); if v > 0.001, volume.muted { source.setMuted(false) }; refresh() }
     func toggleMute() { source.setMuted(!volume.muted); refresh() }
+
+    // 2.17：设备切换与麦克风静音
+    func setOutput(_ id: AudioDeviceID) { if source.setDefaultOutput(id) { refresh() } }
+    func setInput(_ id: AudioDeviceID) { if source.setDefaultInput(id) { refresh() } }
+    @discardableResult func cycleOutput() -> AudioDeviceID? {
+        guard let n = AudioDevices.next(outputs, current: defaultOutputID) else { return nil }
+        setOutput(n); return n
+    }
+    @discardableResult func cycleInput() -> AudioDeviceID? {
+        guard let n = AudioDevices.next(inputs, current: defaultInputID) else { return nil }
+        setInput(n); return n
+    }
+    func toggleMic() { _ = source.setMicMuted(!micMuted); refresh() }
 
     /// 音量和输出设备变化由系统事件通知，不用轮询；Wi-Fi 跟随现有的低频采样刷新
     func startListening() {
         if !systemListener {
             systemListener = true
-            var a = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &a, .main) { [weak self] _, _ in self?.startListening(); self?.refresh() }
+            for sel in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDevices] {
+                var a = AudioDevices.globalAddr(sel)
+                AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &a, .main) { [weak self] _, _ in self?.startListening(); self?.refresh() }
+            }
         }
-        guard let d = SystemTrioSource.device(), !listening.contains(d) else { return }
-        listening.insert(d)
-        for sel in [SystemTrioSource.volumeSelector, kAudioDevicePropertyMute] {
-            var a = SystemTrioSource.address(sel)
-            guard AudioObjectHasProperty(d, &a) else { continue }
-            AudioObjectAddPropertyListenerBlock(d, &a, .main) { [weak self] _, _ in self?.refresh() }
+        for d in [SystemTrioSource.device(), AudioDevices.defaultDevice(input: true)].compactMap({ $0 }) where !listening.contains(d) {
+            listening.insert(d)
+            for scope in [kAudioDevicePropertyScopeOutput, kAudioDevicePropertyScopeInput] {
+                var a = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+                guard AudioObjectHasProperty(d, &a) else { continue }
+                AudioObjectAddPropertyListenerBlock(d, &a, .main) { [weak self] _, _ in self?.refresh() }
+            }
+            var va = SystemTrioSource.address(SystemTrioSource.volumeSelector)
+            if AudioObjectHasProperty(d, &va) {
+                AudioObjectAddPropertyListenerBlock(d, &va, .main) { [weak self] _, _ in self?.refresh() }
+            }
         }
     }
 
@@ -412,6 +468,26 @@ struct TrioPanelCard: View {
                     Text(v.text).font(DS.sub()).foregroundColor(DS.text.secondary); Spacer()
                 }
             }
+            // 2.17：输出设备切换（不再去系统设置里点）
+            HStack(spacing: 8) {
+                Image(systemName: "hifispeaker.fill").frame(width: 18).foregroundColor(DS.text.secondary).accessibilityHidden(true)
+                deviceMenu(list: model.outputs, current: model.defaultOutputID, fallback: model.outputName,
+                           id: "panel.trio.outdev", label: "输出设备") { model.setOutput($0) }
+                Spacer()
+            }
+            // 2.17：输入设备切换 + 麦克风静音
+            HStack(spacing: 8) {
+                Button(action: { model.toggleMic() }) {
+                    Image(systemName: model.micMuted ? "mic.slash.fill" : "mic.fill").frame(width: 18)
+                }.buttonStyle(.plain).foregroundColor(model.micMuted ? DS.text.warn : DS.text.secondary)
+                    .disabled(model.inputs.isEmpty || !Mic.available)
+                    .help(model.micMuted ? "取消麦克风静音" : "麦克风静音").accessibilityIdentifier("panel.trio.mic.mute")
+                    .accessibilityLabel(model.micMuted ? "取消麦克风静音" : "麦克风静音")
+                deviceMenu(list: model.inputs, current: model.defaultInputID, fallback: model.inputName,
+                           id: "panel.trio.indev", label: "输入设备") { model.setInput($0) }
+                if model.micMuted { Text("已静音").font(DS.num(12)).foregroundColor(DS.text.warn) }
+                Spacer()
+            }
             HStack(spacing: 8) {
                 Image(systemName: w.link == .connected ? "wifi" : "wifi.slash").frame(width: 18).foregroundColor(DS.text.secondary).accessibilityHidden(true)
                 Text(w.summary).font(DS.sub()).foregroundColor(DS.text.secondary).lineLimit(1).minimumScaleFactor(0.8).accessibilityIdentifier("panel.trio.wifi")
@@ -421,5 +497,25 @@ struct TrioPanelCard: View {
         .padding(DS.tilePadding).frame(maxWidth: .infinity, alignment: .leading).card()
         .accessibilityElement(children: .contain).accessibilityIdentifier("panel.trio")
         .onAppear { model.refresh() }
+    }
+
+    /// 设备切换菜单：列出该方向全部设备，当前项打勾；列表为空时写明没有设备
+    func deviceMenu(list: [AudioDeviceInfo], current: AudioDeviceID?, fallback: String, id: String, label: String,
+                    pick: @escaping (AudioDeviceID) -> Void) -> some View {
+        Menu {
+            if list.isEmpty { Text("没有可切换的设备") }
+            ForEach(list) { d in
+                Button { pick(d.id) } label: {
+                    HStack { Text(d.name); if d.id == current { Image(systemName: "checkmark") } }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(fallback).font(DS.sub()).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(DS.sub()).imageScale(.small)
+            }.foregroundColor(DS.text.secondary)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help(label + "（点击切换）").accessibilityIdentifier(id).accessibilityLabel(label + "：" + fallback)
     }
 }
