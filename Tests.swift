@@ -220,7 +220,11 @@ enum MOTests {
         check(dev(20).isEmpty && dev(15) == [.deviceLow("Magic Mouse", 15)], "外设回升 5% 后重新提醒")
         check(dev(100) == [.deviceFull("Magic Mouse")] && dev(100).isEmpty, "外设充满提醒一次")
         // 发送通道（不弹真实通知）
-        let al = BatteryAlerts(); var got: [AlertEvent] = []; al.sink = { got.append($0) }
+        // 独立 suite：实例的 didSet 曾直接写 UserDefaults.standard，每次自检都会覆盖并删除用户的 battery.settings
+        let alSuite = "mo.test.batteryalerts.\(getpid())", alUD = UserDefaults(suiteName: alSuite)!
+        alUD.removePersistentDomain(forName: alSuite)
+        let beforeBS = UserDefaults.standard.data(forKey: BatterySettings.key)
+        let al = BatteryAlerts(defaults: alUD); var got: [AlertEvent] = []; al.sink = { got.append($0) }
         var sn = Snapshot(); sn.battery = 50; sn.onAC = false
         al.handle(sn); check(got.isEmpty, "提醒总开关关闭时不发送")
         al.engine = AlertEngine(); al.settings.alertsOn = true
@@ -228,8 +232,8 @@ enum MOTests {
         check(got == [.low(20, critical: false)], "开启后按阈值发送一次")
         al.settings.drainAlertsOn = true; al.drain("Chrome", 5); al.drain("Chrome", 5)
         check(got.last == .drain("Chrome", 5) && got.count == 2, "耗电异常 6 小时内只提醒一次")
-        BatterySettings().save()   // 恢复默认（BatteryAlerts 的 didSet 会写入标准设置）
-        UserDefaults.standard.removeObject(forKey: BatterySettings.key)
+        check(UserDefaults.standard.data(forKey: BatterySettings.key) == beforeBS, "测试实例不写用户设置")
+        alUD.removePersistentDomain(forName: alSuite)
     }
 
     static func energyTests() {

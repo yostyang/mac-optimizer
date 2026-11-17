@@ -227,7 +227,13 @@ final class EnergyTracker: ObservableObject {
 // MARK: - 提醒发送
 final class BatteryAlerts: ObservableObject {
     static let shared = BatteryAlerts()
-    @Published var settings = BatterySettings.load() { didSet { settings.save(); if settings.alertsOn && !oldValue.alertsOn { requestAuth() } } }
+    /// 可注入存储：测试实例用独立 suite，写不进去用户的真实设置
+    let defaults: UserDefaults
+    @Published var settings: BatterySettings { didSet { settings.save(defaults); if settings.alertsOn && !oldValue.alertsOn { requestAuth() } } }
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.settings = BatterySettings.load(defaults)
+    }
     /// 2.16 N4：系统通知权限（只读取，不主动切换）。nil = 还没读到
     @Published var permission: UNAuthorizationStatus?
     var engine = AlertEngine()
