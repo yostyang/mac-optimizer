@@ -272,6 +272,21 @@ enum V210 {
         T.check(BTParse.apply(hid: [], to: [k3], access: .notAsked)[0].reason.contains("读取 Keychron 电量") && BTParse.apply(hid: [], to: [k3], access: .denied)[0].reason.contains("系统设置"), "没有权限时说明怎么开启")
         T.check(BTParse.apply(hid: [reading], to: [kb("Keychron K3 Pro", "DC-2C-26-0A-1B-7F", connected: false)], access: .granted)[0].percent == nil, "未连接的键盘不采用读数")
         T.check(!KeychronHID.candidate(mouse) && !KeychronHID.candidate(kb("Keychron K3 Pro", "x", percent: 80)) && KeychronHID.candidate(k3), "只对读不到电量的 Keychron 键盘去读")
+        // 自报值陈旧检测：K3 Pro 实测固件不刷新报告 3，放电到约 70% 仍报 100%
+        let fresh = "test.keychron.fresh.\(getpid())"
+        let fud = UserDefaults(suiteName: fresh)!
+        fud.removePersistentDomain(forName: fresh)
+        let t0 = Date()
+        T.check(!KeychronHID.markFreshness([reading], defaults: fud, now: t0)[0].stale, "第一次见到的值：新鲜，直接采用")
+        T.check(KeychronHID.markFreshness([reading], defaults: fud, now: t0 + 25 * 3600)[0].stale, "从没更新过的通道：同一值 24 小时后判定固件不推送")
+        let newer = KeychronHID.parse([3, 41, 0xDC, 0x2C, 0x26, 0x0A, 0x1B, 0x7F])!
+        T.check(!KeychronHID.markFreshness([newer], defaults: fud, now: t0 + 2 * 86400)[0].stale, "值变了就重置计时：会推送的型号不受影响")
+        T.check(!KeychronHID.markFreshness([newer], defaults: fud, now: t0 + 6 * 86400)[0].stale, "证明过会推送的通道：4 天不变仍可信")
+        T.check(KeychronHID.markFreshness([newer], defaults: fud, now: t0 + 10 * 86400)[0].stale, "活通道超过 7 天不变也降级")
+        var staleRead = reading; staleRead.stale = true
+        let st = BTParse.apply(hid: [staleRead], to: [k3], access: .granted)[0]
+        T.check(st.percent == nil && st.reasonKind == .noReport && st.reason.contains("Fn+B"), "陈旧自报值：降级为「未取得」并提示按 Fn+B，不再显示假电量")
+        T.check(KeychronReading(percent: 76, addresses: ["a"]).stale == false, "默认不陈旧")
 
         T.sec("2.10 充电助手只在已安装的位置自动核对")
         T.check(HelperCheck.autoRepairAllowed(bundlePath: "/Applications/Mac一键优化.app") && HelperCheck.autoRepairAllowed(bundlePath: "/Users/a/Applications/Mac一键优化.app"), "应用程序文件夹：照常核对")

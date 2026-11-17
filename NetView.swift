@@ -257,7 +257,7 @@ struct BTReadingDetail: View {
             if let p = d.lastPercent, d.freshness == .expired || d.freshness == .cached { row("最近成功值", "\(p)%") }
             if let rep = d.sourceReportedAt { row("设备上报于", Self.time(rep)) }   // 只有来源真的给出时间才显示
             if d.keychron {
-                Footnote(text: "Keychron 电量来自键盘自报（HID 3 号报告）。已核对的型号与固件有限；没有在同一台键盘上取得两次不同电量的对照之前，不能据一次读数认定该型号可靠。")
+                Footnote(text: "Keychron 电量来自键盘自报（HID 3 号报告）。已核对的型号与固件有限；同一个值长时间没有变化会判定为固件不再刷新、按「未取得」处理。K3 Pro（K3P-H3）实测自报值不更新，请按键盘 Fn+B 查看实际电量。")
             }
             HStack(spacing: 8) {
                 ForEach(actions, id: \.0) { title, run in

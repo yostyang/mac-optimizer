@@ -687,6 +687,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if args.contains("--read-capabilities") { HardwareCapabilities.printSnapshot(); exit(0) }
         if args.contains("--read-classic-batteries") { RealBTSource.printClassicSnapshot(); exit(0) }
         if args.contains("--read-keychron-battery") { KeychronHID.printSnapshot(); exit(0) }
+        if args.contains("--dump-keychron-hid") { KeychronHID.dumpHID(); exit(0) }
+        if args.contains("--watch-keychron") { KeychronHID.watch(logPath: "/tmp/keychron-watch.log"); exit(0) }
+        if args.contains("--ble-keychron") { KeychronHID.bleScan(); exit(0) }
+        if args.contains("--probe-keychron-raw") { KeychronHID.probeRaw(); exit(0) }
         if !args.contains("--selftest") && !args.contains("--selftest-ci") && !args.contains("--uitest") && !args.contains("--snapshot") { _ = SplitController.shared.tracker }
         if let i = args.firstIndex(of: "--charge") { exit(ChargeCLI.run(Array(args[(i + 1)...]))) }
         #if MO_TESTS
