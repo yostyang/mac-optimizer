@@ -11,6 +11,10 @@ for arg in "$@"; do
   esac
 done
 OUT="$PWD/build-test"; rm -rf "$OUT"; mkdir -p "$OUT"
+# displaysleep 很短的机器上，App 退出后其防息屏断言消失，测试几分钟无输入就会息屏锁屏、
+# uitest「窗口就绪」失败；全程挂 caffeinate 防空闲息屏（解不开已锁的屏，开跑前仍需解锁）
+caffeinate -d & CAF=$!
+trap 'kill $CAF 2>/dev/null' EXIT
 # 避免与正在运行的实例抢菜单栏/辅助功能树；先记下常亮/接显示器模式，测完重新打开并核对
 . ./appstate.sh; mo_record
 # quit 偶尔会被系统弹窗/权限挡住并一直挂着，限 5 秒后走 TERM 兜底
